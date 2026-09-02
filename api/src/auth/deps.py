@@ -1,22 +1,46 @@
 import asyncpg
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, status
+from fastapi.security import APIKeyHeader
 
 from src.auth.telegram_init_data import validate_init_data
 from src.config import get_settings
 from src.db.connection import get_pool
 
+# Схема безпеки, а не звичайний Header: завдяки їй у Swagger з'являється
+# кнопка Authorize — рядок initData вводиться один раз на всі ендпоінти,
+# а не в форму кожного окремо.
+#
+# auto_error=False, бо стандартна помилка APIKeyHeader — 403 "Not authenticated".
+# Відсутній і невалідний initData — той самий випадок «немає доступу»,
+# тож віддаємо на обидва 401 з внятним поясненням.
+init_data_header = APIKeyHeader(
+    name="X-Telegram-Init-Data",
+    scheme_name="TelegramInitData",
+    description=(
+        "Рядок Telegram.WebApp.initData. Для локального тестування "
+        "згенеруйте його: python3 scripts/generate_test_init_data.py $BOT_TOKEN"
+    ),
+    auto_error=False,
+)
+
 
 async def get_init_data(
-    x_telegram_init_data: str = Header(...),
+    init_data_raw: str | None = Depends(init_data_header),
     settings = Depends(get_settings)
 ) -> dict:
     """
-    Дістає заголовок X-Telegram-Init-Data, валідує його 
+    Дістає заголовок X-Telegram-Init-Data, валідує його
     та повертає розпарсений словник із даними.
     """
+    if not init_data_raw:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Відсутній заголовок X-Telegram-Init-Data",
+        )
+
     try:
         return validate_init_data(
-            init_data=x_telegram_init_data,
+            init_data=init_data_raw,
             bot_token=settings.bot_token
         )
     except ValueError as e:

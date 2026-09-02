@@ -150,7 +150,8 @@ docker compose -f docker-compose.dev.yml --profile frontend up
 | DELETE | `/api/cart` | ✓ | очистити кошик |
 | GET | `/api/locations` | — | контакти закладів |
 
-Позначені ✓ потребують заголовка `X-Telegram-Init-Data`.
+Позначені ✓ потребують заголовка `X-Telegram-Init-Data`; без нього або
+з невалідним підписом — `401`.
 
 ### Тестування API без Telegram
 
@@ -160,11 +161,27 @@ docker compose -f docker-compose.dev.yml --profile frontend up
 python3 scripts/generate_test_init_data.py "$BOT_TOKEN"
 ```
 
-Отриманий рядок вставити у Swagger (`/docs` → Authorize) або в curl:
+Далі є два шляхи.
+
+**Swagger.** Відкрити http://localhost:8010/docs → **Authorize** → вставити рядок.
+Він застосується до всіх захищених ендпоінтів одразу.
+
+**curl.** Зручно покласти рядок у змінну — він дійсний 24 години:
 
 ```bash
-curl http://localhost:8010/api/me -H "X-Telegram-Init-Data: <рядок>"
+export INIT_DATA=$(python3 scripts/generate_test_init_data.py "$BOT_TOKEN" | tail -2 | head -1)
+
+curl -s -H "X-Telegram-Init-Data: $INIT_DATA" localhost:8010/api/me | jq
+
+curl -s -X POST localhost:8010/api/cart/items \
+  -H "X-Telegram-Init-Data: $INIT_DATA" -H 'Content-Type: application/json' \
+  -d '{"variant_id":1,"qty":2}' | jq
 ```
+
+Тестовий користувач — `telegram_id=111111111`, зашитий у самому скрипті.
+Підставте туди свій справжній id, якщо хочете бачити себе в БД після `/register`.
+
+Без заголовка або з невалідним підписом захищені ендпоінти віддають `401`.
 
 ### Перевірки
 
