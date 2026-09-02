@@ -114,11 +114,11 @@ API — на http://localhost:8010 (Swagger на `/docs`), Mini App — на htt
 > Порт на хості — **8010**, а не 8000: 8000 часто зайнятий (у автора — portainer).
 > Змінюється в `docker-compose.dev.yml` і `VITE_API_BASE_URL`.
 
-Після зміни `frontend/package.json` образ треба перезібрати **разом із анонімним
-томом** — інакше в контейнері лишиться старий `node_modules`:
+`frontend/node_modules` лежить на хості (а не в анонімному томі) — інакше
+IDE не бачить типів. Після зміни `package.json` достатньо перезапустити сервіс:
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d --build --renew-anon-volumes frontend
+docker compose -f docker-compose.dev.yml restart frontend
 ```
 
 ### Змінні оточення

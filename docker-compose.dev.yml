@@ -59,9 +59,9 @@ services:
     ports:
       - "5173:5173"
     volumes:
+      # node_modules навмисно НЕ ховаємо в анонімний том: інакше на хості його
+      # немає, і VS Code не бачить типів — ні автодоповнення, ні помилок.
+      # На Linux bind-mount нативний, тож втрат у швидкості немає.
       - ./frontend:/app
-      # Анонімний том: інакше бінд-маунт вище перекрив би node_modules з образу.
-      # УВАГА: том переживає перезбірку образу. Після зміни package.json —
-      # docker compose -f docker-compose.dev.yml up -d --build --renew-anon-volumes frontend
-      - /app/node_modules
-    command: npm run dev -- --host 0.0.0.0
+    # Залежності ставляться при старті, якщо їх ще немає на хості.
+    command: sh -c "[ -d node_modules/vite ] || npm install; npm run dev -- --host 0.0.0.0"
