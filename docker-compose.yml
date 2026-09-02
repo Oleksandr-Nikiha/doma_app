@@ -1,0 +1,57 @@
+# Прод/staging-стек.
+#     docker compose up -d --build
+#
+# Postgres не піднімається тут — використовується зовнішній сервер із .env.
+# TLS термінує зовнішній reverse-proxy або тунель; nginx слухає 80 (див. nginx/nginx.conf).
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    expose:
+      - "8000"
+    # Назовні api не публікуємо — доступ лише крізь nginx
+
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - api
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+      args:
+        # Фронтенд ходить у той самий origin, що і статика, тож відносний шлях.
+        VITE_API_BASE_URL: /api
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+
+volumes:
+  redis_data:
