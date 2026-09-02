@@ -1,0 +1,25 @@
+# Dev-образ фронтенду: Vite-сервер із HMR.
+# Прод збирається інакше — див. nginx/Dockerfile (multi-stage).
+#
+# Vite 8 вимагає Node ^20.19 || >=22.12, тому саме 22.
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Спершу лише маніфести — шар із npm install кешується, поки залежності не змінились
+COPY package.json package-lock.json* ./
+RUN npm install
+
+COPY . .
+
+# /app змонтовано з хоста, тож усе, що пише контейнер (dist/, .vite/), лягає
+# в робочу копію. Від root ці файли потім не стерти без sudo.
+# uid юзера node в цьому образі — 1000, як і в типового користувача на хості.
+RUN chown -R node:node /app
+USER node
+
+EXPOSE 5173
+
+# --host обов'язковий: без нього Vite слухає лише 127.0.0.1 усередині
+# контейнера і ззовні недоступний
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

@@ -49,18 +49,19 @@ services:
     volumes:
       - ./bot/src:/app/src
 
-  # Фронтенд ще не заскафолджений (немає package.json / Dockerfile.dev),
-  # тож сервіс сховано за профілем — інакше падав би весь `compose up`.
-  # Вмикається так: docker compose -f docker-compose.dev.yml --profile frontend up
   frontend:
-    profiles: ["frontend"]
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
     restart: unless-stopped
+    # Vite вшиває VITE_*-змінні у код, тож .env потрібен уже на dev-сервері
+    env_file: .env
     ports:
       - "5173:5173"
     volumes:
       - ./frontend:/app
+      # Анонімний том: інакше бінд-маунт вище перекрив би node_modules з образу.
+      # УВАГА: том переживає перезбірку образу. Після зміни package.json —
+      # docker compose -f docker-compose.dev.yml up -d --build --renew-anon-volumes frontend
       - /app/node_modules
     command: npm run dev -- --host 0.0.0.0

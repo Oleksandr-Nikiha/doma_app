@@ -11,7 +11,7 @@
 [![aiogram](https://img.shields.io/badge/aiogram-3.31-2CA5E0.svg?logo=telegram&logoColor=white)](https://aiogram.dev/)
 
 > **Статус: у розробці.** Бекенд, бот та інфраструктура готові й покриті CI.
-> Фронтенд Mini App ще не реалізований — див. [Roadmap](#roadmap).
+> Фронтенд заскафолджений, екрани Mini App у роботі — див. [Roadmap](#roadmap).
 
 ---
 
@@ -56,7 +56,7 @@ Telegram client
 |---|---|
 | API | FastAPI, Pydantic v2, asyncpg |
 | Бот | aiogram 3 |
-| Фронтенд | React + TypeScript + Vite, TanStack Query, Telegram UI *(в роботі)* |
+| Фронтенд | React 19 + TypeScript + Vite 8, TailwindCSS 4, TanStack Query, `@telegram-apps/sdk-react` |
 | Сховище | PostgreSQL, Redis |
 | Інфраструктура | Docker Compose, nginx |
 
@@ -67,7 +67,7 @@ Telegram client
 ```
 api/        FastAPI — REST для Mini App (валідація initData, каталог, кошик)
 bot/        aiogram — точка входу /start, надалі нотифікації
-frontend/   React + TS + Vite — сам Mini App (ще не заскафолджено)
+frontend/   React + TS + Vite — сам Mini App
 db/         SQL-міграції та сид каталогу
 nginx/      Прод-образ: збірка фронтенду + віддача статики + проксі /api
 scripts/    Dev-утиліти
@@ -108,15 +108,17 @@ psql "$DATABASE_URL" -f db/seed/seed_catalog.sql
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-Підіймаються `redis`, `api` і `bot`. API — на http://localhost:8010, Swagger — на `/docs`.
+Підіймаються `redis`, `api`, `bot` і `frontend`.
+API — на http://localhost:8010 (Swagger на `/docs`), Mini App — на http://localhost:5173.
 
 > Порт на хості — **8010**, а не 8000: 8000 часто зайнятий (у автора — portainer).
 > Змінюється в `docker-compose.dev.yml` і `VITE_API_BASE_URL`.
 
-Фронтенд поки за окремим профілем (запрацює після скафолдингу):
+Після зміни `frontend/package.json` образ треба перезібрати **разом із анонімним
+томом** — інакше в контейнері лишиться старий `node_modules`:
 
 ```bash
-docker compose -f docker-compose.dev.yml --profile frontend up
+docker compose -f docker-compose.dev.yml up -d --build --renew-anon-volumes frontend
 ```
 
 ### Змінні оточення
