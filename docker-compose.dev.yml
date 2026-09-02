@@ -24,6 +24,9 @@ services:
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0
+      # Контейнер працює від root, а ./api/src змонтовано з хоста — без цього
+      # він засіває робочу копію root-овими __pycache__, які потім не стерти.
+      PYTHONDONTWRITEBYTECODE: "1"
       # DATABASE_URL береться з .env (зовнішній сервер з postgres/pgadmin)
     depends_on:
       redis:
@@ -40,6 +43,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file: .env
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"   # див. коментар у сервісі api
     # DATABASE_URL береться з .env (зовнішній сервер з postgres/pgadmin)
     volumes:
       - ./bot/src:/app/src

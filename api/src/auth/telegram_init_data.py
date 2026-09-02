@@ -1,8 +1,10 @@
-import hmac
+import contextlib
 import hashlib
+import hmac
+import json
 import time
 import urllib.parse
-import json
+
 
 def validate_init_data(init_data: str, bot_token: str, max_age_seconds: int = 86400) -> dict:
     """
@@ -44,7 +46,8 @@ def validate_init_data(init_data: str, bot_token: str, max_age_seconds: int = 86
     try:
         auth_date = int(parsed_data["auth_date"])
     except ValueError:
-        raise ValueError("Параметр 'auth_date' має бути цілим числом")
+        # Початковий ValueError від int() нічого не додає — обриваємо ланцюжок
+        raise ValueError("Параметр 'auth_date' має бути цілим числом") from None
         
     current_time = time.time()
     if current_time - auth_date > max_age_seconds:
@@ -53,9 +56,9 @@ def validate_init_data(init_data: str, bot_token: str, max_age_seconds: int = 86
     result = parsed_data.copy()
     for json_field in ("user", "receiver", "chat"):
         if json_field in result:
-            try:
+            # Поле, яке не розпарсилось, лишаємо сирим рядком — підпис уже
+            # перевірено, тож це не привід відхиляти весь запит.
+            with contextlib.suppress(json.JSONDecodeError):
                 result[json_field] = json.loads(result[json_field])
-            except json.JSONDecodeError:
-                pass
 
     return result

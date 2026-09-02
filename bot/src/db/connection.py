@@ -1,9 +1,8 @@
 import asyncpg
-from typing import Optional
 
 from src.config import get_settings
 
-_pool: Optional[asyncpg.Pool] = None
+_pool: asyncpg.Pool | None = None
 
 
 async def connect_db() -> None:
@@ -33,7 +32,7 @@ def get_pool() -> asyncpg.Pool:
     return _pool
 
 
-async def get_user_by_telegram_id(telegram_id: int) -> Optional[asyncpg.Record]:
+async def get_user_by_telegram_id(telegram_id: int) -> asyncpg.Record | None:
     """
     Профіль користувача або None, якщо він ще не проходив реєстрацію в Mini App.
     Бот сам нікого не реєструє — це робить `POST /api/register`.

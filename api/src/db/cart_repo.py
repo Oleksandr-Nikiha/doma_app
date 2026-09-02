@@ -1,5 +1,6 @@
 import asyncpg
 
+
 async def get_or_create_cart_id(pool: asyncpg.Pool, telegram_id: int) -> int:
     """
     Повертає id кошика юзера. Якщо кошика ще нема — створює.

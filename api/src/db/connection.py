@@ -1,9 +1,8 @@
 import asyncpg
-from typing import Optional
 
 from src.config import get_settings
 
-_pool: Optional[asyncpg.Pool] = None
+_pool: asyncpg.Pool | None = None
 
 
 async def connect_db() -> None:

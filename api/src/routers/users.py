@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
 import asyncpg
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from src.schemas.user import RegisterIn, UserOut
-from src.auth.deps import get_init_data, get_current_user
+from src.auth.deps import get_current_user, get_init_data
 from src.db.connection import get_pool
+from src.schemas.user import RegisterIn, UserOut
 
 router = APIRouter(prefix="/api", tags=["Users"])
 

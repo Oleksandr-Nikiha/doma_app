@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 
+
 class RegisterIn(BaseModel):
     full_name: str
     phone: str

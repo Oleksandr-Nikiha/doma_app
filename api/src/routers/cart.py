@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
 import asyncpg
+from fastapi import APIRouter, Depends, HTTPException
 
-from src.schemas.cart import CartOut, CartItemOut, CartItemIn, CartItemUpdateIn
 from src.auth.deps import get_current_user
-from src.db.connection import get_pool
 from src.db.cart_repo import get_or_create_cart_id
+from src.db.connection import get_pool
+from src.schemas.cart import CartItemIn, CartItemOut, CartItemUpdateIn, CartOut
 
 router = APIRouter(prefix="/api/cart", tags=["Cart"])
 

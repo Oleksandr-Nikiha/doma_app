@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Новий push у ту саму гілку скасовує попередній прогін
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Лінт та синтаксис Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Версія зафіксована, щоб оновлення ruff не ламало CI несподівано
+      - name: Встановити ruff
+        run: pip install ruff==0.16.5
+
+      - name: ruff check
+        run: ruff check api bot
+
+      - name: Перевірка синтаксису
+        run: python -m compileall -q api/src bot/src
+
+  imports:
+    name: Імпорт застосунків
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # api і bot тягнуть різні набори залежностей, тож ставимо в окремі venv
+      - name: Імпорт FastAPI-застосунку
+        working-directory: api
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/test
+          BOT_TOKEN: "123456:test-token-for-ci"
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -r requirements.txt
+          # Імпорт піднімає роутери і схеми, але не чіпає БД (connect_db у lifespan)
+          .venv/bin/python -c "from src.main import app; print(f'{len(app.routes)} маршрутів')"
+
+      - name: Імпорт бота
+        working-directory: bot
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/test
+          BOT_TOKEN: "123456:test-token-for-ci"
+          MINI_APP_URL: https://example.com
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -r requirements.txt
+          .venv/bin/python -c "from src.main import main; from src.handlers.start import router; print('бот імпортується')"
+
+  infra:
+    name: Конфіги інфраструктури
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Обидва compose-файли мають env_file: .env — без нього config впаде
+      - name: Підготувати .env
+        run: cp .env.example .env
+
+      - name: Валідність compose-файлів
+        run: |
+          docker compose -f docker-compose.dev.yml config -q
+          docker compose -f docker-compose.yml config -q
+
+      - name: Синтаксис nginx.conf
+        run: |
+          docker run --rm \
+            -v "$PWD/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:1.27-alpine nginx -t
+
+  build:
+    name: Збірка образів
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, bot]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Образ nginx тут не збирається: його стадія build потребує
+      # frontend/package.json, якого ще немає. Додати в матрицю
+      # разом зі скафолдингом фронтенду.
+      - name: Зібрати ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  secrets:
+    name: Перевірка на секрети
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: .env не має бути у git
+        run: |
+          if git ls-files --error-unmatch .env 2>/dev/null; then
+            echo "::error::.env потрапив у репозиторій — відкличте BOT_TOKEN і приберіть файл з історії"
+            exit 1
+          fi
+          echo "OK: .env не відстежується"
+
+      - name: Пошук токенів Telegram у відстежуваних файлах
+        run: |
+          # Формат токена BotFather: <digits>:<35 символів>. Плейсхолдери в
+          # .env.example і CI навмисно коротші й під шаблон не підпадають.
+          if git grep -nE '[0-9]{8,10}:[A-Za-z0-9_-]{35}' -- . ':!.github/workflows/ci.yml'; then
+            echo "::error::Схоже на справжній BOT_TOKEN у репозиторії"
+            exit 1
+          fi
+          echo "OK: токенів не знайдено"

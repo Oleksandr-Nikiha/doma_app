@@ -1,9 +1,10 @@
-from fastapi import Header, HTTPException, Depends, status
 import asyncpg
+from fastapi import Depends, Header, HTTPException, status
 
 from src.auth.telegram_init_data import validate_init_data
 from src.config import get_settings
 from src.db.connection import get_pool
+
 
 async def get_init_data(
     x_telegram_init_data: str = Header(...),
@@ -22,7 +23,7 @@ async def get_init_data(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Помилка авторизації: {e}"
-        )
+        ) from e
 
 
 async def get_current_user(

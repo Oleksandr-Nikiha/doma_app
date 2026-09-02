@@ -1,0 +1,23 @@
+# Фіксуємо набір правил явно, щоб CI не залежав від дефолтів конкретної версії ruff.
+
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    # Depends()/Header() у дефолтах аргументів — штатний ідіом FastAPI,
+    # без нього не працює вбудований DI. Для цього проєкту це хибне спрацювання.
+    "B008",
+]
+
+[lint.isort]
+# api/ і bot/ обидва мають кореневий пакет `src` — інакше isort вважає його стороннім
+known-first-party = ["src"]
