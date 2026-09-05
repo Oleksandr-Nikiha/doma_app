@@ -7,6 +7,7 @@ class CategoryOut(BaseModel):
     icon: str | None = None
     location_id: int
     location_name: str
+    parent_id: int | None
 
 
 class ProductVariantOut(BaseModel):
@@ -22,6 +23,22 @@ class ProductListItemOut(BaseModel):
     name: str
     image_url: str | None = None
     price_from: float
+    category_id: int
+    category_name: str
+
+
+class OptionItemOut(BaseModel):
+    variant_id: int
+    name: str
+    price_delta: float
+
+
+class OptionGroupOut(BaseModel):
+    group_id: int
+    name: str
+    min_select: int
+    max_select: int
+    items: list[OptionItemOut]
 
 
 class ProductDetailOut(BaseModel):
@@ -31,3 +48,4 @@ class ProductDetailOut(BaseModel):
     description: str | None = None
     image_url: str | None = None
     variants: list[ProductVariantOut]
+    option_groups: list[OptionGroupOut] = []
