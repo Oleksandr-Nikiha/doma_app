@@ -232,10 +232,17 @@ Telegram відкриває Mini App лише за HTTPS-URL. Потрібні �
 
 ```nginx
 location /api/ { proxy_pass http://127.0.0.1:8010; }   # API
-location /     { proxy_pass http://127.0.0.1:5173; }   # Vite (dev) або статика (прод)
+location /     { root /var/www/doma-app; try_files $uri $uri/ /index.html; }
 ```
 
-Для `/` обов'язкові заголовки `Upgrade`/`Connection` — інакше не працює HMR.
+Статику оновлює [scripts/deploy_frontend.sh](scripts/deploy_frontend.sh) — він збирає
+бандл, перевіряє його на секрети й розкладає у `/var/www/doma-app`.
+
+**Dev-сервер Vite назовні виставляти не можна.** Він віддає вихідні тексти
+з уже підставленими значеннями `VITE_*`-змінних, а серед них `VITE_DEV_INIT_DATA` —
+підписаний `initData`, тобто валідні облікові дані до захищеного API.
+Тому в dev-compose порт прив'язаний до `127.0.0.1`.
+
 `X-Frame-Options` не виставляти: Telegram Desktop відкриває Mini App в iframe.
 
 У `.env` вказати `MINI_APP_URL`, `VITE_PUBLIC_HOST` (домен потрібен Vite

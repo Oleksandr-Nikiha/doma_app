@@ -62,7 +62,10 @@ services:
       VITE_DEV_INIT_DATA: ${VITE_DEV_INIT_DATA:-}
       VITE_PUBLIC_HOST: ${VITE_PUBLIC_HOST:-}
     ports:
-      - "5173:5173"
+      # Тільки локально: назовні Mini App віддає nginx зі зібраної статики
+      # (scripts/deploy_frontend.sh). Dev-сервер публікувати не можна — він
+      # віддає вихідні тексти з підставленими значеннями VITE_*-змінних.
+      - "127.0.0.1:5173:5173"
     volumes:
       # node_modules навмисно НЕ ховаємо в анонімний том: інакше на хості його
       # немає, і VS Code не бачить типів — ні автодоповнення, ні помилок.

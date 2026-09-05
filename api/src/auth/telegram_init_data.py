@@ -13,7 +13,7 @@ def validate_init_data(init_data: str, bot_token: str, max_age_seconds: int = 86
     Кидає ValueError з описом причини, якщо ні.
     """
 
-    parsed_pairs = urllib.parse.parse_qsl(init_data)
+    parsed_pairs = urllib.parse.parse_qsl(init_data, keep_blank_values=True)
     parsed_data = dict(parsed_pairs)
     
     if "hash" not in parsed_data:
