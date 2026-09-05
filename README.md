@@ -10,8 +10,8 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![aiogram](https://img.shields.io/badge/aiogram-3.31-2CA5E0.svg?logo=telegram&logoColor=white)](https://aiogram.dev/)
 
-> **Статус: у розробці.** Бекенд, бот та інфраструктура готові й покриті CI.
-> Фронтенд заскафолджений, екрани Mini App у роботі — див. [Roadmap](#roadmap).
+> **Статус: MVP зібраний.** Бекенд, бот, інфраструктура і всі екрани Mini App готові.
+> Далі — оформлення замовлення, див. [Roadmap](#roadmap).
 
 ---
 
@@ -24,6 +24,9 @@
 - Кошик: додавання, зміна кількості, видалення позиції, повне очищення
 - Контакти закладів
 - Бот: `/start` із кнопкою запуску Mini App та постійна Menu Button
+
+**Екрани Mini App:** онбординг, категорії, товари, картка товару з вибором розміру
+й кількості, кошик, контакти. Нативна кнопка «Назад» і тактильний відгук Telegram.
 
 **Заплановано:** оформлення замовлення, історія, Telegram Payments — див. [Development.md](Development.md).
 
@@ -163,6 +166,13 @@ docker compose -f docker-compose.dev.yml restart frontend
 python3 scripts/generate_test_init_data.py "$BOT_TOKEN"
 ```
 
+Рядок діє **24 години**. Коли протухне, фронтенд почне отримувати `401` —
+оновити разом із перезапуском контейнера можна одною командою:
+
+```bash
+./scripts/refresh_dev_init_data.sh
+```
+
 Далі є два шляхи.
 
 **Swagger.** Відкрити http://localhost:8010/docs → **Authorize** → вставити рядок.
@@ -223,7 +233,7 @@ docker compose up -d --build
 
 | Фаза | Обсяг | Стан |
 |---|---|---|
-| 1 | MVP: реєстрація, каталог, кошик, контакти | бекенд ✅, фронтенд ⏳ |
+| 1 | MVP: реєстрація, каталог, кошик, контакти | ✅ готово |
 | 2 | Оформлення замовлення, фізична оплата, модерація адреси | заплановано |
 | 3 | Історія замовлень, повтор у клік | заплановано |
 | 4 | Telegram Payments | заплановано |

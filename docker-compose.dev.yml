@@ -54,8 +54,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
     restart: unless-stopped
-    # Vite вшиває VITE_*-змінні у код, тож .env потрібен уже на dev-сервері
-    env_file: .env
+    # НЕ env_file: .env — той віддав би контейнеру фронтенду ще й BOT_TOKEN
+    # та DATABASE_URL. Vite вшиває у бандл лише VITE_*, але тримати секрети
+    # в оточенні фронтенду немає причин. Перелічуємо явно тільки потрібне.
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8010/api}
+      VITE_DEV_INIT_DATA: ${VITE_DEV_INIT_DATA:-}
     ports:
       - "5173:5173"
     volumes:

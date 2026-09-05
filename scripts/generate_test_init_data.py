@@ -39,10 +39,19 @@ def build_test_init_data(bot_token: str) -> str:
     user_json = json.dumps(FAKE_USER, separators=(",", ":"), ensure_ascii=False)
 
     # Поля, які реально присутні у справжньому initData (без hash)
+    #
+    # signature — Ed25519-підпис Telegram для сторонньої валідації (без бот-токена).
+    # Підробити його ми не можемо й не потребуємо: бекенд перевіряє HMAC на bot_token,
+    # а не цей підпис. Але поле має бути присутнє — @telegram-apps/sdk 3.x валідує
+    # схему initData і без нього кидає 'Expected "signature" but received undefined'.
+    #
+    # За специфікацією Telegram з data-check-string виключається лише hash,
+    # тож signature бере участь у підписі — так само, як і на бекенді.
     fields = {
         "user": user_json,
         "auth_date": auth_date,
         "query_id": "AAHtestquery1234",
+        "signature": "test_signature_not_verified_by_backend",
     }
 
     # Крок 1: data_check_string — той самий формат, що і при валідації
