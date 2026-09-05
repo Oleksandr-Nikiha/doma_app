@@ -225,7 +225,26 @@ docker compose up -d --build
 зовнішній reverse-proxy, certbot або тунель. Приклад HTTPS-блоку закоментований
 у [nginx/nginx.conf](nginx/nginx.conf).
 
-Після деплою оновити URL Mini App у BotFather на прод-домен.
+### Публікація для Telegram
+
+Telegram відкриває Mini App лише за HTTPS-URL. Потрібні домен і сертифікат;
+далі reverse-proxy на хості віддає застосунок і API з одного origin:
+
+```nginx
+location /api/ { proxy_pass http://127.0.0.1:8010; }   # API
+location /     { proxy_pass http://127.0.0.1:5173; }   # Vite (dev) або статика (прод)
+```
+
+Для `/` обов'язкові заголовки `Upgrade`/`Connection` — інакше не працює HMR.
+`X-Frame-Options` не виставляти: Telegram Desktop відкриває Mini App в iframe.
+
+У `.env` вказати `MINI_APP_URL`, `VITE_PUBLIC_HOST` (домен потрібен Vite
+для `allowedHosts`) і додати домен у `CORS_ORIGINS`. Після зміни `MINI_APP_URL`
+перестворити контейнер бота — він виставляє Menu Button на старті:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --force-recreate bot
+```
 
 ---
 

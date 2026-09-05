@@ -58,8 +58,9 @@ services:
     # та DATABASE_URL. Vite вшиває у бандл лише VITE_*, але тримати секрети
     # в оточенні фронтенду немає причин. Перелічуємо явно тільки потрібне.
     environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8010/api}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
       VITE_DEV_INIT_DATA: ${VITE_DEV_INIT_DATA:-}
+      VITE_PUBLIC_HOST: ${VITE_PUBLIC_HOST:-}
     ports:
       - "5173:5173"
     volumes:
