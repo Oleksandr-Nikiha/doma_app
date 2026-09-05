@@ -10,16 +10,43 @@ import { backButton, hapticFeedback, init, miniApp, themeParams, viewport } from
 
 let ready = false;
 
+/**
+ * Прибирає порожні --tg-theme-* зі стилю <html>.
+ *
+ * Не всі клієнти Telegram надсилають повний набір параметрів теми (найчастіше
+ * бракує secondary_bg_color). SDK усе одно прив'язує змінну — з порожнім
+ * значенням. Інлайн перебиває наш дефолт із index.css, а підстановка порожнечі
+ * робить усю декларацію background недійсною: на темній темі плашки під
+ * текстом просто зникають. Знімаємо такі змінні, щоб спрацював дефолт.
+ */
+function dropEmptyThemeVars(): void {
+  const el = document.documentElement;
+  for (let i = el.style.length - 1; i >= 0; i--) {
+    const name = el.style[i];
+    if (name.startsWith("--tg-theme-") && !el.style.getPropertyValue(name).trim()) {
+      el.style.removeProperty(name);
+    }
+  }
+}
+
 export function initSdk(): void {
   if (ready) return;
   try {
     init();
     if (miniApp.mountSync.isAvailable()) {
       miniApp.mountSync();
-      // Прив'язує CSS-змінні --tg-theme-* до реальної теми клієнта
+    }
+    // Прив'язка теми — окремо від miniApp: якщо mountSync недоступний
+    // (старіший клієнт, мок), кольори Telegram інакше не приїхали б зовсім,
+    // і застосунок лишався б світлим у темному клієнті.
+    try {
       themeParams.mountSync();
       themeParams.bindCssVars();
-    }
+      dropEmptyThemeVars();
+      // Користувач може перемкнути тему на льоту: SDK перепризначить змінні,
+      // і порожні можуть повернутись — чистимо після кожної зміни.
+      themeParams.state.sub(() => dropEmptyThemeVars());
+    } catch { /* теми немає — лишаються значення з index.css */ }
     if (viewport.mount.isAvailable()) {
       void viewport.mount().then(() => {
         if (viewport.bindCssVars.isAvailable()) viewport.bindCssVars();

@@ -23,7 +23,7 @@ export function RegisterPage() {
   const canSubmit = fullName.trim().length > 1 && phone.trim().length >= 9;
 
   const inputStyle = {
-    background: "var(--tg-theme-secondary-bg-color)",
+    background: "var(--app-surface)",
     color: "var(--tg-theme-text-color)",
   };
 

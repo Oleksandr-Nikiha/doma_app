@@ -27,12 +27,11 @@ export function CartPage() {
     <div className="pb-4">
       <ScreenTitle>Кошик</ScreenTitle>
 
-      <div className="space-y-3 px-4">
+      <div className="app-rise space-y-3 px-4">
         {data.items.map((item) => (
           <div
             key={item.id}
-            className="rounded-2xl p-3"
-            style={{ background: "var(--tg-theme-secondary-bg-color)" }}
+            className="app-card rounded-2xl p-3"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -41,6 +40,19 @@ export function CartPage() {
                   {item.variant_label}
                   {item.weight && ` · ${item.weight}`}
                 </p>
+                {/* Саме опції відрізняють два однакові з вигляду бокси —
+                    без цього рядка їх у кошику не розрізнити. Мітку варіанта
+                    («порція», «0.5 л») не показуємо: розмір уже заданий групою. */}
+                {item.options.length > 0 && (
+                  <p
+                    className="mt-1 inline-block rounded-lg px-2 py-1 text-xs"
+                    style={{ background: "var(--app-tint)", color: "var(--tg-theme-link-color)" }}
+                  >
+                    {item.options
+                      .map((o) => (o.price_delta > 0 ? `${o.name} +${formatPrice(o.price_delta)}` : o.name))
+                      .join(" · ")}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => {
@@ -48,7 +60,7 @@ export function CartPage() {
                   removeItem.mutate(item.id, { onError: () => hapticNotify("error") });
                 }}
                 disabled={busy}
-                className="shrink-0 px-1 text-lg opacity-50 disabled:opacity-20"
+                className="app-press shrink-0 px-1 text-lg opacity-50 disabled:opacity-20"
                 aria-label={`Видалити ${item.product_name}`}
               >
                 ✕
@@ -56,7 +68,7 @@ export function CartPage() {
             </div>
 
             <div className="mt-3 flex items-center justify-between">
-              <div className="flex items-center gap-3 rounded-xl px-2 py-1" style={{ background: "var(--tg-theme-bg-color)" }}>
+              <div className="flex items-center gap-3 rounded-xl px-2 py-1" style={{ background: "var(--app-surface-2)" }}>
                 <button
                   onClick={() => {
                     haptic("light");
@@ -65,7 +77,7 @@ export function CartPage() {
                     else updateItem.mutate({ itemId: item.id, qty: item.qty - 1 });
                   }}
                   disabled={busy}
-                  className="h-7 w-7 text-lg font-bold disabled:opacity-30"
+                  className="app-press h-7 w-7 text-lg font-bold disabled:opacity-30"
                   aria-label="Менше"
                 >
                   −
@@ -77,7 +89,7 @@ export function CartPage() {
                     updateItem.mutate({ itemId: item.id, qty: item.qty + 1 });
                   }}
                   disabled={busy}
-                  className="h-7 w-7 text-lg font-bold disabled:opacity-30"
+                  className="app-press h-7 w-7 text-lg font-bold disabled:opacity-30"
                   aria-label="Більше"
                 >
                   +
@@ -110,7 +122,7 @@ export function CartPage() {
             clearCart.mutate(undefined, { onError: () => hapticNotify("error") });
           }}
           disabled={busy}
-          className="mt-2 w-full py-3 text-sm font-medium opacity-60 disabled:opacity-30"
+          className="app-press mt-2 w-full py-3 text-sm font-medium opacity-60 disabled:opacity-30"
         >
           Очистити кошик
         </button>

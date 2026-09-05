@@ -10,6 +10,7 @@ import type {
   Cart,
   Category,
   Location,
+  OptionSelection,
   ProductDetail,
   ProductListItem,
   RegisterPayload,
@@ -90,7 +91,8 @@ export function useCart() {
 export function useAddToCart() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { variant_id: number; qty: number }) => api.post<Cart>("/cart/items", v),
+    mutationFn: (v: { variant_id: number; qty: number; options: OptionSelection[] }) =>
+      api.post<Cart>("/cart/items", v),
     onSuccess: (cart) => qc.setQueryData(keys.cart, cart),
   });
 }

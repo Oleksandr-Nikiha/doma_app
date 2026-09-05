@@ -15,7 +15,7 @@ export function ContactsPage() {
           <section
             key={loc.id}
             className="rounded-2xl p-4"
-            style={{ background: "var(--tg-theme-secondary-bg-color)" }}
+            style={{ background: "var(--app-surface)" }}
           >
             <h2 className="font-semibold">{loc.name}</h2>
             <p className="mt-1 text-sm opacity-70">{loc.address}</p>

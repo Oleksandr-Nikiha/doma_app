@@ -18,8 +18,11 @@ export function TabBar() {
     <nav
       className="sticky bottom-0 flex border-t"
       style={{
-        background: "var(--tg-theme-bg-color)",
-        borderColor: "var(--tg-theme-secondary-bg-color)",
+        // Напівпрозора з розмиттям: контент, що проїжджає під панеллю,
+        // натякає, що список продовжується, а не обрізаний
+        background: "var(--app-veil)",
+        backdropFilter: "blur(12px)",
+        borderColor: "var(--app-border)",
         // Щоб панель не ховалась під системним індикатором на iPhone
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
@@ -39,7 +42,8 @@ export function TabBar() {
           {tab.label}
           {tab.to === "/cart" && count > 0 && (
             <span
-              className="absolute right-[22%] top-1 min-w-4 rounded-full px-1 text-[10px] font-bold leading-4"
+              key={count} /* перемонтування на зміні — щоб app-pop програвався щоразу */
+              className="app-pop absolute right-[22%] top-1 min-w-4 rounded-full px-1 text-[10px] font-bold leading-4"
               style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
             >
               {count}
