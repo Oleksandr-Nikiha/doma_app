@@ -1,6 +1,5 @@
 from functools import lru_cache
 
-from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,21 +15,18 @@ class Settings(BaseSettings):
     api_debug: bool = False
 
     # Origins, яким дозволено ходити в API з браузера (Vite у dev, домен Mini App у проді).
-    # У .env задається як CORS_ORIGINS=http://localhost:5173,https://app.example.com
-    cors_origins: list[str] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
+    # У .env задається рядком через кому: CORS_ORIGINS=http://localhost:5173,https://app.example.com
+    #
+    # Тип саме str, а не list[str]: для складних типів pydantic-settings намагається
+    # розпарсити значення змінної як JSON ще до валідаторів, тож рядок через кому
+    # валить застосунок з SettingsError. Розбираємо самі — див. cors_origin_list().
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def _split_origins(cls, v):
-        """Дозволяє задати список як звичайний рядок через кому, а не JSON."""
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",") if origin.strip()]
-        return v
+    def cors_origin_list(self) -> list[str]:
+        """CORS_ORIGINS як список, з відкинутими порожніми елементами й пробілами."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache

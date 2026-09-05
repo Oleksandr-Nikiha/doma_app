@@ -23,7 +23,7 @@ app = FastAPI(title="Doma Mini App API", lifespan=lifespan)
 _settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_settings.cors_origins,
+    allow_origins=_settings.cors_origin_list(),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
