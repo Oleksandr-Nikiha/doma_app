@@ -87,25 +87,60 @@ jobs:
             -v "$PWD/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
             nginx:1.27-alpine nginx -t
 
+  frontend:
+    name: Фронтенд — типи та збірка
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Встановити залежності
+        run: npm ci
+
+      # tsc окремим кроком від vite build: так у логах видно, що саме впало —
+      # типи чи сама збірка. npm run build робить обидва разом.
+      - name: Перевірка типів
+        run: npx tsc --noEmit
+
+      - name: Збірка
+        run: npx vite build
+
   build:
     name: Збірка образів
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        service: [api, bot]
+        include:
+          - name: api
+            context: ./api
+            dockerfile: ./api/Dockerfile
+          - name: bot
+            context: ./bot
+            dockerfile: ./bot/Dockerfile
+          # У nginx контекст — корінь проєкту: його перша стадія збирає
+          # фронтенд, тож їй потрібні і frontend/, і nginx/.
+          - name: nginx
+            context: .
+            dockerfile: ./nginx/Dockerfile
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
 
-      # Образ nginx тут не збирається: його стадія build потребує
-      # frontend/package.json, якого ще немає. Додати в матрицю
-      # разом зі скафолдингом фронтенду.
-      - name: Зібрати ${{ matrix.service }}
+      - name: Зібрати ${{ matrix.name }}
         uses: docker/build-push-action@v6
         with:
-          context: ./${{ matrix.service }}
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -135,3 +170,21 @@ jobs:
             exit 1
           fi
           echo "OK: токенів не знайдено"
+
+      - name: Пошук підписаного initData
+        run: |
+          # initData підписаний тим самим BOT_TOKEN і дійсний добу. Одного разу
+          # він уже витікав через dev-сервер, тож стежимо і за ним. Шукаємо
+          # зв'язку auth_date + hash, а не окремі слова: інакше спрацьовуватиме
+          # на код, який ці поля просто називає.
+          # Статус пайплайна тут не показник: xargs без вводу завершується
+          # нулем, тож `if ... | xargs ...` спрацьовував би на порожньому
+          # результаті. Дивимось саме на вивід.
+          found=$(git grep -lE 'auth_date=[0-9]{10}' -- . ':!.github/workflows/ci.yml' \
+                  | xargs -r grep -lE 'hash=[a-f0-9]{64}' || true)
+          if [ -n "$found" ]; then
+            echo "$found"
+            echo "::error::Схоже на підписаний initData у репозиторії — перегенеруйте його"
+            exit 1
+          fi
+          echo "OK: initData не знайдено"

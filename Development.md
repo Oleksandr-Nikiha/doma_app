@@ -11,22 +11,33 @@ UX замовлення у **Telegram Mini App**, залишивши бота д
 
 ---
 
-## Поточний стан (оновлено 2026-09-02)
+## Поточний стан (оновлено 2026-09-05)
+
+**MVP зібраний повністю.** Бекенд, бот, інфраструктура та всі екрани Mini App
+працюють; застосунок відкривається з Telegram за HTTPS-доменом.
 
 **Готово:**
-- Backend MVP — усі 12 ендпоінтів реалізовані та перевірені наскрізно проти живої БД
-- Схема БД (`0001_init.sql`) застосована, каталог засіяний
-- Бот: `/start` із кнопкою Mini App + постійна Menu Button, розпізнає зареєстрованого юзера
+- Backend — 12 ендпоінтів, перевірені наскрізно проти живої БД
+- Схема БД (`0001_init.sql`) застосована, каталог засіяний реальними даними з
+  `domapizza.com.ua`: 112 товарів, 195 варіантів, 32 категорії
+- Дворівневі категорії з прихованими та стоп-лист (`is_available`)
+- Групи опцій: соус і напій «на вибір» у боксах, хенд-ролах, картоплі
+- Бот: `/start` із кнопкою Mini App + постійна Menu Button
 - nginx: статика + проксі `/api`, SPA-fallback, рантайм-резолв upstream
-- `docker-compose.dev.yml` (redis + api + bot) та `docker-compose.yml` (прод, з nginx)
-
-**Лишилось для MVP:** фронтенд — жодного файлу, лише каркас директорій.
+- Усі екрани Mini App, світла й темна теми
+- CI: лінт, імпорти, конфіги, типи та збірка фронтенду, три docker-образи, пошук секретів
 
 **Відхилення від початкового плану:**
 - `aiogram` — **3.31**, а не 3.7: 3.7 вимагає `pydantic<2.8` і конфліктує з `pydantic 2.9.2` в API
 - Порт API на хості — **8010**, а не 8000 (8000 зайнятий portainer)
 - Redis у compose є, але кодом ще не використовується — кошик одразу в Postgres, як і планувалось для MVP
 - Кошик **не групується** по `location_id` — свідомо, це задача Фази 2 (checkout)
+- `@telegram-apps/telegram-ui` не використовується: власні компоненти на Tailwind
+  виявились простішими, ніж підганяти готові під потрібний вигляд
+- Категорії стали дворівневими, а товари обзавелись опціями — цього не було
+  в початковому плані, з'явилось після розбору реального меню закладу
+
+**Лишилось до Фази 2:** оформлення замовлення.
 
 ---
 
@@ -58,11 +69,11 @@ MVP включає лише 4 можливості:
 - Валідація `Telegram.WebApp.initData` (HMAC) на кожен запит — без окремого JWT для MVP
 
 **Frontend (Mini App UI):**
-- React + TypeScript + Vite
-- `@telegram-apps/sdk` (або `@twa-dev/sdk`) — тема, `MainButton`, `BackButton`, `HapticFeedback`
-- `@telegram-apps/telegram-ui` — готові UI-компоненти під Telegram
-- TailwindCSS
+- React 19 + TypeScript + Vite 8
+- `@telegram-apps/sdk-react` — тема, `BackButton`, `HapticFeedback`
+- TailwindCSS 4 — власні компоненти замість `@telegram-apps/telegram-ui`
 - TanStack Query — робота з API
+- react-router-dom — навігація між екранами
 
 **Інфраструктура:**
 - Docker Compose: `bot`, `api`, `postgres`, `redis`, `frontend` (nginx)
@@ -73,52 +84,47 @@ MVP включає лише 4 можливості:
 
 ## Модель даних (MVP)
 
+Фактична схема — `db/migrations/0001_init.sql`, 11 таблиць.
+
 ```
-users
-  id                  PK
-  telegram_id         unique
-  full_name
-  phone
-  delivery_address
-  created_at
+locations          id, name, address, phones[]
+users              id, telegram_id UNIQUE, full_name, phone, delivery_address
 
-categories
-  id                  PK
-  name
-  icon
-  location_id         FK -> locations (щоб знати, з якого закладу товар)
-  sort_order
+categories         id, location_id FK, parent_id FK -> categories, name, icon,
+                   is_visible, sort_order
+products           id, category_id FK, name, description, image_url,
+                   is_available, sort_order
+product_variants   id, product_id FK, label, weight, price, is_available, sort_order
 
-products
-  id                  PK
-  category_id         FK
-  name
-  description
-  image_url
+option_groups         id, name, sort_order
+option_group_items    group_id FK, variant_id FK, price_delta, is_available
+                      PK (group_id, variant_id)
+product_option_groups product_id FK, group_id FK, min_select, max_select
+                      PK (product_id, group_id)
 
-product_variants
-  id                  PK
-  product_id          FK
-  label               (S / M / XL / 3XL)
-  weight
-  price
-
-locations
-  id                  PK
-  name                (Doma Pizza / Doma Croissants)
-  address
-  phone
-
-carts
-  id                  PK
-  telegram_id         unique (1 активний кошик на юзера)
-
-cart_items
-  id                  PK
-  cart_id             FK
-  variant_id          FK
-  qty
+carts              id, telegram_id UNIQUE FK -> users.telegram_id
+cart_items         id, cart_id FK, variant_id FK, qty, options_key
+                   UNIQUE (cart_id, variant_id, options_key)
+cart_item_options  cart_item_id FK, (group_id, variant_id) FK -> option_group_items, qty
 ```
+
+**Чому саме так:**
+
+- **Дерево категорій — два рівні.** `parent_id` на самі ж категорії; товари висять
+  тільки на листках. `is_visible = false` ховає категорію з меню: так зроблено
+  «Соуси», позиції якої існують лише як опції.
+- **Опції посилаються на `product_variants`, а не на окрему таблицю.** Кетчуп і
+  Fanta — звичайні товари з цінами; окрема таблиця опцій дублювала б їх.
+- **`min_select`/`max_select` живуть на звʼязку товар↔група, а не на групі.**
+  Група «Соус до хенд-ролу» одна, але звичайний хенд-рол бере 1 соус із 3,
+  а СЕТ — усі 3.
+- **`options_key`** — відсортований відбиток вибраних опцій (`"1:3|2:5"`), який
+  рахує бекенд. Він у складі унікального ключа, тож бокс із кетчупом і бокс із
+  сирним соусом стають різними рядками, а два однакові складаються в один
+  через `ON CONFLICT`.
+- **`is_available`** — стоп-лист без видалення рядків. Видаляти не можна:
+  `cart_items.variant_id` має `ON DELETE RESTRICT`, щоб зміна каталогу не
+  ламала чужий кошик.
 
 > Поля `fulfillment_type`, `payment_method`, `order_groups` тощо — свідомо не додаємо в MVP,
 > вони з'являться разом із checkout (Фаза 2).
@@ -131,12 +137,12 @@ cart_items
 POST   /api/register            { full_name, phone, delivery_address }   ← створює/оновлює users
 GET    /api/me                                                            ← дані профілю
 
-GET    /api/categories
-GET    /api/categories/{id}/products
-GET    /api/products/{id}                                                 ← з variants
+GET    /api/categories                                                    ← плаский список із parent_id
+GET    /api/categories/{id}/products                                      ← товари категорії та її дітей
+GET    /api/products/{id}                                                 ← variants + option_groups
 
 GET    /api/cart
-POST   /api/cart/items           { variant_id, qty }
+POST   /api/cart/items           { variant_id, qty, options: [{group_id, variant_id}] }
 PATCH  /api/cart/items/{id}      { qty }
 DELETE /api/cart/items/{id}
 DELETE /api/cart                                                          ← очистити кошик
@@ -146,6 +152,12 @@ GET    /api/locations                                                     ← к
 
 Кожен запит несе `initData` в заголовку (напр. `X-Telegram-Init-Data`), бекенд валідує підпис
 і дістає `telegram_id` — окремої авторизації через логін/пароль немає.
+
+`POST /api/cart/items` перевіряє опції на боці сервера: група має належати саме
+цьому товару, позиція — саме цій групі й бути доступною, кількість вибраного —
+вкладатись у `min_select`…`max_select`. Схема БД цього не гарантує (зовнішній
+ключ не бачить, до якого товару належить позиція кошика), тож без перевірки
+підробленим запитом можна було б узяти безкоштовний напій до піци.
 
 ---
 
@@ -158,20 +170,27 @@ GET    /api/locations                                                     ← к
    - `MainButton`: "Зберегти" → `POST /api/register`
 
 2. **Головна (категорії)**
-   - Сітка категорій: Піца, Суші та роли, Боули та салати, Закуски, Десерти, Напої, Круасани
+   - Сітка **кореневих** категорій: Піца, Суші та роли, Боули та салати, Закуски,
+     Десерти, Напої, Круасани. Підкатегорії окремими тайлами не показуються
    - Іконка + назва (як зараз у боті, тільки у вигляді тайлів замість reply-кнопок)
 
 3. **Список товарів категорії**
+   - Товари кореня і всіх його підкатегорій одним екраном, розкладені по секціях
+     («Фірмові», «Мікс на чотири», …) — на один рівень навігації менше
    - Картки: фото, назва, ціна "від"
-   - Тап → картка товару
+   - Заголовок секції липкий: у списку на 25 позицій інакше не видно, де ти
 
 4. **Картка товару**
    - Фото, опис, вибір розміру (S/M/XL/3XL з ціною для кожного)
+   - Групи опцій, якщо вони є: «Соус до картоплі», «Напій 0.5 л». Група, де
+     брати треба все (Хенд-рол СЕТ — три соуси), показується як склад, а не вибір
    - Степер кількості
-   - `MainButton`: "Додати в кошик — {сума}"
+   - Кнопка "Додати в кошик — {сума}", неактивна поки не обрано обов'язкові опції
 
 5. **Кошик**
-   - Список позицій: назва, розмір, ціна, +/– кількість, видалити позицію
+   - Список позицій: назва, розмір, обрані опції, ціна, +/– кількість, видалити позицію
+   - Опції показуються обов'язково: без них два бокси з різними соусами
+     виглядають однаково
    - Кнопка "Очистити кошик"
    - Підсумкова сума
    - Кнопка "Оформити" — у MVP веде на заглушку ("Скоро буде доступно") або просто прихована
