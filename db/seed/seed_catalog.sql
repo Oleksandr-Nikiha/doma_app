@@ -2026,6 +2026,36 @@ FROM new_product, (VALUES
         ('порція', NULL, 0, 1)
     ) AS v(label, weight, price, sort_order);
 
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Майонез', NULL,
+           NULL, 6
+    FROM categories c JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Соуси'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('порція', NULL, 0, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Соус BBQ — тезка піци «BBQ». Різні категорії, тож у products це не конфлікт,
+-- але вибірки за назвою мусять додавати v.label = 'порція': у піци мітки S/M/XL/3XL.
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'BBQ', NULL,
+           NULL, 7
+    FROM categories c JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Соуси'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('порція', NULL, 0, 1)
+    ) AS v(label, weight, price, sort_order);
+
 -- ========== Групи опцій ==========
 
 INSERT INTO option_groups (name, sort_order) VALUES
@@ -2054,6 +2084,14 @@ UNION ALL
 SELECT g.id, v.id, 20, 2
 FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id
 WHERE g.name = 'Соус до картоплі' AND p.name = 'Сирний соус' AND v.label = 'порція'
+UNION ALL
+SELECT g.id, v.id, 20, 3
+FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id
+WHERE g.name = 'Соус до картоплі' AND p.name = 'Майонез' AND v.label = 'порція'
+UNION ALL
+SELECT g.id, v.id, 20, 4
+FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id
+WHERE g.name = 'Соус до картоплі' AND p.name = 'BBQ' AND v.label = 'порція'
 UNION ALL
 SELECT g.id, v.id, 0, 1
 FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id
