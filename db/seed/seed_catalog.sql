@@ -1,8 +1,8 @@
 -- seed_catalog.sql
 -- Тестові дані каталогу, зібрані з domapizza.com.ua (станом на 2026-09-05).
 --
--- Розраховано на ЧИСТУ базу після 0001_init.sql: повторний запуск створить дублі,
--- бо унікальних обмежень на назви немає.
+-- Розраховано на ЧИСТУ базу після 0001_init.sql і 0002_free_options.sql:
+-- повторний запуск створить дублі, бо унікальних обмежень на назви немає.
 --
 -- Джерело даних:
 --   Піца            https://domapizza.com.ua/pizza/
@@ -22,8 +22,11 @@
 --   * «Cola, Fanta, Sprite» розбито на три товари: як один товар вони не дають
 --     обрати смак у групі опцій боксів.
 --   * Категорія «Соуси» прихована (is_visible = false) — її товари існують лише
---     як позиції груп опцій, окремо в меню не показуються. Ціна 0: сайт віддає
---     ці соуси безкоштовно, окремого прайсу на них немає.
+--     як позиції груп опцій, окремо в меню не показуються. Власна ціна 0: у меню
+--     вони не продаються, платить клієнт через price_delta групи.
+--   * Соус до картоплі: перший безкоштовно, кожен наступний 20 грн
+--     (price_delta = 20 на позиціях, free_count = 1 на звʼязку з товаром).
+--     Стеля 5 порцій — запобіжник від безглуздого замовлення.
 --
 -- Відомі розбіжності самого джерела (лишені як є, крім позначеного):
 --   * «Чотири сири»: 60-см піца підписана як XL — виправлено на 3XL за діаметром,
@@ -2041,11 +2044,11 @@ SELECT g.id, v.id, 0, 3
 FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id
 WHERE g.name = 'Соус до хенд-ролу' AND p.name = 'Соус унагі' AND v.label = 'порція'
 UNION ALL
-SELECT g.id, v.id, 0, 1
+SELECT g.id, v.id, 20, 1
 FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id
 WHERE g.name = 'Соус до картоплі' AND p.name = 'Кетчуп' AND v.label = 'порція'
 UNION ALL
-SELECT g.id, v.id, 0, 2
+SELECT g.id, v.id, 20, 2
 FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id
 WHERE g.name = 'Соус до картоплі' AND p.name = 'Сирний соус' AND v.label = 'порція'
 UNION ALL
@@ -2065,50 +2068,50 @@ WHERE g.name = 'Напій 0.5 л' AND p.name = 'Sprite' AND v.label = '0.5 л';
 -- min_select/max_select живуть саме тут: група «Соус до хенд-ролу» та сама,
 -- але звичайний хенд-рол бере 1 соус із 3, а СЕТ — усі 3.
 
-INSERT INTO product_option_groups (product_id, group_id, min_select, max_select, sort_order)
-SELECT p.id, g.id, 1, 1, 1 FROM products p, option_groups g
+INSERT INTO product_option_groups (product_id, group_id, min_select, max_select, free_count, sort_order)
+SELECT p.id, g.id, 1, 1, 0, 1 FROM products p, option_groups g
 WHERE p.name = 'Хенд-рол з лососем' AND g.name = 'Соус до хенд-ролу'
 UNION ALL
-SELECT p.id, g.id, 1, 1, 1 FROM products p, option_groups g
+SELECT p.id, g.id, 1, 1, 0, 1 FROM products p, option_groups g
 WHERE p.name = 'Хенд-рол з вугрем' AND g.name = 'Соус до хенд-ролу'
 UNION ALL
-SELECT p.id, g.id, 1, 1, 1 FROM products p, option_groups g
+SELECT p.id, g.id, 1, 1, 0, 1 FROM products p, option_groups g
 WHERE p.name = 'Хенд-рол з тигровою креветкою' AND g.name = 'Соус до хенд-ролу'
 UNION ALL
-SELECT p.id, g.id, 3, 3, 1 FROM products p, option_groups g
+SELECT p.id, g.id, 3, 3, 0, 1 FROM products p, option_groups g
 WHERE p.name = 'Хенд-рол СЕТ' AND g.name = 'Соус до хенд-ролу'
 UNION ALL
-SELECT p.id, g.id, 1, 1, 1 FROM products p, option_groups g
+SELECT p.id, g.id, 1, 5, 1, 1 FROM products p, option_groups g
 WHERE p.name = 'Картопля фрі з печі' AND g.name = 'Соус до картоплі'
 UNION ALL
-SELECT p.id, g.id, 1, 1, 1 FROM products p, option_groups g
+SELECT p.id, g.id, 1, 5, 1, 1 FROM products p, option_groups g
 WHERE p.name = 'Чікен рол бокс' AND g.name = 'Соус до картоплі'
 UNION ALL
-SELECT p.id, g.id, 1, 1, 2 FROM products p, option_groups g
+SELECT p.id, g.id, 1, 1, 0, 2 FROM products p, option_groups g
 WHERE p.name = 'Чікен рол бокс' AND g.name = 'Напій 0.5 л'
 UNION ALL
-SELECT p.id, g.id, 1, 1, 1 FROM products p, option_groups g
+SELECT p.id, g.id, 1, 5, 1, 1 FROM products p, option_groups g
 WHERE p.name = 'Верона рол бокс' AND g.name = 'Соус до картоплі'
 UNION ALL
-SELECT p.id, g.id, 1, 1, 2 FROM products p, option_groups g
+SELECT p.id, g.id, 1, 1, 0, 2 FROM products p, option_groups g
 WHERE p.name = 'Верона рол бокс' AND g.name = 'Напій 0.5 л'
 UNION ALL
-SELECT p.id, g.id, 1, 1, 1 FROM products p, option_groups g
+SELECT p.id, g.id, 1, 5, 1, 1 FROM products p, option_groups g
 WHERE p.name = 'Вишгородський рол бокс' AND g.name = 'Соус до картоплі'
 UNION ALL
-SELECT p.id, g.id, 1, 1, 2 FROM products p, option_groups g
+SELECT p.id, g.id, 1, 1, 0, 2 FROM products p, option_groups g
 WHERE p.name = 'Вишгородський рол бокс' AND g.name = 'Напій 0.5 л'
 UNION ALL
-SELECT p.id, g.id, 1, 1, 1 FROM products p, option_groups g
+SELECT p.id, g.id, 1, 5, 1, 1 FROM products p, option_groups g
 WHERE p.name = 'Цезар рол бокс' AND g.name = 'Соус до картоплі'
 UNION ALL
-SELECT p.id, g.id, 1, 1, 2 FROM products p, option_groups g
+SELECT p.id, g.id, 1, 1, 0, 2 FROM products p, option_groups g
 WHERE p.name = 'Цезар рол бокс' AND g.name = 'Напій 0.5 л'
 UNION ALL
-SELECT p.id, g.id, 1, 1, 1 FROM products p, option_groups g
+SELECT p.id, g.id, 1, 5, 1, 1 FROM products p, option_groups g
 WHERE p.name = 'Хані міт роллінг бокс' AND g.name = 'Соус до картоплі'
 UNION ALL
-SELECT p.id, g.id, 1, 1, 2 FROM products p, option_groups g
+SELECT p.id, g.id, 1, 1, 0, 2 FROM products p, option_groups g
 WHERE p.name = 'Хані міт роллінг бокс' AND g.name = 'Напій 0.5 л';
 
 COMMIT;
