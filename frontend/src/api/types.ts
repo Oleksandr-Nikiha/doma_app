@@ -45,6 +45,8 @@ export interface OptionGroup {
   name: string;
   min_select: number;
   max_select: number;
+  /** Скільки порцій у групі безкоштовні: соус до картоплі — перша. */
+  free_count: number;
   items: OptionItem[];
 }
 
@@ -75,6 +77,8 @@ export interface RegisterPayload {
 export interface OptionSelection {
   group_id: number;
   variant_id: number;
+  /** Кілька порцій однієї опції: два кетчупи — це qty = 2, а не два записи. */
+  qty: number;
 }
 
 export interface CartItemOption {

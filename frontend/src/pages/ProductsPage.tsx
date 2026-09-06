@@ -1,4 +1,5 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { useLayoutEffect } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useCategories, useProducts } from "@/api/queries";
 import {
@@ -14,6 +15,9 @@ import { useBackButton } from "@/hooks/useBackButton";
 import { haptic } from "@/telegram/sdk";
 import type { Category, ProductListItem } from "@/api/types";
 
+/** Якір секції в DOM — за ним працює перехід із головної до підкатегорії. */
+const sectionDomId = (categoryId: number) => `cat-${categoryId}`;
+
 /**
  * Розкладає товари по підкатегоріях.
  *
@@ -26,20 +30,21 @@ function groupBySubcategory(products: ProductListItem[], categories: Category[] 
   const order = new Map<number, number>();
   categories?.forEach((c, i) => order.set(c.id, i));
 
-  const map = new Map<number, { name: string; items: ProductListItem[] }>();
+  const map = new Map<number, { id: number; name: string; items: ProductListItem[] }>();
   for (const p of products) {
-    const group = map.get(p.category_id) ?? { name: p.category_name, items: [] };
+    const group = map.get(p.category_id) ?? { id: p.category_id, name: p.category_name, items: [] };
     group.items.push(p);
     map.set(p.category_id, group);
   }
 
-  return [...map.entries()]
-    .sort(([a], [b]) => (order.get(a) ?? Infinity) - (order.get(b) ?? Infinity))
-    .map(([, group]) => group);
+  return [...map.values()].sort(
+    (a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity),
+  );
 }
 
 export function ProductsPage() {
   const { categoryId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   useBackButton();
 
@@ -50,6 +55,17 @@ export function ProductsPage() {
   // (перезавантаження, посилання) заголовок був би порожній
   const { data: categories } = useCategories();
   const title = categories?.find((c) => c.id === id)?.name ?? "Товари";
+
+  // ?section=<id> — перехід із головної одразу до потрібної підкатегорії.
+  // useLayoutEffect, а не useEffect: браузер не встигає намалювати кадр
+  // на початку списку, тож стрибка вниз не видно.
+  // Розміри карток фіксовані (мініатюра має задану висоту), тож підвантаження
+  // фото після скролу нічого не зсуває.
+  const targetSection = searchParams.get("section");
+  useLayoutEffect(() => {
+    if (!targetSection || !data) return;
+    document.getElementById(sectionDomId(Number(targetSection)))?.scrollIntoView({ block: "start" });
+  }, [targetSection, data]);
 
   if (isPending) return <Spinner />;
   if (error) return <ErrorBox message={error.message} onRetry={() => void refetch()} />;
@@ -66,7 +82,7 @@ export function ProductsPage() {
     <div className="pb-4">
       <ScreenTitle>{title}</ScreenTitle>
       {groups.map((group) => (
-        <section key={group.name} className="mb-5 last:mb-0">
+        <section key={group.id} id={sectionDomId(group.id)} className="mb-5 last:mb-0">
           {withHeadings && <SectionHeading>{group.name}</SectionHeading>}
           {/* Поява — на контейнері: у картки свій перехід на натиск */}
           <div className="app-rise space-y-3 px-4">

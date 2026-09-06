@@ -5,22 +5,57 @@ import { useAddToCart, useProduct } from "@/api/queries";
 import { ErrorBox, Spinner, Thumb, formatPrice } from "@/components/ui";
 import { useBackButton } from "@/hooks/useBackButton";
 import { haptic, hapticNotify } from "@/telegram/sdk";
-import type { OptionGroup } from "@/api/types";
+import type { OptionGroup, OptionSelection } from "@/api/types";
+
+/** Скільки порцій обрано в групі: ключ — variant_id, значення — кількість. */
+type Picks = Record<number, number>;
 
 /**
  * Група, де вибирати нема з чого: треба взяти рівно стільки, скільки є
  * (Хенд-рол СЕТ — усі три соуси). Показуємо як склад, а не як вибір.
  */
 function isFixed(group: OptionGroup) {
-  return group.min_select >= group.items.length;
+  return group.min_select >= group.items.length && group.max_select <= group.items.length;
 }
 
-/** Підказка біля назви групи: скільки позицій очікується. */
+function unitsIn(picks: Picks) {
+  return Object.values(picks).reduce((sum, n) => sum + n, 0);
+}
+
+/**
+ * Вартість опцій групи з урахуванням безкоштовної квоти.
+ *
+ * Повторює алгоритм бекенда один в один (api/src/routers/cart.py → options_cost):
+ * розгортаємо вибір по окремих порціях, найдорожчі йдуть безкоштовно. Якщо ці
+ * два підрахунки розійдуться, користувач побачить одну суму на кнопці й іншу
+ * в кошику.
+ */
+function groupCost(group: OptionGroup, picks: Picks) {
+  const units: number[] = [];
+  for (const item of group.items) {
+    const qty = picks[item.variant_id] ?? 0;
+    for (let i = 0; i < qty; i++) units.push(item.price_delta);
+  }
+  return units
+    .sort((a, b) => b - a)
+    .slice(group.free_count)
+    .reduce((sum, price) => sum + price, 0);
+}
+
+/** Підказка біля назви групи: скільки брати і що з цього безкоштовно. */
 function selectionHint(group: OptionGroup) {
   if (isFixed(group)) return "усе включено";
-  if (group.min_select === group.max_select) return `оберіть ${group.min_select}`;
-  if (group.min_select === 0) return `до ${group.max_select}`;
-  return `${group.min_select}–${group.max_select}`;
+
+  const need =
+    group.min_select === group.max_select
+      ? `оберіть ${group.min_select}`
+      : group.min_select === 0
+        ? `до ${group.max_select}`
+        : `${group.min_select}–${group.max_select}`;
+
+  if (group.free_count === 0) return need;
+  const free = group.free_count === 1 ? "перша безкоштовно" : `${group.free_count} безкоштовно`;
+  return `${need} · ${free}`;
 }
 
 /** Спільний вигляд для «таблеток» розміру й опцій. */
@@ -46,49 +81,52 @@ export function ProductPage() {
   // Вибір опцій за group_id. Групи, яких тут немає, беруть значення за
   // замовчуванням — так стан лишається коректним і до завантаження даних,
   // без useEffect на підстановку.
-  const [picked, setPicked] = useState<Record<number, number[]>>({});
+  const [picked, setPicked] = useState<Record<number, Picks>>({});
 
   if (isPending) return <Spinner />;
   if (error) return <ErrorBox message={error.message} onRetry={() => void refetch()} />;
 
   const selected = data.variants.find((v) => v.id === variantId) ?? data.variants[0];
 
-  const selectionFor = (group: OptionGroup): number[] =>
-    picked[group.group_id] ?? (isFixed(group) ? group.items.map((i) => i.variant_id) : []);
+  const picksFor = (group: OptionGroup): Picks =>
+    picked[group.group_id] ??
+    (isFixed(group) ? Object.fromEntries(group.items.map((i) => [i.variant_id, 1])) : {});
 
-  function toggleOption(group: OptionGroup, optionVariantId: number) {
-    const current = selectionFor(group);
-    let next: number[];
+  function setPicks(group: OptionGroup, next: Picks) {
+    setPicked((prev) => ({ ...prev, [group.group_id]: next }));
+  }
 
-    if (current.includes(optionVariantId)) {
-      next = current.filter((id) => id !== optionVariantId);
-    } else if (group.max_select === 1) {
-      next = [optionVariantId]; // одиночний вибір — заміщуємо
-    } else if (current.length < group.max_select) {
-      next = [...current, optionVariantId];
-    } else {
+  /** Одиночний вибір: тап заміщує попередній. */
+  function pickOne(group: OptionGroup, optionVariantId: number) {
+    const current = picksFor(group);
+    haptic("light");
+    setPicks(group, current[optionVariantId] ? {} : { [optionVariantId]: 1 });
+  }
+
+  /** Множинний вибір: ±1 порція, у межах max_select на всю групу. */
+  function changeQty(group: OptionGroup, optionVariantId: number, delta: number) {
+    const current = picksFor(group);
+
+    if (delta > 0 && unitsIn(current) >= group.max_select) {
       hapticNotify("warning"); // ліміт групи вичерпано
       return;
     }
 
+    const next = { ...current };
+    const value = (next[optionVariantId] ?? 0) + delta;
+    if (value <= 0) delete next[optionVariantId];
+    else next[optionVariantId] = value;
+
     haptic("light");
-    setPicked((prev) => ({ ...prev, [group.group_id]: next }));
+    setPicks(group, next);
   }
 
   // Бекенд перевіряє ті самі межі й віддає 400 — тут дублюємо, щоб не
   // ганяти завідомо невалідний запит і одразу пояснити, чого бракує.
-  const unfilled = data.option_groups.filter((g) => selectionFor(g).length < g.min_select);
+  const unfilled = data.option_groups.filter((g) => unitsIn(picksFor(g)) < g.min_select);
   const canAdd = Boolean(selected) && unfilled.length === 0;
 
-  const optionsDelta = data.option_groups.reduce(
-    (sum, g) =>
-      sum +
-      selectionFor(g).reduce(
-        (acc, id) => acc + (g.items.find((i) => i.variant_id === id)?.price_delta ?? 0),
-        0,
-      ),
-    0,
-  );
+  const optionsDelta = data.option_groups.reduce((sum, g) => sum + groupCost(g, picksFor(g)), 0);
   const total = selected ? (selected.price + optionsDelta) * qty : 0;
 
   return (
@@ -128,8 +166,12 @@ export function ProductPage() {
         )}
 
         {data.option_groups.map((group) => {
-          const chosen = selectionFor(group);
+          const picks = picksFor(group);
           const fixed = isFixed(group);
+          // Кілька порцій — окремий вигляд: «таблетка» не показує кількість,
+          // а рядок зі степером показує і не потребує здогадок.
+          const multi = !fixed && group.max_select > 1;
+
           return (
             <div key={group.group_id} className="app-rise mt-5 px-4">
               <div className="mb-2 flex items-baseline justify-between gap-2">
@@ -138,30 +180,76 @@ export function ProductPage() {
                 </p>
                 <p className="shrink-0 text-xs opacity-40">{selectionHint(group)}</p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {group.items.map((item) => {
-                  const active = chosen.includes(item.variant_id);
-                  return (
-                    <button
-                      key={item.variant_id}
-                      disabled={fixed}
-                      onClick={() => toggleOption(group, item.variant_id)}
-                      className={`rounded-xl px-3 py-2 text-sm disabled:opacity-100 ${fixed ? "" : "app-press"}`}
-                      style={chipStyle(active)}
-                    >
-                      {active && (
-                        <span className="app-pop mr-1.5 inline-block text-xs" aria-hidden>
-                          ✓
+
+              {multi ? (
+                <div className="space-y-2">
+                  {group.items.map((item) => {
+                    const count = picks[item.variant_id] ?? 0;
+                    return (
+                      <div
+                        key={item.variant_id}
+                        className="flex items-center gap-3 rounded-xl px-3 py-2"
+                        style={{ background: "var(--app-surface)" }}
+                      >
+                        <span className={`flex-1 text-sm ${count ? "font-semibold" : ""}`}>
+                          {item.name}
                         </span>
-                      )}
-                      <span className={active ? "font-semibold" : undefined}>{item.name}</span>
-                      {item.price_delta > 0 && (
-                        <span className="ml-2 opacity-70">+{formatPrice(item.price_delta)}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+                        {item.price_delta > 0 && (
+                          <span className="text-sm opacity-60">
+                            +{formatPrice(item.price_delta)}
+                          </span>
+                        )}
+                        <div
+                          className="flex items-center gap-2 rounded-lg px-1"
+                          style={{ background: "var(--app-surface-2)" }}
+                        >
+                          <button
+                            onClick={() => changeQty(group, item.variant_id, -1)}
+                            disabled={count === 0}
+                            className="app-press h-7 w-7 text-lg font-bold disabled:opacity-25"
+                            aria-label={`Менше: ${item.name}`}
+                          >
+                            −
+                          </button>
+                          <span className="w-4 text-center text-sm font-semibold">{count}</span>
+                          <button
+                            onClick={() => changeQty(group, item.variant_id, 1)}
+                            className="app-press h-7 w-7 text-lg font-bold"
+                            aria-label={`Більше: ${item.name}`}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {group.items.map((item) => {
+                    const active = Boolean(picks[item.variant_id]);
+                    return (
+                      <button
+                        key={item.variant_id}
+                        disabled={fixed}
+                        onClick={() => pickOne(group, item.variant_id)}
+                        className={`rounded-xl px-3 py-2 text-sm disabled:opacity-100 ${fixed ? "" : "app-press"}`}
+                        style={chipStyle(active)}
+                      >
+                        {active && (
+                          <span className="app-pop mr-1.5 inline-block text-xs" aria-hidden>
+                            ✓
+                          </span>
+                        )}
+                        <span className={active ? "font-semibold" : undefined}>{item.name}</span>
+                        {item.price_delta > 0 && (
+                          <span className="ml-2 opacity-70">+{formatPrice(item.price_delta)}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
@@ -210,8 +298,12 @@ export function ProductPage() {
           disabled={!canAdd || addToCart.isPending}
           onClick={() => {
             if (!selected) return;
-            const options = data.option_groups.flatMap((g) =>
-              selectionFor(g).map((variant_id) => ({ group_id: g.group_id, variant_id })),
+            const options: OptionSelection[] = data.option_groups.flatMap((g) =>
+              Object.entries(picksFor(g)).map(([optionVariantId, optionQty]) => ({
+                group_id: g.group_id,
+                variant_id: Number(optionVariantId),
+                qty: optionQty,
+              })),
             );
             addToCart.mutate(
               { variant_id: selected.id, qty, options },

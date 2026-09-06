@@ -42,14 +42,19 @@ export function CartPage() {
                 </p>
                 {/* Саме опції відрізняють два однакові з вигляду бокси —
                     без цього рядка їх у кошику не розрізнити. Мітку варіанта
-                    («порція», «0.5 л») не показуємо: розмір уже заданий групою. */}
+                    («порція», «0.5 л») не показуємо: розмір уже заданий групою.
+
+                    Ціну кожної опції окремо теж не показуємо: через безкоштовну
+                    квоту перша порція соусу коштує 0, а друга 20, і підпис
+                    «+20 ₴» біля назви вводив би в оману. Замість цього нижче
+                    йде фактична доплата за позицію. */}
                 {item.options.length > 0 && (
                   <p
                     className="mt-1 inline-block rounded-lg px-2 py-1 text-xs"
                     style={{ background: "var(--app-tint)", color: "var(--tg-theme-link-color)" }}
                   >
                     {item.options
-                      .map((o) => (o.price_delta > 0 ? `${o.name} +${formatPrice(o.price_delta)}` : o.name))
+                      .map((o) => (o.qty > 1 ? `${o.name} ×${o.qty}` : o.name))
                       .join(" · ")}
                   </p>
                 )}
@@ -95,7 +100,16 @@ export function CartPage() {
                   +
                 </button>
               </div>
-              <p className="font-semibold">{formatPrice(item.subtotal)}</p>
+              <div className="text-right">
+                {/* Виводимо різницю, а не суму price_delta: бекенд уже врахував
+                    безкоштовну квоту, і перерахунок на клієнті міг би розійтися */}
+                {item.subtotal / item.qty - item.price > 0.005 && (
+                  <p className="text-xs opacity-50">
+                    +{formatPrice(item.subtotal - item.price * item.qty)} за опції
+                  </p>
+                )}
+                <p className="font-semibold">{formatPrice(item.subtotal)}</p>
+              </div>
             </div>
           </div>
         ))}
