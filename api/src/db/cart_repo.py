@@ -1,18 +1,23 @@
 import asyncpg
 
 
-async def get_or_create_cart_id(pool: asyncpg.Pool, telegram_id: int) -> int:
+async def get_or_create_cart_id(conn: asyncpg.Connection, telegram_id: int) -> int:
     """
     Повертає id кошика юзера. Якщо кошика ще нема — створює.
-    Атомарний запит, стійкий до race condition (подвійних кліків).
+
+    Приймає зʼєднання, а не пул: виклик іде всередині транзакції додавання
+    позиції, і власне зʼєднання з пулу опинилося б поза нею — кошик створився
+    б навіть тоді, коли решта операції відкотилась.
+
+    ON CONFLICT ... DO UPDATE SET telegram_id = EXCLUDED.telegram_id — трюк,
+    що завжди повертає рядок. З DO NOTHING RETURNING віддав би порожньо,
+    якщо кошик уже існує, і два швидкі кліки дали б None.
     """
     query = """
-        INSERT INTO carts (telegram_id) 
+        INSERT INTO carts (telegram_id)
         VALUES ($1)
-        ON CONFLICT (telegram_id) DO UPDATE 
+        ON CONFLICT (telegram_id) DO UPDATE
         SET telegram_id = EXCLUDED.telegram_id
         RETURNING id;
     """
-    
-    async with pool.acquire() as conn:
-        return await conn.fetchval(query, telegram_id)
+    return await conn.fetchval(query, telegram_id)

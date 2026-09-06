@@ -38,6 +38,9 @@ class OptionGroupOut(BaseModel):
     name: str
     min_select: int
     max_select: int
+    # Скільки порцій у цій групі безкоштовні. Потрібне фронтенду, щоб він
+    # показав ту саму суму, яку порахує бекенд при додаванні в кошик.
+    free_count: int
     items: list[OptionItemOut]
 
 
