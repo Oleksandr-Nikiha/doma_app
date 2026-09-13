@@ -108,7 +108,9 @@ async def _fetch_cart(pool: asyncpg.Pool, telegram_id: int) -> CartOut:
                         qty=row["qty"],
                     )
                 )
-            extra += options_cost(units, rows[0]["free_count"])
+            
+            effective_free = rows[0]["free_count"] * item["qty"]
+            extra += options_cost(units, effective_free)
 
         price = float(item["price"])
         subtotal = round((price + extra) * item["qty"], 2)
@@ -189,7 +191,11 @@ async def add_item_to_cart(
             # Саме одиниці, а не рядки: два кетчупи приходять одним рядком
             # із qty = 2, і len() порахував би їх за один.
             count = sum(o.qty for o in requested_groups.get(g_id, []))
-            if count < rule["min_select"] or count > rule["max_select"]:
+
+            effective_min = rule["min_select"] * payload.qty
+            effective_max = rule["max_select"] * payload.qty
+            
+            if count < effective_min or count > effective_max:
                 raise HTTPException(
                     status_code=400, 
                     detail=(
@@ -247,22 +253,75 @@ async def update_cart_item(
     pool: asyncpg.Pool = Depends(get_pool)
 ):
     """
-    Оновлює кількість конкретного товару в кошику (наприклад, +1 / -1).
+    Оновлює кількість товару в кошику.
+
+    Позиції з обраними опціями (соуси, напої) ревалідуються: якщо новий qty
+    зсуває effective_min/max (= min_select/max_select * qty) так, що поточний
+    вибір опцій більше не вкладається — запит відхиляється. Інакше кількість
+    безкоштовних/платних порцій розійшлася б із тим, що юзер реально обирав
+    на картці товару (саме це стається без цієї перевірки: 2 соуси на 1 порцію
+    товару замість очікуваних 2 порцій).
+
+    Працює в обидва боки: і зменшення qty може порушити effective_max
+    (забагато соусу лишилось), і збільшення — effective_min (бракує напою
+    на другий бокс).
     """
-    update_query = """
-        UPDATE cart_items
-        SET qty = $1
-        FROM carts
-        WHERE cart_items.cart_id = carts.id
-          AND cart_items.id = $2
-          AND carts.telegram_id = $3
-    """
-    async with pool.acquire() as conn:
-        # execute повертає рядок статусу, наприклад "UPDATE 1" або "UPDATE 0"
-        result = await conn.execute(update_query, payload.qty, item_id, user["telegram_id"])
-        
-        if result == "UPDATE 0":
+    async with pool.acquire() as conn, conn.transaction():
+        # FOR UPDATE — лочимо рядок: паралельний PATCH на той самий item_id
+        # інакше міг би проскочити повз перевірку між SELECT і UPDATE.
+        item = await conn.fetchrow(
+            """
+            SELECT ci.id, pv.product_id
+            FROM cart_items ci
+            JOIN carts c ON c.id = ci.cart_id
+            JOIN product_variants pv ON pv.id = ci.variant_id
+            WHERE ci.id = $1 AND c.telegram_id = $2
+            FOR UPDATE OF ci
+            """,
+            item_id, user["telegram_id"],
+        )
+        if item is None:
             raise HTTPException(status_code=404, detail="Товар не знайдено в кошику")
+
+        rules = await conn.fetch(
+            """
+            SELECT group_id, min_select, max_select
+            FROM product_option_groups
+            WHERE product_id = $1
+            """,
+            item["product_id"],
+        )
+
+        if rules:
+            selected = await conn.fetch(
+                "SELECT group_id, qty FROM cart_item_options WHERE cart_item_id = $1",
+                item_id,
+            )
+            selected_counts: dict[int, int] = {}
+            for row in selected:
+                selected_counts[row["group_id"]] = (
+                    selected_counts.get(row["group_id"], 0) + row["qty"]
+                )
+
+            for rule in rules:
+                effective_min = rule["min_select"] * payload.qty
+                effective_max = rule["max_select"] * payload.qty
+                count = selected_counts.get(rule["group_id"], 0)
+                if count < effective_min or count > effective_max:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"Нова кількість не узгоджується з обраними опціями "
+                            f"(група {rule['group_id']}: обрано {count}, "
+                            f"дозволено {effective_min}-{effective_max} "
+                            f"при кількості {payload.qty}). "
+                            "Видаліть позицію і додайте знову з новою кількістю."
+                        ),
+                    )
+
+        await conn.execute(
+            "UPDATE cart_items SET qty = $1 WHERE id = $2", payload.qty, item_id
+        )
 
     return await _fetch_cart(pool, user["telegram_id"])
 

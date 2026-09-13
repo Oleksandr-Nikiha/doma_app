@@ -16,7 +16,7 @@ export function TabBar() {
 
   return (
     <nav
-      className="sticky bottom-0 flex border-t"
+      className="fixed inset-x-0 bottom-0 z-40 flex border-t"
       style={{
         // Напівпрозора з розмиттям: контент, що проїжджає під панеллю,
         // натякає, що список продовжується, а не обрізаний

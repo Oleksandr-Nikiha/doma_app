@@ -52,6 +52,17 @@
   --app-shadow: 0 1px 2px rgb(0 0 0 / 5%), 0 6px 16px -6px rgb(0 0 0 / 12%);
 }
 
+/* --- Компонування --- */
+
+/* Висота TabBar: py-2 (8px) + іконка text-xl (20px) + gap-0.5 (2px)
+   + підпис text-xs (16px) + py-2 (8px) + border-t (1px) = 55px.
+   Порахована з фактичної розмітки TabBar.tsx — онови тут, якщо зміниш
+   там padding, розмір іконки чи шрифт. Екрани зі скролом додають цю
+   висоту собі в padding-bottom через Layout.tsx, а не дублюють число. */
+:root {
+  --app-tabbar-height: 55px;
+}
+
 body {
   margin: 0;
   background: var(--tg-theme-bg-color);

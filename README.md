@@ -18,6 +18,7 @@
 ## Можливості
 
 **Готово:**
+
 - Реєстрація клієнта (ім'я, телефон, адреса) без окремого логіна — особа встановлюється
   з підписаного Telegram `initData`
 - Каталог: дворівневі категорії обох закладів → товари, розкладені по секціях →
@@ -41,7 +42,7 @@
 
 ## Архітектура
 
-```
+```text
 Telegram client
       │
       ├── Bot (aiogram)  ──── polling ────► Telegram Bot API
@@ -62,19 +63,19 @@ Telegram client
 
 ### Стек
 
-| Шар | Технології |
-|---|---|
-| API | FastAPI, Pydantic v2, asyncpg |
-| Бот | aiogram 3 |
-| Фронтенд | React 19 + TypeScript + Vite 8, TailwindCSS 4, TanStack Query, `@telegram-apps/sdk-react` |
-| Сховище | PostgreSQL, Redis |
-| Інфраструктура | Docker Compose, nginx |
+ Шар | Технології
+--- | ---
+ API | FastAPI, Pydantic v2, asyncpg
+ Бот | aiogram 3
+ Фронтенд | React 19 + TypeScript + Vite 8, TailwindCSS 4, TanStack Query, `@telegram-apps/sdk-react`
+ Сховище | PostgreSQL, Redis
+ Інфраструктура | Docker Compose, nginx
 
 ---
 
 ## Структура
 
-```
+```text
 api/        FastAPI — REST для Mini App (валідація initData, каталог, кошик)
 bot/        aiogram — точка входу /start, надалі нотифікації
 frontend/   React + TS + Vite — сам Mini App
@@ -119,7 +120,7 @@ docker compose -f docker-compose.dev.yml up --build
 ```
 
 Підіймаються `redis`, `api`, `bot` і `frontend`.
-API — на http://localhost:8010 (Swagger на `/docs`), Mini App — на http://localhost:5173.
+API — на `http://localhost:8010` (Swagger на `/docs`), Mini App — на `http://localhost:5173`.
 
 > Порт на хості — **8010**, а не 8000: 8000 часто зайнятий (у автора — portainer).
 > Змінюється в `docker-compose.dev.yml` і `VITE_API_BASE_URL`.
@@ -133,34 +134,34 @@ docker compose -f docker-compose.dev.yml restart frontend
 
 ### Змінні оточення
 
-| Змінна | Обов'язкова | Опис |
-|---|---|---|
-| `DATABASE_URL` | так | DSN PostgreSQL, напр. `postgresql://user:pass@host:5432/doma_app_db` |
-| `BOT_TOKEN` | так | Токен від BotFather; ним же валідується `initData` |
-| `MINI_APP_URL` | так | HTTPS-URL Mini App для кнопки в боті |
-| `REDIS_URL` | ні | Типово `redis://redis:6379/0` |
-| `CORS_ORIGINS` | ні | Origins через кому; типово Vite на `:5173` |
-| `API_DEBUG` | ні | Типово `false` |
-| `VITE_API_BASE_URL` | ні | Базовий URL API для фронтенду |
+Змінна | Обов'язкова | Опис
+--- | --- | ---
+`DATABASE_URL` | так | DSN PostgreSQL, напр. `postgresql://user:pass@host:5432/doma_app_db`
+`BOT_TOKEN` | так | Токен від BotFather; ним же валідується `initData`
+`MINI_APP_URL` | так | HTTPS-URL Mini App для кнопки в боті
+`REDIS_URL` | ні | Типово `redis://redis:6379/0`
+`CORS_ORIGINS` | ні | Origins через кому; типово Vite на `:5173`
+`API_DEBUG` | ні | Типово `false`
+`VITE_API_BASE_URL` | ні | Базовий URL API для фронтенду
 
 ---
 
 ## API
 
-| Метод | Шлях | Auth | Опис |
-|---|---|:---:|---|
-| GET | `/api/health` | — | healthcheck |
-| POST | `/api/register` | ✓ | створити/оновити профіль |
-| GET | `/api/me` | ✓ | профіль поточного користувача |
-| GET | `/api/categories` | — | дерево категорій обох закладів (плоско, з `parent_id`) |
-| GET | `/api/categories/{id}/products` | — | товари категорії **та її підкатегорій** |
-| GET | `/api/products/{id}` | — | картка товару: варіанти + групи опцій |
-| GET | `/api/cart` | ✓ | вміст кошика |
-| POST | `/api/cart/items` | ✓ | додати позицію |
-| PATCH | `/api/cart/items/{id}` | ✓ | змінити кількість |
-| DELETE | `/api/cart/items/{id}` | ✓ | видалити позицію |
-| DELETE | `/api/cart` | ✓ | очистити кошик |
-| GET | `/api/locations` | — | контакти закладів |
+Метод | Шлях | Auth | Опис
+--- | --- | :---: | ---
+GET | `/api/health` | — | healthcheck
+POST | `/api/register` | ✓ | створити/оновити профіль
+GET | `/api/me` | ✓ | профіль поточного користувача
+GET | `/api/categories` | — | дерево категорій обох закладів (плоско, з `parent_id`)
+GET | `/api/categories/{id}/products` | — | товари категорії **та її підкатегорій**
+GET | `/api/products/{id}` | — | картка товару: варіанти + групи опцій
+GET | `/api/cart` | ✓ | вміст кошика
+POST | `/api/cart/items` | ✓ | додати позицію
+PATCH | `/api/cart/items/{id}` | ✓ | змінити кількість
+DELETE | `/api/cart/items/{id}` | ✓ | видалити позицію
+DELETE | `/api/cart` | ✓ | очистити кошик
+GET | `/api/locations` | — | контакти закладів
 
 Позначені ✓ потребують заголовка `X-Telegram-Init-Data`; без нього або
 з невалідним підписом — `401`.
@@ -182,7 +183,7 @@ python3 scripts/generate_test_init_data.py "$BOT_TOKEN"
 
 Далі є два шляхи.
 
-**Swagger.** Відкрити http://localhost:8010/docs → **Authorize** → вставити рядок.
+**Swagger.** Відкрити `http://localhost:8010/docs` → **Authorize** → вставити рядок.
 Він застосується до всіх захищених ендпоінтів одразу.
 
 **curl.** Зручно покласти рядок у змінну — він дійсний 24 години:
@@ -281,13 +282,13 @@ docker compose -f docker-compose.dev.yml up -d --force-recreate bot
 
 ## Roadmap
 
-| Фаза | Обсяг | Стан |
-|---|---|---|
-| 1 | MVP: реєстрація, каталог, кошик, контакти | ✅ готово |
-| 2 | Оформлення замовлення, фізична оплата, модерація адреси | заплановано |
-| 3 | Історія замовлень, повтор у клік | заплановано |
-| 4 | Telegram Payments | заплановано |
-| 5 | Push-нотифікації, адмін-панель | заплановано |
+Фаза | Обсяг | Стан
+--- | --- | ---
+1 | MVP: реєстрація, каталог, кошик, контакти | ✅ готово
+2 | Оформлення замовлення, фізична оплата, модерація адреси | заплановано
+3 | Історія замовлень, повтор у клік | заплановано
+4 | Telegram Payments | заплановано
+5 | Push-нотифікації, адмін-панель | заплановано
 
 Деталі — у [Development.md](Development.md).
 

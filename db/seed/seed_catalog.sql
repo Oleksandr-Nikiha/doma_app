@@ -2028,7 +2028,7 @@ FROM new_product, (VALUES
 
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'Майонез', NULL,
+    SELECT c.id, 'Кисло-солодкий соус', NULL,
            NULL, 6
     FROM categories c JOIN locations l ON l.id = c.location_id
     WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Соуси'
@@ -2087,7 +2087,7 @@ WHERE g.name = 'Соус до картоплі' AND p.name = 'Сирний со�
 UNION ALL
 SELECT g.id, v.id, 20, 3
 FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id
-WHERE g.name = 'Соус до картоплі' AND p.name = 'Майонез' AND v.label = 'порція'
+WHERE g.name = 'Соус до картоплі' AND p.name = 'Кисло-солодкий соус' AND v.label = 'порція'
 UNION ALL
 SELECT g.id, v.id, 20, 4
 FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id

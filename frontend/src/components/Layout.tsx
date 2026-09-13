@@ -6,7 +6,10 @@ import { TabBar } from "@/components/TabBar";
 export function Layout() {
   return (
     <div className="flex min-h-screen flex-col">
-      <main className="flex-1">
+      <main
+        className="flex-1"
+        style={{ paddingBottom: "calc(var(--app-tabbar-height) + env(safe-area-inset-bottom) + 12px)" }}
+      >
         <Outlet />
       </main>
       <TabBar />

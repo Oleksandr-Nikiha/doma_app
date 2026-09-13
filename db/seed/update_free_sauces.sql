@@ -26,8 +26,8 @@ WHERE g.id = ogi.group_id
 
 -- 2. Межі й квота для всіх товарів, що використовують цю групу
 UPDATE product_option_groups pog
-SET max_select = 5,
-    free_count = 1
+SET max_select = 3,
+    free_count = 0
 FROM option_groups g
 WHERE g.id = pog.group_id
   AND g.name = 'Соус до картоплі';

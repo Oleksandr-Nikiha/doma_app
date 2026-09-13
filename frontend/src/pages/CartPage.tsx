@@ -4,14 +4,34 @@ import {
   useRemoveCartItem,
   useUpdateCartItem,
 } from "@/api/queries";
+import { ApiError } from "@/api/client";
 import { EmptyState, ErrorBox, ScreenTitle, Spinner, formatPrice } from "@/components/ui";
 import { haptic, hapticNotify } from "@/telegram/sdk";
+import { useState } from "react";
 
 export function CartPage() {
   const { data, isPending, error, refetch } = useCart();
   const updateItem = useUpdateCartItem();
   const removeItem = useRemoveCartItem();
   const clearCart = useClearCart();
+
+  const [itemErrors, setItemErrors] = useState<Record<number, string>>({});
+
+  const clearItemError = (itemId: number) =>
+    setItemErrors((prev) => {
+      if (!(itemId in prev)) return prev;
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
+
+  const setItemError = (itemId: number, err: unknown) => {
+    hapticNotify("error");
+    setItemErrors((prev) => ({
+      ...prev,
+      [itemId]: err instanceof ApiError ? err.detail : "Не вдалося оновити кількість",
+    }));
+  };
 
   if (isPending) return <Spinner />;
   if (error) return <ErrorBox message={error.message} onRetry={() => void refetch()} />;
@@ -77,9 +97,17 @@ export function CartPage() {
                 <button
                   onClick={() => {
                     haptic("light");
-                    // qty=0 бекенд не приймає (CHECK qty>0) — на одиниці видаляємо позицію
-                    if (item.qty <= 1) removeItem.mutate(item.id);
-                    else updateItem.mutate({ itemId: item.id, qty: item.qty - 1 });
+                    if (item.qty <= 1) {
+                      removeItem.mutate(item.id, { onError: () => hapticNotify("error") });
+                      return;
+                    }
+                    updateItem.mutate(
+                      { itemId: item.id, qty: item.qty - 1 },
+                      {
+                        onError: (err) => setItemError(item.id, err),
+                        onSuccess: () => clearItemError(item.id),
+                      },
+                    );
                   }}
                   disabled={busy}
                   className="app-press h-7 w-7 text-lg font-bold disabled:opacity-30"
@@ -91,7 +119,13 @@ export function CartPage() {
                 <button
                   onClick={() => {
                     haptic("light");
-                    updateItem.mutate({ itemId: item.id, qty: item.qty + 1 });
+                    updateItem.mutate(
+                      { itemId: item.id, qty: item.qty + 1 },
+                      {
+                        onError: (err) => setItemError(item.id, err),
+                        onSuccess: () => clearItemError(item.id),
+                      },
+                    );
                   }}
                   disabled={busy}
                   className="app-press h-7 w-7 text-lg font-bold disabled:opacity-30"
@@ -101,8 +135,6 @@ export function CartPage() {
                 </button>
               </div>
               <div className="text-right">
-                {/* Виводимо різницю, а не суму price_delta: бекенд уже врахував
-                    безкоштовну квоту, і перерахунок на клієнті міг би розійтися */}
                 {item.subtotal / item.qty - item.price > 0.005 && (
                   <p className="text-xs opacity-50">
                     +{formatPrice(item.subtotal - item.price * item.qty)} за опції
@@ -111,6 +143,12 @@ export function CartPage() {
                 <p className="font-semibold">{formatPrice(item.subtotal)}</p>
               </div>
             </div>
+
+            {itemErrors[item.id] && (
+              <p className="mt-2 rounded-lg px-3 py-2 text-xs" style={{ background: "color-mix(in srgb, #ef4444 12%, transparent)", color: "#ef4444" }}>
+                {itemErrors[item.id]}
+              </p>
+            )}
           </div>
         ))}
       </div>
