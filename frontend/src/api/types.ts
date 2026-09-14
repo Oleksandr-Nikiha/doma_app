@@ -63,8 +63,20 @@ export interface User {
   id: number;
   telegram_id: number;
   full_name: string;
+  first_name?: string | null;
+  last_name?: string | null;
   phone: string;
   delivery_address: string | null;
+  additional_address?: string | null;
+  client_code?: string | null;
+  bonus_balance?: number;
+}
+
+export interface UserUpdatePayload {
+  first_name: string;
+  last_name?: string | null;
+  delivery_address?: string | null;
+  additional_address?: string | null;
 }
 
 export interface RegisterPayload {

@@ -7,6 +7,7 @@ const TABS = [
   { to: "/", icon: "🍕", label: "Меню" },
   { to: "/cart", icon: "🛒", label: "Кошик" },
   { to: "/contacts", icon: "📍", label: "Контакти" },
+  { to: "/profile", icon: "👤", label: "Профіль" },
 ];
 
 export function TabBar() {

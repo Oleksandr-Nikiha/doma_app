@@ -158,7 +158,7 @@ export function ProductPage() {
     (sum, g) => sum + groupCost(g, picksFor(g), qty),
     0,
   );
-  const total = selected ? (selected.price + optionsDelta) * qty : 0;
+  const total = selected ? selected.price * qty + optionsDelta : 0;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -207,7 +207,9 @@ export function ProductPage() {
             return (
               <div
                 key={group.group_id}
-                className="app-rise mt-5 rounded-2xl py-3 transition-colors"
+                className={`app-rise rounded-2xl transition-all ${
+                  isUnfilled ? "mt-6 -mx-3 px-3.5 py-3.5" : "mt-5 -mx-3 px-3.5 py-1"
+                }`}
                 style={
                   isUnfilled
                     ? {
@@ -217,7 +219,7 @@ export function ProductPage() {
                     : undefined
                 }
               >
-                <div className="mb-2 flex items-baseline justify-between gap-2">
+                <div className="mb-2.5 flex items-baseline justify-between gap-2">
                   <p
                     className="text-sm font-semibold uppercase tracking-wide"
                     style={{ opacity: isUnfilled ? 0.9 : 0.5, color: isUnfilled ? "#ef4444" : undefined }}
@@ -305,7 +307,7 @@ export function ProductPage() {
             );
           })}
 
-          <div className="app-rise mt-5 flex items-center gap-4">
+          <div className="app-rise mt-6 flex items-center gap-4">
             <p className="text-sm font-semibold uppercase tracking-wide opacity-50">Кількість</p>
             <div className="flex items-center gap-3 rounded-xl px-2 py-1" style={{ background: "var(--app-surface)" }}>
               <button

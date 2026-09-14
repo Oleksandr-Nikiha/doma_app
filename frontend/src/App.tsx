@@ -9,6 +9,7 @@ import { CategoriesPage } from "@/pages/CategoriesPage";
 import { ContactsPage } from "@/pages/ContactsPage";
 import { ProductPage } from "@/pages/ProductPage";
 import { ProductsPage } from "@/pages/ProductsPage";
+import { ProfilePage } from "@/pages/ProfilePage";
 import { RegisterPage } from "@/pages/RegisterPage";
 
 export function App() {
@@ -46,6 +47,7 @@ export function App() {
         <Route path="/categories/:categoryId" element={<ProductsPage />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/contacts" element={<ContactsPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
       </Route>
       {/* Картка товару — на всю висоту, без нижньої панелі: там своя кнопка дії */}
       <Route path="/products/:productId" element={<ProductPage />} />

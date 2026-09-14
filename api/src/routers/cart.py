@@ -113,7 +113,7 @@ async def _fetch_cart(pool: asyncpg.Pool, telegram_id: int) -> CartOut:
             extra += options_cost(units, effective_free)
 
         price = float(item["price"])
-        subtotal = round((price + extra) * item["qty"], 2)
+        subtotal = round(price * item["qty"] + extra, 2)
         total += subtotal
 
         items.append(

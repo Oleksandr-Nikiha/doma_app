@@ -15,6 +15,7 @@ import type {
   ProductListItem,
   RegisterPayload,
   User,
+  UserUpdatePayload,
 } from "@/api/types";
 
 /** Ключі кешу зібрані в одному місці — щоб інвалідація не розповзалась по компонентах. */
@@ -76,6 +77,14 @@ export function useRegister() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: RegisterPayload) => api.post<User>("/register", payload),
+    onSuccess: (user) => qc.setQueryData(keys.me, user),
+  });
+}
+
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: UserUpdatePayload) => api.patch<User>("/me", payload),
     onSuccess: (user) => qc.setQueryData(keys.me, user),
   });
 }
