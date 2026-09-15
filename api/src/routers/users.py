@@ -38,7 +38,9 @@ async def register_user(
             detail="Не вдалося отримати telegram_id з даних авторизації"
         )
 
-    first_name = payload.first_name or (payload.full_name.split(" ", 1)[0] if payload.full_name else "")
+    first_name = payload.first_name or (
+        payload.full_name.split(" ", 1)[0] if payload.full_name else ""
+    )
     last_name = payload.last_name or (
         payload.full_name.split(" ", 1)[1] if len(payload.full_name.split(" ", 1)) > 1 else None
     )

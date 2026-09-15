@@ -1,3 +1,4 @@
+import contextlib
 import logging
 
 from aiogram import F, Router
@@ -66,10 +67,8 @@ async def handle_order_moderation(callback: CallbackQuery) -> None:
             label = status_labels.get(current_status, f"зі статусом '{current_status}'")
             await callback.answer(f"Замовлення {label}", show_alert=True)
             if callback.message:
-                try:
+                with contextlib.suppress(Exception):
                     await callback.message.edit_reply_markup(reply_markup=None)
-                except Exception:
-                    pass
             return
 
         if action == "confirm":
@@ -95,7 +94,8 @@ async def handle_order_moderation(callback: CallbackQuery) -> None:
             client_msg = (
                 f"😔 <b>Замовлення #{order_id} відхилено</b>\n\n"
                 "На жаль, наразі ми не можемо виконати це замовлення.\n"
-                f"Найближчим часом менеджер зателефонує вам за номером {order['contact_phone']} для уточнення."
+                "Найближчим часом менеджер зателефонує вам "
+                f"за номером {order['contact_phone']} для уточнення."
             )
             callback_feedback = "Замовлення відхилено"
 

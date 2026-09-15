@@ -18,9 +18,8 @@ class OrderCreateIn(BaseModel):
         if self.fulfillment_type == "delivery":
             if not self.delivery_address or not self.delivery_address.strip():
                 raise ValueError("Адреса доставки обов'язкова для кур'єрської доставки")
-        elif self.fulfillment_type == "pickup":
-            if not self.location_id:
-                raise ValueError("Локація обов'язкова для самовивозу")
+        elif self.fulfillment_type == "pickup" and not self.location_id:
+            raise ValueError("Локація обов'язкова для самовивозу")
         return self
 
 

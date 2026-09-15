@@ -1,4 +1,5 @@
 import asyncio
+import html
 import json
 import logging
 import urllib.error
@@ -23,9 +24,6 @@ from src.schemas.order import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/orders", tags=["Orders"])
-
-
-import html
 
 
 def _send_telegram_notification_sync(token: str, payload: dict[str, Any]) -> None:
@@ -174,7 +172,10 @@ async def create_order(
             if len(distinct_locations) > 1:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="У кошику є страви з різних закладів. Будь ласка, оформіть окреме замовлення для кожного закладу.",
+                    detail=(
+                        "У кошику є страви з різних закладів. "
+                        "Будь ласка, оформіть окреме замовлення для кожного закладу."
+                    ),
                 )
             target_location_id = list(distinct_locations.keys())[0]
             target_location_name = list(distinct_locations.values())[0]
@@ -220,7 +221,8 @@ async def create_order(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=f"Опція «{row['option_name']}» наразі недоступна",
                 )
-            by_item_opts.setdefault(row["cart_item_id"], {}).setdefault(row["group_id"], []).append(row)
+            item_groups = by_item_opts.setdefault(row["cart_item_id"], {})
+            item_groups.setdefault(row["group_id"], []).append(row)
 
         # 5. Підрахунок сум
         total_order_price = 0.0
