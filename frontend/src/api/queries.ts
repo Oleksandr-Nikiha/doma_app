@@ -7,17 +7,40 @@ import {
 
 import { ApiError, api } from "@/api/client";
 import type {
+  AdminCategory,
+  AdminMe,
+  AdminOptionGroup,
+  AdminOptionGroupItem,
+  AdminProduct,
+  AdminVariant,
   Cart,
   Category,
+  CategoryCreatePayload,
+  CategoryUpdatePayload,
   Location,
+  Manager,
+  ManagerCreatePayload,
+  ManagerUpdatePayload,
+  OptionGroupCreatePayload,
+  OptionGroupItemCreatePayload,
+  OptionGroupItemUpdatePayload,
+  OptionGroupUpdatePayload,
   OptionSelection,
   Order,
   OrderCreatePayload,
+  ProductCreatePayload,
   ProductDetail,
   ProductListItem,
+  ProductOptionGroupAdmin,
+  ProductOptionGroupAttachPayload,
+  ProductOptionGroupUpdatePayload,
+  ProductUpdatePayload,
   RegisterPayload,
   User,
   UserUpdatePayload,
+  VariantCreatePayload,
+  VariantSelectorChoice,
+  VariantUpdatePayload,
 } from "@/api/types";
 
 /** Ключі кешу зібрані в одному місці — щоб інвалідація не розповзалась по компонентах. */
@@ -29,6 +52,14 @@ export const keys = {
   cart: ["cart"] as const,
   locations: ["locations"] as const,
   order: (orderId: number) => ["order", orderId] as const,
+  adminMe: ["admin", "me"] as const,
+  adminManagers: ["admin", "managers"] as const,
+  adminCategories: (locationId?: number | null) => ["admin", "categories", locationId] as const,
+  adminProducts: (params?: { categoryId?: number | null; locationId?: number | null }) =>
+    ["admin", "products", params] as const,
+  adminOptionGroups: ["admin", "option-groups"] as const,
+  adminOptionGroupItems: (groupId: number) => ["admin", "option-groups", groupId, "items"] as const,
+  adminVariantChoices: ["admin", "variant-choices"] as const,
 };
 
 // --- Каталог і контакти (публічні) ---
@@ -152,5 +183,400 @@ export function useOrder(orderId: number) {
     queryKey: keys.order(orderId),
     queryFn: () => api.get<Order>(`/orders/${orderId}`),
     enabled: orderId > 0,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      // Опитуємо кожні 3.5 секунди, поки статус очікує модерації
+      return status === "pending_moderation" ? 3500 : false;
+    },
+  });
+}
+
+// ============================================================================
+// Адмін-панель
+// ============================================================================
+
+// --- Права та статус співробітника ---
+
+export function useAdminMe() {
+  return useQuery({
+    queryKey: keys.adminMe,
+    queryFn: () => api.get<AdminMe>("/admin/me"),
+    staleTime: 30000,
+  });
+}
+
+// --- Управління менеджерами (Тільки Admin) ---
+
+export function useAdminManagers() {
+  return useQuery({
+    queryKey: keys.adminManagers,
+    queryFn: () => api.get<Manager[]>("/admin/managers"),
+  });
+}
+
+export function useCreateManager() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ManagerCreatePayload) => api.post<Manager>("/admin/managers", payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.adminManagers });
+    },
+  });
+}
+
+export function useUpdateManager() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ managerId, payload }: { managerId: number; payload: ManagerUpdatePayload }) =>
+      api.patch<Manager>(`/admin/managers/${managerId}`, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.adminManagers });
+    },
+  });
+}
+
+export function useDeleteManager() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (managerId: number) =>
+      api.delete<{ status: string; message: string }>(`/admin/managers/${managerId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.adminManagers });
+    },
+  });
+}
+
+// --- Категорії ---
+
+export function useAdminCategories(locationId?: number | null) {
+  return useQuery({
+    queryKey: keys.adminCategories(locationId),
+    queryFn: () => {
+      const qs = locationId ? `?location_id=${locationId}` : "";
+      return api.get<AdminCategory[]>(`/admin/categories${qs}`);
+    },
+  });
+}
+
+export function useCreateCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CategoryCreatePayload) =>
+      api.post<AdminCategory>("/admin/categories", payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "categories"] });
+      void qc.invalidateQueries({ queryKey: keys.categories });
+    },
+  });
+}
+
+export function useUpdateCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ categoryId, payload }: { categoryId: number; payload: CategoryUpdatePayload }) =>
+      api.patch<AdminCategory>(`/admin/categories/${categoryId}`, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "categories"] });
+      void qc.invalidateQueries({ queryKey: keys.categories });
+    },
+  });
+}
+
+export function useDeleteCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (categoryId: number) =>
+      api.delete<{ status: string; message: string }>(`/admin/categories/${categoryId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "categories"] });
+      void qc.invalidateQueries({ queryKey: keys.categories });
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+  });
+}
+
+// --- Страви (Товари) ---
+
+export function useAdminProducts(params?: { categoryId?: number | null; locationId?: number | null }) {
+  return useQuery({
+    queryKey: keys.adminProducts(params),
+    queryFn: () => {
+      const sp = new URLSearchParams();
+      if (params?.categoryId) sp.set("category_id", String(params.categoryId));
+      if (params?.locationId) sp.set("location_id", String(params.locationId));
+      const qs = sp.toString() ? `?${sp.toString()}` : "";
+      return api.get<AdminProduct[]>(`/admin/products${qs}`);
+    },
+  });
+}
+
+export function useCreateProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ProductCreatePayload) =>
+      api.post<AdminProduct>("/admin/products", payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+      void qc.invalidateQueries({ queryKey: ["admin", "categories"] });
+      void qc.invalidateQueries({ queryKey: keys.categories });
+      void qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+export function useUpdateProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ productId, payload }: { productId: number; payload: ProductUpdatePayload }) =>
+      api.patch<AdminProduct>(`/admin/products/${productId}`, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+      void qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+export function useDeleteProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (productId: number) =>
+      api.delete<{ status: string; message: string }>(`/admin/products/${productId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+      void qc.invalidateQueries({ queryKey: ["admin", "categories"] });
+      void qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+// --- Варіанти цін ---
+
+export function useCreateVariant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ productId, payload }: { productId: number; payload: VariantCreatePayload }) =>
+      api.post<AdminVariant>(`/admin/products/${productId}/variants`, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+      void qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+export function useUpdateVariant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ variantId, payload }: { variantId: number; payload: VariantUpdatePayload }) =>
+      api.patch<AdminVariant>(`/admin/variants/${variantId}`, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+      void qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+export function useDeleteVariant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (variantId: number) =>
+      api.delete<{ status: string; message: string }>(`/admin/variants/${variantId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+      void qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+// --- Швидкий стоп-лист ---
+
+export function useToggleProductAvailability() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ productId, isAvailable }: { productId: number; isAvailable: boolean }) =>
+      api.patch<{ id: number; is_available: boolean }>(`/admin/products/${productId}/toggle-availability`, {
+        is_available: isAvailable,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+      void qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+export function useToggleVariantAvailability() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ variantId, isAvailable }: { variantId: number; isAvailable: boolean }) =>
+      api.patch<{ id: number; is_available: boolean }>(`/admin/variants/${variantId}/toggle-availability`, {
+        is_available: isAvailable,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+      void qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+// --- Адмін-панель: Додатки (Option Groups) ---
+
+export function useAdminOptionGroups() {
+  return useQuery({
+    queryKey: keys.adminOptionGroups,
+    queryFn: () => api.get<AdminOptionGroup[]>("/admin/option-groups"),
+  });
+}
+
+export function useCreateOptionGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: OptionGroupCreatePayload) =>
+      api.post<AdminOptionGroup>("/admin/option-groups", payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.adminOptionGroups });
+    },
+  });
+}
+
+export function useUpdateOptionGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ groupId, payload }: { groupId: number; payload: OptionGroupUpdatePayload }) =>
+      api.patch<AdminOptionGroup>(`/admin/option-groups/${groupId}`, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.adminOptionGroups });
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+  });
+}
+
+export function useDeleteOptionGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (groupId: number) =>
+      api.delete<{ status: string; message: string }>(`/admin/option-groups/${groupId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.adminOptionGroups });
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+  });
+}
+
+// --- Позиції в групі додатків ---
+
+export function useAdminOptionGroupItems(groupId: number) {
+  return useQuery({
+    queryKey: keys.adminOptionGroupItems(groupId),
+    queryFn: () => api.get<AdminOptionGroupItem[]>(`/admin/option-groups/${groupId}/items`),
+    enabled: groupId > 0,
+  });
+}
+
+export function useAddOptionGroupItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ groupId, payload }: { groupId: number; payload: OptionGroupItemCreatePayload }) =>
+      api.post<AdminOptionGroupItem>(`/admin/option-groups/${groupId}/items`, payload),
+    onSuccess: (_, vars) => {
+      void qc.invalidateQueries({ queryKey: keys.adminOptionGroupItems(vars.groupId) });
+      void qc.invalidateQueries({ queryKey: keys.adminOptionGroups });
+    },
+  });
+}
+
+export function useUpdateOptionGroupItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      groupId,
+      variantId,
+      payload,
+    }: {
+      groupId: number;
+      variantId: number;
+      payload: OptionGroupItemUpdatePayload;
+    }) =>
+      api.patch<AdminOptionGroupItem>(`/admin/option-groups/${groupId}/items/${variantId}`, payload),
+    onSuccess: (_, vars) => {
+      void qc.invalidateQueries({ queryKey: keys.adminOptionGroupItems(vars.groupId) });
+    },
+  });
+}
+
+export function useDeleteOptionGroupItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ groupId, variantId }: { groupId: number; variantId: number }) =>
+      api.delete<{ status: string; message: string }>(
+        `/admin/option-groups/${groupId}/items/${variantId}`,
+      ),
+    onSuccess: (_, vars) => {
+      void qc.invalidateQueries({ queryKey: keys.adminOptionGroupItems(vars.groupId) });
+      void qc.invalidateQueries({ queryKey: keys.adminOptionGroups });
+    },
+  });
+}
+
+// --- Прив'язка додатків до страви ---
+
+export function useAttachProductOptionGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      productId,
+      payload,
+    }: {
+      productId: number;
+      payload: ProductOptionGroupAttachPayload;
+    }) =>
+      api.post<ProductOptionGroupAdmin>(`/admin/products/${productId}/option-groups`, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+      void qc.invalidateQueries({ queryKey: keys.adminOptionGroups });
+    },
+  });
+}
+
+export function useUpdateProductOptionGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      productId,
+      groupId,
+      payload,
+    }: {
+      productId: number;
+      groupId: number;
+      payload: ProductOptionGroupUpdatePayload;
+    }) =>
+      api.patch<ProductOptionGroupAdmin>(
+        `/admin/products/${productId}/option-groups/${groupId}`,
+        payload,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+  });
+}
+
+export function useDetachProductOptionGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ productId, groupId }: { productId: number; groupId: number }) =>
+      api.delete<{ status: string; message: string }>(
+        `/admin/products/${productId}/option-groups/${groupId}`,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+      void qc.invalidateQueries({ queryKey: keys.adminOptionGroups });
+    },
+  });
+}
+
+// --- Довідник варіантів для селектора ---
+
+export function useAdminVariantChoices() {
+  return useQuery({
+    queryKey: keys.adminVariantChoices,
+    queryFn: () => api.get<VariantSelectorChoice[]>("/admin/variant-choices"),
   });
 }

@@ -5,10 +5,12 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery
 
 from src.db.connection import get_pool
+from src.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="orders")
+settings = get_settings()
 
 
 @router.callback_query(F.data.startswith("order:confirm:") | F.data.startswith("order:reject:"))
@@ -34,6 +36,36 @@ async def handle_order_moderation(callback: CallbackQuery) -> None:
         return
 
     pool = get_pool()
+    user_id = callback.from_user.id
+
+    # Перевірка ролі користувача через таблицю managers (з fallback на settings.managers_ids)
+    async with pool.acquire() as conn:
+        manager = await conn.fetchrow(
+            """
+            SELECT role, location_id, is_active
+            FROM managers
+            WHERE telegram_id = $1 AND is_active = true
+            """,
+            user_id,
+        )
+
+    is_env_manager = user_id in (settings.managers_ids or [])
+    if not manager and not is_env_manager:
+        await callback.answer("⛔ У вас немає прав для модерації замовлень", show_alert=True)
+        return
+
+    # Якщо менеджер закріплений за конкретним закладом — перевіряємо, чи замовлення належить цьому закладу
+    if manager and manager["role"] == "manager" and manager["location_id"] is not None:
+        async with pool.acquire() as conn:
+            loc_match = await conn.fetchval(
+                "SELECT 1 FROM order_groups WHERE order_id = $1 AND location_id = $2 LIMIT 1",
+                order_id,
+                manager["location_id"],
+            )
+        if not loc_match:
+            await callback.answer("⛔ Це замовлення належить іншому закладу", show_alert=True)
+            return
+
     manager_name = (
         f"@{callback.from_user.username}"
         if callback.from_user.username

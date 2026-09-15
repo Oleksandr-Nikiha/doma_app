@@ -7,7 +7,7 @@ import urllib.request
 from typing import Any
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
 from src.auth.deps import get_current_user
 from src.config import get_settings
@@ -118,9 +118,31 @@ async def send_order_to_manager(order_id: int, order_data: dict[str, Any], setti
     await asyncio.to_thread(_send_telegram_notification_sync, settings.bot_token, payload)
 
 
+async def _fetch_order_by_id(conn, order_id: int, telegram_id: int) -> OrderOut | None:
+    order_row = await conn.fetchrow(
+        "SELECT id, telegram_id, status, fulfillment_type, delivery_address, contact_name, contact_phone, payment_method, comment, total_price, created_at FROM orders WHERE id = $1 AND telegram_id = $2",
+        order_id, telegram_id,
+    )
+    if not order_row:
+        return None
+    groups_rows = await conn.fetch("SELECT og.id, og.location_id, loc.name AS location_name, og.status, og.subtotal FROM order_groups og JOIN locations loc ON loc.id = og.location_id WHERE og.order_id = $1 ORDER BY og.id", order_id)
+    items_rows = await conn.fetch("SELECT id, order_group_id, variant_id, product_name, variant_label, unit_price, qty, subtotal FROM order_items WHERE order_group_id = ANY($1::int[]) ORDER BY id", [g["id"] for g in groups_rows])
+    options_rows = await conn.fetch("SELECT id, order_item_id, option_group_name, option_name, price_delta, qty FROM order_item_options WHERE order_item_id = ANY($1::int[]) ORDER BY id", [i["id"] for i in items_rows])
+    
+    opts_by_item: dict[int, list[OrderItemOptionOut]] = {}
+    for r in options_rows:
+        opts_by_item.setdefault(r["order_item_id"], []).append(OrderItemOptionOut(id=r["id"], option_group_name=r["option_group_name"], option_name=r["option_name"], price_delta=float(r["price_delta"]), qty=r["qty"]))
+    items_by_group: dict[int, list[OrderItemOut]] = {}
+    for r in items_rows:
+        items_by_group.setdefault(r["order_group_id"], []).append(OrderItemOut(id=r["id"], variant_id=r["variant_id"], product_name=r["product_name"], variant_label=r["variant_label"], unit_price=float(r["unit_price"]), qty=r["qty"], subtotal=float(r["subtotal"]), options=opts_by_item.get(r["id"], [])))
+    groups: list[OrderGroupOut] = [OrderGroupOut(id=g["id"], location_id=g["location_id"], location_name=g["location_name"], status=g["status"], subtotal=float(g["subtotal"]), items=items_by_group.get(g["id"], [])) for g in groups_rows]
+    return OrderOut(id=order_row["id"], telegram_id=order_row["telegram_id"], status=order_row["status"], fulfillment_type=order_row["fulfillment_type"], delivery_address=order_row["delivery_address"], contact_name=order_row["contact_name"], contact_phone=order_row["contact_phone"], payment_method=order_row["payment_method"], comment=order_row["comment"], total_price=float(order_row["total_price"]), created_at=order_row["created_at"], groups=groups)
+
+
 @router.post("", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
 async def create_order(
     payload: OrderCreateIn,
+    background_tasks: BackgroundTasks,
     user=Depends(get_current_user),
     pool: asyncpg.Pool = Depends(get_pool),
 ):
@@ -264,6 +286,31 @@ async def create_order(
 
         total_order_price = round(total_order_price, 2)
 
+        # 5.1 Захист від дублювання замовлень (SEC-2)
+        # Якщо користувач двічі натиснув кнопку або запит здублювався за останні 20 секунд:
+        recent_order_id = await conn.fetchval(
+            """
+            SELECT o.id
+            FROM orders o
+            JOIN order_groups og ON og.order_id = o.id
+            WHERE o.telegram_id = $1
+              AND og.location_id = $2
+              AND o.status = 'pending_moderation'
+              AND o.total_price = $3
+              AND o.created_at > now() - interval '20 seconds'
+            ORDER BY o.id DESC
+            LIMIT 1
+            """,
+            telegram_id, target_location_id, total_order_price,
+        )
+        if recent_order_id:
+            logger.info("Повторний запит: знайдено нещодавно створене замовлення #%s", recent_order_id)
+            # Отримуємо і повертаємо вже створене замовлення без створення дубля
+            # Для цього транзакція завершиться без змін, і ми просто повернемо результат
+            existing_order = await _fetch_order_by_id(conn, recent_order_id, telegram_id)
+            if existing_order:
+                return existing_order
+
         # 6. Створення замовлення в БД
         order_insert_sql = """
             INSERT INTO orders (
@@ -301,17 +348,21 @@ async def create_order(
         )
         order_group_id = group_row["id"]
 
-        # Створення позицій замовлення
+        # Створення позицій замовлення та пакетна вставка опцій (PERF-2)
         saved_items: list[OrderItemOut] = []
+        options_batch: list[tuple] = []
+        options_by_item_map: dict[int, list[OrderItemOptionOut]] = {}
+
+        item_insert_sql = """
+            INSERT INTO order_items (
+                order_group_id, variant_id, product_name, variant_label,
+                unit_price, qty, subtotal
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id
+        """
+
         for calc_item in calculated_items:
-            item_insert_sql = """
-                INSERT INTO order_items (
-                    order_group_id, variant_id, product_name, variant_label,
-                    unit_price, qty, subtotal
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING id
-            """
             item_db = await conn.fetchrow(
                 item_insert_sql,
                 order_group_id,
@@ -323,27 +374,20 @@ async def create_order(
                 calc_item["subtotal"],
             )
             saved_item_id = item_db["id"]
+            options_by_item_map[saved_item_id] = []
 
-            saved_options: list[OrderItemOptionOut] = []
             for opt in calc_item["options"]:
-                opt_insert_sql = """
-                    INSERT INTO order_item_options (
-                        order_item_id, option_group_name, option_name, price_delta, qty
-                    )
-                    VALUES ($1, $2, $3, $4, $5)
-                    RETURNING id
-                """
-                opt_db = await conn.fetchrow(
-                    opt_insert_sql,
+                options_batch.append((
                     saved_item_id,
                     opt["option_group_name"],
                     opt["name"],
                     opt["price_delta"],
                     opt["qty"],
-                )
-                saved_options.append(
+                ))
+                # Формуємо об'єкт для повернення
+                options_by_item_map[saved_item_id].append(
                     OrderItemOptionOut(
-                        id=opt_db["id"],
+                        id=0,  # ID опцій не критичний для клієнта на екрані успіху
                         option_group_name=opt["option_group_name"],
                         option_name=opt["name"],
                         price_delta=opt["price_delta"],
@@ -360,9 +404,19 @@ async def create_order(
                     unit_price=calc_item["unit_price"],
                     qty=calc_item["qty"],
                     subtotal=calc_item["subtotal"],
-                    options=saved_options,
+                    options=options_by_item_map[saved_item_id],
                 )
             )
+
+        # Пакетна вставка всіх опцій одним махом (PERF-2)
+        if options_batch:
+            opt_insert_sql = """
+                INSERT INTO order_item_options (
+                    order_item_id, option_group_name, option_name, price_delta, qty
+                )
+                VALUES ($1, $2, $3, $4, $5)
+            """
+            await conn.executemany(opt_insert_sql, options_batch)
 
         # 7. Видаляємо оформлені позиції з кошика
         await conn.execute(
@@ -382,7 +436,7 @@ async def create_order(
         "total_price": total_order_price,
         "items": calculated_items,
     }
-    await send_order_to_manager(order_id, order_notification_data, settings)
+    background_tasks.add_task(send_order_to_manager, order_id, order_notification_data, settings)
 
     return OrderOut(
         id=order_id,

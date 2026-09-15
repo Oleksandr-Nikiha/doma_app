@@ -4,6 +4,7 @@ import { ApiError } from "@/api/client";
 import { useMe } from "@/api/queries";
 import { Layout } from "@/components/Layout";
 import { ErrorBox, Spinner } from "@/components/ui";
+import { AdminPage } from "@/pages/AdminPage";
 import { CartPage } from "@/pages/CartPage";
 import { CategoriesPage } from "@/pages/CategoriesPage";
 import { CheckoutPage } from "@/pages/CheckoutPage";
@@ -51,7 +52,8 @@ export function App() {
         <Route path="/contacts" element={<ContactsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
-      {/* Картка товару, чекаут та екран успіху — без нижньої панелі */}
+      {/* Картка товару, чекаут, екран успіху та адмінка — без клієнтської нижньої панелі */}
+      <Route path="/admin" element={<AdminPage />} />
       <Route path="/products/:productId" element={<ProductPage />} />
       <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/orders/:orderId/success" element={<OrderSuccessPage />} />

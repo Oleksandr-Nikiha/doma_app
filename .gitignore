@@ -28,3 +28,4 @@ yarn-error.log*
 *.swp
 CLAUDE.md
 .antigravityignore
+.gemini/

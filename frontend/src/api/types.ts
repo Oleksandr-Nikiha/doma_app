@@ -182,3 +182,207 @@ export interface Order {
   created_at: string;
   groups: OrderGroup[];
 }
+
+// --- Адмін-панель ---
+
+export interface AdminMe {
+  is_staff: boolean;
+  role?: "admin" | "manager" | null;
+  location_id?: number | null;
+  location_name?: string | null;
+}
+
+export interface Manager {
+  id: number;
+  telegram_id: number;
+  full_name: string;
+  phone: string;
+  role: "admin" | "manager";
+  location_id: number | null;
+  location_name: string | null;
+  is_active: boolean;
+}
+
+export interface ManagerCreatePayload {
+  telegram_id: number;
+  role: "admin" | "manager";
+  location_id?: number | null;
+}
+
+export interface ManagerUpdatePayload {
+  role?: "admin" | "manager";
+  location_id?: number | null;
+  is_active?: boolean;
+}
+
+export interface AdminCategory {
+  id: number;
+  name: string;
+  icon: string | null;
+  parent_id: number | null;
+  location_id: number;
+  location_name?: string | null;
+  sort_order: number;
+  is_visible: boolean;
+  products_count: number;
+}
+
+export interface CategoryCreatePayload {
+  name: string;
+  location_id: number;
+  parent_id?: number | null;
+  icon?: string | null;
+  sort_order?: number;
+  is_visible?: boolean;
+}
+
+export interface CategoryUpdatePayload {
+  name?: string;
+  location_id?: number;
+  parent_id?: number | null;
+  icon?: string | null;
+  sort_order?: number;
+  is_visible?: boolean;
+}
+
+export interface AdminVariant {
+  id: number;
+  product_id: number;
+  label: string;
+  price: number;
+  weight: string | null;
+  sort_order: number;
+  is_available: boolean;
+}
+
+export interface VariantCreatePayload {
+  label: string;
+  price: number;
+  weight?: string | null;
+  sort_order?: number;
+  is_available?: boolean;
+}
+
+export interface VariantUpdatePayload {
+  label?: string;
+  price?: number;
+  weight?: string | null;
+  sort_order?: number;
+  is_available?: boolean;
+}
+
+export interface ProductOptionGroupAdmin {
+  product_id: number;
+  group_id: number;
+  group_name: string;
+  min_select: number;
+  max_select: number;
+  free_count: number;
+  sort_order: number;
+}
+
+export interface AdminProduct {
+  id: number;
+  name: string;
+  category_id: number;
+  category_name?: string | null;
+  location_id?: number | null;
+  location_name?: string | null;
+  description: string | null;
+  image_url: string | null;
+  sort_order: number;
+  is_available: boolean;
+  variants: AdminVariant[];
+  option_groups: ProductOptionGroupAdmin[];
+}
+
+export interface ProductCreatePayload {
+  name: string;
+  category_id: number;
+  description?: string | null;
+  image_url?: string | null;
+  sort_order?: number;
+  is_available?: boolean;
+  variants?: VariantCreatePayload[];
+}
+
+export interface ProductUpdatePayload {
+  name?: string;
+  category_id?: number;
+  description?: string | null;
+  image_url?: string | null;
+  sort_order?: number;
+  is_available?: boolean;
+}
+
+export interface AvailabilityPayload {
+  is_available: boolean;
+}
+
+// --- Додатки (Групи опцій) ---
+
+export interface AdminOptionGroup {
+  id: number;
+  name: string;
+  sort_order: number;
+  items_count: number;
+  products_count: number;
+}
+
+export interface OptionGroupCreatePayload {
+  name: string;
+  sort_order?: number;
+}
+
+export interface OptionGroupUpdatePayload {
+  name?: string;
+  sort_order?: number;
+}
+
+export interface AdminOptionGroupItem {
+  group_id: number;
+  variant_id: number;
+  product_id: number;
+  product_name: string;
+  variant_label: string;
+  price_delta: number;
+  sort_order: number;
+  is_available: boolean;
+}
+
+export interface OptionGroupItemCreatePayload {
+  variant_id: number;
+  price_delta?: number;
+  sort_order?: number;
+  is_available?: boolean;
+}
+
+export interface OptionGroupItemUpdatePayload {
+  price_delta?: number;
+  sort_order?: number;
+  is_available?: boolean;
+}
+
+export interface ProductOptionGroupAttachPayload {
+  group_id: number;
+  min_select?: number;
+  max_select?: number;
+  free_count?: number;
+  sort_order?: number;
+}
+
+export interface ProductOptionGroupUpdatePayload {
+  min_select?: number;
+  max_select?: number;
+  free_count?: number;
+  sort_order?: number;
+}
+
+export interface VariantSelectorChoice {
+  variant_id: number;
+  product_id: number;
+  product_name: string;
+  variant_label: string;
+  price: number;
+  category_name?: string | null;
+}

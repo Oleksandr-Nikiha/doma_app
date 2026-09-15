@@ -101,8 +101,11 @@ CREATE TABLE IF NOT EXISTS product_option_groups (
 );
 
 CREATE INDEX IF NOT EXISTS idx_categories_location ON categories(location_id);
+CREATE INDEX IF NOT EXISTS idx_categories_listing ON categories(location_id, is_visible, sort_order);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
+CREATE INDEX IF NOT EXISTS idx_products_listing ON products(category_id, is_available, sort_order);
 CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id);
+CREATE INDEX IF NOT EXISTS idx_variants_product_sort ON product_variants(product_id, is_available, sort_order);
 CREATE INDEX IF NOT EXISTS idx_cart_items_variant ON cart_items(variant_id);
 CREATE INDEX IF NOT EXISTS idx_cart_items_cart ON cart_items(cart_id);
 CREATE INDEX IF NOT EXISTS idx_option_group_items_variant ON option_group_items(variant_id);

@@ -117,8 +117,14 @@ export function CartPage() {
               {group.items.map((item) => (
                 <div key={item.id} className="app-card rounded-2xl p-3">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{item.product_name}</p>
+                    <div
+                      onClick={() => navigate(`/products/${item.product_id}`)}
+                      className="app-press min-w-0 cursor-pointer"
+                    >
+                      <p className="truncate font-medium flex items-center gap-1.5 hover:underline">
+                        <span>{item.product_name}</span>
+                        <span className="text-xs opacity-40">↗</span>
+                      </p>
                       <p className="mt-0.5 text-sm opacity-60">
                         {item.variant_label}
                         {item.weight && ` · ${item.weight}`}
@@ -203,12 +209,19 @@ export function CartPage() {
                   </div>
 
                   {itemErrors[item.id] && (
-                    <p
-                      className="mt-2 rounded-lg px-3 py-2 text-xs"
+                    <div
+                      className="mt-2 rounded-xl p-2.5 text-xs flex flex-col gap-1.5"
                       style={{ background: "color-mix(in srgb, #ef4444 12%, transparent)", color: "#ef4444" }}
                     >
-                      {itemErrors[item.id]}
-                    </p>
+                      <p className="leading-relaxed">{itemErrors[item.id]}</p>
+                      <button
+                        onClick={() => navigate(`/products/${item.product_id}`)}
+                        className="app-press self-start font-semibold underline"
+                        style={{ color: "var(--tg-theme-link-color)" }}
+                      >
+                        Налаштувати страву в меню →
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}

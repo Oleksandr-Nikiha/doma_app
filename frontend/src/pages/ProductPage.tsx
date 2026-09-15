@@ -93,6 +93,7 @@ export function ProductPage() {
   // null = ще не обрано; після завантаження підставляємо перший варіант
   const [variantId, setVariantId] = useState<number | null>(null);
   const [qty, setQty] = useState(1);
+  const [showErrors, setShowErrors] = useState(false);
   // Вибір опцій за group_id. Групи, яких тут немає, беруть значення за
   // замовчуванням — так стан лишається коректним і до завантаження даних,
   // без useEffect на підстановку.
@@ -111,6 +112,7 @@ export function ProductPage() {
     (isFixed(group) ? Object.fromEntries(group.items.map((i) => [i.variant_id, qty])) : {});
 
   function setPicks(group: OptionGroup, next: Picks) {
+    setShowErrors(false);
     setPicked((prev) => ({ ...prev, [group.group_id]: next }));
   }
 
@@ -203,32 +205,67 @@ export function ProductPage() {
             const { min: effMin, max: effMax } = effectiveLimits(group, qty);
             const multi = !fixed && effMax > 1;
             const isUnfilled = !fixed && unitsIn(picks) < effMin;
+            const isUrgentError = isUnfilled && showErrors;
 
             return (
               <div
                 key={group.group_id}
                 className={`app-rise rounded-2xl transition-all ${
-                  isUnfilled ? "mt-6 -mx-3 px-3.5 py-3.5" : "mt-5 -mx-3 px-3.5 py-1"
+                  isUrgentError
+                    ? "mt-6 -mx-3 px-3.5 py-3.5"
+                    : isUnfilled
+                    ? "mt-5 -mx-3 px-3.5 py-2.5"
+                    : "mt-5 -mx-3 px-3.5 py-1"
                 }`}
                 style={
-                  isUnfilled
+                  isUrgentError
                     ? {
-                      background: "color-mix(in srgb, #ef4444 8%, transparent)",
-                      boxShadow: "0 0 0 1px color-mix(in srgb, #ef4444 35%, transparent)",
+                      background: "color-mix(in srgb, #ef4444 10%, transparent)",
+                      boxShadow: "0 0 0 1px color-mix(in srgb, #ef4444 40%, transparent)",
+                    }
+                    : isUnfilled
+                    ? {
+                      background: "var(--app-tint)",
+                      boxShadow: "0 0 0 1px color-mix(in srgb, var(--tg-theme-link-color) 20%, transparent)",
                     }
                     : undefined
                 }
               >
                 <div className="mb-2.5 flex items-baseline justify-between gap-2">
-                  <p
-                    className="text-sm font-semibold uppercase tracking-wide"
-                    style={{ opacity: isUnfilled ? 0.9 : 0.5, color: isUnfilled ? "#ef4444" : undefined }}
-                  >
-                    {group.name}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p
+                      className="text-sm font-semibold uppercase tracking-wide"
+                      style={{
+                        opacity: isUrgentError ? 1 : isUnfilled ? 0.9 : 0.5,
+                        color: isUrgentError
+                          ? "#ef4444"
+                          : isUnfilled
+                          ? "var(--tg-theme-link-color)"
+                          : undefined,
+                      }}
+                    >
+                      {group.name}
+                    </p>
+                    {isUnfilled && (
+                      <span
+                        className="rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                        style={{
+                          background: isUrgentError
+                            ? "color-mix(in srgb, #ef4444 20%, transparent)"
+                            : "color-mix(in srgb, var(--tg-theme-link-color) 15%, transparent)",
+                          color: isUrgentError ? "#ef4444" : "var(--tg-theme-link-color)",
+                        }}
+                      >
+                        Обов'язково
+                      </span>
+                    )}
+                  </div>
                   <p
                     className="shrink-0 text-xs"
-                    style={{ opacity: isUnfilled ? 0.9 : 0.4, color: isUnfilled ? "#ef4444" : undefined }}
+                    style={{
+                      opacity: isUrgentError ? 0.9 : 0.6,
+                      color: isUrgentError ? "#ef4444" : undefined,
+                    }}
                   >
                     {selectionHint(group, qty)}
                   </p>
@@ -354,8 +391,13 @@ export function ProductPage() {
             </p>
           )}
           <button
-            disabled={!canAdd || addToCart.isPending}
+            disabled={addToCart.isPending}
             onClick={() => {
+              if (!canAdd) {
+                setShowErrors(true);
+                hapticNotify("error");
+                return;
+              }
               if (!selected) return;
               const options: OptionSelection[] = data.option_groups.flatMap((g) =>
                 Object.entries(picksFor(g)).map(([optionVariantId, optionQty]) => ({
@@ -375,7 +417,7 @@ export function ProductPage() {
                 },
               );
             }}
-            className="app-press w-full rounded-xl py-3 font-semibold"
+            className="app-press w-full rounded-xl py-3 font-semibold transition"
             style={
               canAdd
                 ? {
@@ -386,7 +428,7 @@ export function ProductPage() {
                 : {
                   background: "color-mix(in srgb, currentColor 15%, transparent)",
                   color: "currentColor",
-                  opacity: 0.5,
+                  opacity: 0.65,
                 }
             }
           >

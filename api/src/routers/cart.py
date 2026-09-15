@@ -272,11 +272,9 @@ async def update_cart_item(
     на другий бокс).
     """
     async with pool.acquire() as conn, conn.transaction():
-        # FOR UPDATE — лочимо рядок: паралельний PATCH на той самий item_id
-        # інакше міг би проскочити повз перевірку між SELECT і UPDATE.
         item = await conn.fetchrow(
             """
-            SELECT ci.id, pv.product_id
+            SELECT ci.id, ci.qty, ci.variant_id, pv.product_id
             FROM cart_items ci
             JOIN carts c ON c.id = ci.cart_id
             JOIN product_variants pv ON pv.id = ci.variant_id
@@ -288,48 +286,96 @@ async def update_cart_item(
         if item is None:
             raise HTTPException(status_code=404, detail="Товар не знайдено в кошику")
 
-        rules = await conn.fetch(
-            """
-            SELECT group_id, min_select, max_select
-            FROM product_option_groups
-            WHERE product_id = $1
-            """,
-            item["product_id"],
-        )
+        old_qty = item["qty"]
+        new_qty = payload.qty
 
-        if rules:
+        if new_qty != old_qty:
+            rules = await conn.fetch(
+                """
+                SELECT group_id, min_select, max_select
+                FROM product_option_groups
+                WHERE product_id = $1
+                """,
+                item["product_id"],
+            )
+
             selected = await conn.fetch(
-                "SELECT group_id, qty FROM cart_item_options WHERE cart_item_id = $1",
+                """
+                SELECT group_id, variant_id, qty 
+                FROM cart_item_options 
+                WHERE cart_item_id = $1 
+                ORDER BY group_id, variant_id
+                """,
                 item_id,
             )
-            selected_counts: dict[int, int] = {}
-            for row in selected:
-                selected_counts[row["group_id"]] = (
-                    selected_counts.get(row["group_id"], 0) + row["qty"]
-                )
 
-            for rule in rules:
-                effective_min = rule["min_select"] * payload.qty
-                effective_max = rule["max_select"] * payload.qty
-                count = selected_counts.get(rule["group_id"], 0)
-                if count < effective_min or count > effective_max:
+            # Якщо є опції та правила — пробуємо пропорційно масштабувати
+            if selected and rules:
+                is_proportional = all(r["qty"] % old_qty == 0 for r in selected)
+
+                if is_proportional:
+                    # Рахуємо масштабовані кількості
+                    scaled_options = []
+                    new_group_totals: dict[int, int] = {}
+                    for r in selected:
+                        unit_qty = r["qty"] // old_qty
+                        scaled_qty = unit_qty * new_qty
+                        scaled_options.append((r["group_id"], r["variant_id"], scaled_qty))
+                        new_group_totals[r["group_id"]] = new_group_totals.get(r["group_id"], 0) + scaled_qty
+
+                    # Перевіряємо валідність масштабованих опцій проти правил
+                    valid = True
+                    for rule in rules:
+                        eff_min = rule["min_select"] * new_qty
+                        eff_max = rule["max_select"] * new_qty
+                        count = new_group_totals.get(rule["group_id"], 0)
+                        if count < eff_min or count > eff_max:
+                            valid = False
+                            break
+
+                    if valid:
+                        # Оновлюємо кількості опцій у БД
+                        for g_id, v_id, s_qty in scaled_options:
+                            await conn.execute(
+                                """
+                                UPDATE cart_item_options 
+                                SET qty = $1 
+                                WHERE cart_item_id = $2 AND group_id = $3 AND variant_id = $4
+                                """,
+                                s_qty, item_id, g_id, v_id
+                            )
+
+                        # Перераховуємо options_key
+                        ordered = sorted(scaled_options, key=lambda o: (o[0], o[1]))
+                        new_key = "|".join(f"{g}:{v}:{q}" for g, v, q in ordered)
+
+                        await conn.execute(
+                            "UPDATE cart_items SET qty = $1, options_key = $2 WHERE id = $3",
+                            new_qty, new_key, item_id,
+                        )
+                    else:
+                        raise HTTPException(
+                            status_code=409,
+                            detail="Кількість вибраних опцій неможливо автоматично масштабувати. Будь ласка, налаштуйте страву в меню."
+                        )
+                else:
                     raise HTTPException(
                         status_code=409,
-                        detail=(
-                            f"Нова кількість не узгоджується з обраними опціями "
-                            f"(група {rule['group_id']}: обрано {count}, "
-                            f"дозволено {effective_min}-{effective_max} "
-                            f"при кількості {payload.qty}). "
-                            "Видаліть позицію і додайте знову з новою кількістю."
-                        ),
+                        detail="Опції вибрано несиметрично. Будь ласка, налаштуйте страву в меню з новою кількістю."
                     )
-
-        await conn.execute(
-            "UPDATE cart_items SET qty = $1 WHERE id = $2", payload.qty, item_id
-        )
+            else:
+                # Опцій немає — перевіряємо, чи не з'явилися обов'язкові опції
+                for rule in rules:
+                    if rule["min_select"] * new_qty > 0:
+                        raise HTTPException(
+                            status_code=409,
+                            detail="Страва потребує вибору обов'язкових опцій. Налаштуйте страву в меню."
+                        )
+                await conn.execute(
+                    "UPDATE cart_items SET qty = $1 WHERE id = $2", new_qty, item_id
+                )
 
     return await _fetch_cart(pool, user["telegram_id"])
-
 
 @router.delete("/items/{item_id}", response_model=CartOut)
 async def delete_cart_item(

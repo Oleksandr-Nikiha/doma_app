@@ -80,3 +80,48 @@ async def get_current_user(
         )
 
     return user_row
+
+
+async def get_current_staff(
+    user: asyncpg.Record = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> asyncpg.Record:
+    """
+    Перевіряє, чи є користувач активним менеджером або адміністратором.
+    Повертає запис зі штату з полями role, location_id, is_active тощо.
+    """
+    async with pool.acquire() as conn:
+        staff_row = await conn.fetchrow(
+            """
+            SELECT m.id, m.telegram_id, m.role, m.location_id, m.is_active,
+                   l.name AS location_name, u.full_name, u.phone
+            FROM managers m
+            JOIN users u ON u.telegram_id = m.telegram_id
+            LEFT JOIN locations l ON l.id = m.location_id
+            WHERE m.telegram_id = $1 AND m.is_active = true
+            """,
+            user["telegram_id"],
+        )
+
+    if not staff_row:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Доступ заборонено. Тільки для персоналу закладу.",
+        )
+
+    return staff_row
+
+
+async def get_current_admin(
+    staff: asyncpg.Record = Depends(get_current_staff),
+) -> asyncpg.Record:
+    """
+    Перевіряє, чи має користувач найвищу роль 'admin'.
+    """
+    if staff["role"] != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Доступ заборонено. Потрібні права головного адміністратора.",
+        )
+
+    return staff

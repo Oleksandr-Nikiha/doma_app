@@ -1,12 +1,29 @@
-from pydantic import BaseModel
+import re
+from pydantic import BaseModel, field_validator
 
 
+def normalize_phone(val: str) -> str:
+    """Приводить номер телефону до стандарту E.164 (+380XXXXXXXXX)."""
+    if not val:
+        raise ValueError("Номер телефону обов'язковий")
+    digits = re.sub(r"\D", "", val)
+    if digits.startswith("380") and len(digits) == 12:
+        return f"+{digits}"
+    if digits.startswith("0") and len(digits) == 10:
+        return f"+38{digits}"
+    if len(digits) == 9:
+        return f"+380{digits}"
+    raise ValueError("Некоректний номер телефону. Вкажіть номер у форматі 0XXXXXXXXX або +380XXXXXXXXX")
 class RegisterIn(BaseModel):
     full_name: str
     phone: str
     delivery_address: str | None = None
     first_name: str | None = None
     last_name: str | None = None
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        return normalize_phone(v)
 
 
 class UserUpdateIn(BaseModel):

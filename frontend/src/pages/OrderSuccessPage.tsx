@@ -1,9 +1,10 @@
+import { useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { useOrder } from "@/api/queries";
 import { ErrorBox, ScreenTitle, Spinner, formatPrice } from "@/components/ui";
 import { useBackButton } from "@/hooks/useBackButton";
-import { haptic } from "@/telegram/sdk";
+import { haptic, hapticNotify } from "@/telegram/sdk";
 
 export function OrderSuccessPage() {
   const navigate = useNavigate();
@@ -13,6 +14,21 @@ export function OrderSuccessPage() {
   useBackButton(() => navigate("/"));
 
   const { data: order, isPending, error, refetch } = useOrder(id);
+  const prevStatusRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!order) return;
+    if (prevStatusRef.current && prevStatusRef.current !== order.status) {
+      if (order.status === "confirmed") {
+        hapticNotify("success");
+      } else if (order.status === "rejected") {
+        hapticNotify("error");
+      } else {
+        haptic("medium");
+      }
+    }
+    prevStatusRef.current = order.status;
+  }, [order?.status]);
 
   if (isPending) return <Spinner />;
   if (error || !order) {
@@ -26,13 +42,40 @@ export function OrderSuccessPage() {
   const statusBadge = () => {
     switch (order.status) {
       case "confirmed":
-        return { text: "✅ Підтверджено", color: "#22c55e", bg: "rgba(34, 197, 94, 0.12)" };
+        return {
+          text: "✅ Підтверджено",
+          subtitle: "Замовлення підтверджено! Ми вже розпочали приготування 🍕✨",
+          color: "#22c55e",
+          bg: "rgba(34, 197, 94, 0.12)",
+        };
       case "rejected":
-        return { text: "❌ Відхилено", color: "#ef4444", bg: "rgba(239, 68, 68, 0.12)" };
+        return {
+          text: "❌ Відхилено",
+          subtitle: "На жаль, замовлення відхилено. Менеджер зателефонує для уточнення деталей.",
+          color: "#ef4444",
+          bg: "rgba(239, 68, 68, 0.12)",
+        };
       case "in_progress":
-        return { text: "👨‍🍳 Готується", color: "#3b82f6", bg: "rgba(59, 130, 246, 0.12)" };
+        return {
+          text: "👨‍🍳 Готується",
+          subtitle: "Ваші страви вже на кухні!",
+          color: "#3b82f6",
+          bg: "rgba(59, 130, 246, 0.12)",
+        };
+      case "completed":
+        return {
+          text: "🎉 Виконано",
+          subtitle: "Смачного! Дякуємо, що обираєте Doma.",
+          color: "#22c55e",
+          bg: "rgba(34, 197, 94, 0.12)",
+        };
       default:
-        return { text: "⏳ Очікує підтвердження", color: "#eab308", bg: "rgba(234, 179, 8, 0.12)" };
+        return {
+          text: "⏳ Очікує підтвердження",
+          subtitle: "Менеджер закладу перевіряє ваше замовлення",
+          color: "#eab308",
+          bg: "rgba(234, 179, 8, 0.12)",
+        };
     }
   };
 
@@ -45,10 +88,12 @@ export function OrderSuccessPage() {
       <div className="app-rise space-y-4 px-4">
         {/* Головна картка успіху */}
         <div className="app-card rounded-2xl p-5 text-center">
-          <div className="text-5xl">🎉</div>
-          <h2 className="mt-3 text-lg font-bold">Замовлення #{order.id} прийнято</h2>
-          <p className="mt-1 text-xs opacity-60">
-            Менеджер закладу перевіряє ваше замовлення
+          <div className="text-5xl">
+            {order.status === "rejected" ? "😔" : "🎉"}
+          </div>
+          <h2 className="mt-3 text-lg font-bold">Замовлення #{order.id} {order.status === "confirmed" ? "підтверджено" : "прийнято"}</h2>
+          <p className="mt-1 text-xs opacity-70 leading-relaxed max-w-[280px] mx-auto">
+            {badge.subtitle}
           </p>
 
           <div className="mt-3 inline-block rounded-full px-3 py-1 text-xs font-semibold" style={{ background: badge.bg, color: badge.color }}>

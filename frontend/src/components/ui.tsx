@@ -90,7 +90,6 @@ export function Thumb({
   className?: string;
   rounded?: string;
   fallback?: string;
-  /** Головне фото екрана вантажимо одразу; мініатюри списку — лінюче. */
   eager?: boolean;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">(src ? "loading" : "failed");
@@ -98,11 +97,14 @@ export function Thumb({
   if (state === "failed") {
     return (
       <div
-        className={`flex items-center justify-center opacity-40 ${rounded} ${className}`}
-        style={{ background: "var(--app-skeleton)" }}
+        className={`flex flex-col items-center justify-center ${rounded} ${className}`}
+        style={{
+          background: "color-mix(in srgb, var(--app-surface-2) 80%, transparent)",
+          color: "var(--tg-theme-hint-color, #999)",
+        }}
         aria-hidden
       >
-        {fallback}
+        <span className="text-2xl select-none opacity-60">{fallback}</span>
       </div>
     );
   }

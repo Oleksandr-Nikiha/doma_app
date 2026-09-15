@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, field_validator
+
+from src.schemas.user import normalize_phone
 
 
 class OrderCreateIn(BaseModel):
@@ -21,6 +23,11 @@ class OrderCreateIn(BaseModel):
         elif self.fulfillment_type == "pickup" and not self.location_id:
             raise ValueError("Локація обов'язкова для самовивозу")
         return self
+    
+    @field_validator("contact_phone")
+    @classmethod
+    def validate_contact_phone(cls, v: str) -> str:
+        return normalize_phone(v)
 
 
 class OrderItemOptionOut(BaseModel):

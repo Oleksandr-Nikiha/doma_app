@@ -69,6 +69,7 @@ export function CheckoutPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (createOrder.isPending) return;
     setSubmitError(null);
 
     const name = contactName.trim();
