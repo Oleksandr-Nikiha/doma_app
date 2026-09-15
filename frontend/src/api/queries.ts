@@ -11,6 +11,8 @@ import type {
   Category,
   Location,
   OptionSelection,
+  Order,
+  OrderCreatePayload,
   ProductDetail,
   ProductListItem,
   RegisterPayload,
@@ -26,6 +28,7 @@ export const keys = {
   product: (productId: number) => ["product", productId] as const,
   cart: ["cart"] as const,
   locations: ["locations"] as const,
+  order: (orderId: number) => ["order", orderId] as const,
 };
 
 // --- Каталог і контакти (публічні) ---
@@ -128,5 +131,26 @@ export function useClearCart() {
   return useMutation({
     mutationFn: () => api.delete<Cart>("/cart"),
     onSuccess: (cart) => qc.setQueryData(keys.cart, cart),
+  });
+}
+
+// --- Замовлення ---
+
+export function useCreateOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: OrderCreatePayload) => api.post<Order>("/orders", payload),
+    onSuccess: () => {
+      // Бекенд видалив оформлені страви з кошика — оновлюємо дані кошика
+      void qc.invalidateQueries({ queryKey: keys.cart });
+    },
+  });
+}
+
+export function useOrder(orderId: number) {
+  return useQuery({
+    queryKey: keys.order(orderId),
+    queryFn: () => api.get<Order>(`/orders/${orderId}`),
+    enabled: orderId > 0,
   });
 }

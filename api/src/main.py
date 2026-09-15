@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import get_settings
 from src.db.connection import connect_db, disconnect_db
-from src.routers import cart, catalog, locations, users
+from src.routers import cart, catalog, locations, orders, users
 
 
 @asynccontextmanager
@@ -32,6 +32,7 @@ app.add_middleware(
 app.include_router(catalog.router)
 app.include_router(users.router)
 app.include_router(cart.router)
+app.include_router(orders.router)
 app.include_router(locations.router)
 
 

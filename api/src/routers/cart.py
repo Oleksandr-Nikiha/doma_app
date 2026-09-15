@@ -51,10 +51,13 @@ async def _fetch_cart(pool: asyncpg.Pool, telegram_id: int) -> CartOut:
     """
     items_query = """
         SELECT ci.id, p.id AS product_id, p.name AS product_name,
-               pv.label AS variant_label, pv.weight, pv.price, ci.qty
+               pv.label AS variant_label, pv.weight, pv.price, ci.qty,
+               loc.id AS location_id, loc.name AS location_name
         FROM cart_items ci
         JOIN product_variants pv ON pv.id = ci.variant_id
         JOIN products p ON p.id = pv.product_id
+        JOIN categories cat ON cat.id = p.category_id
+        JOIN locations loc ON loc.id = cat.location_id
         JOIN carts c ON c.id = ci.cart_id
         WHERE c.telegram_id = $1
         ORDER BY ci.id
@@ -126,6 +129,8 @@ async def _fetch_cart(pool: asyncpg.Pool, telegram_id: int) -> CartOut:
                 price=price,
                 qty=item["qty"],
                 subtotal=subtotal,
+                location_id=item["location_id"],
+                location_name=item["location_name"],
                 options=options,
             )
         )

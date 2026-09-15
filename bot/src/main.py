@@ -8,7 +8,7 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 from src.config import get_settings
 from src.db.connection import connect_db, disconnect_db
-from src.handlers import start
+from src.handlers import orders, start
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,6 +39,7 @@ async def main() -> None:
     )
     dp = Dispatcher()
     dp.include_router(start.router)
+    dp.include_router(orders.router)
 
     await connect_db()
     try:

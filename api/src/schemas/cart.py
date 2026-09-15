@@ -33,6 +33,8 @@ class CartItemOut(BaseModel):
     price: float
     qty: int
     subtotal: float
+    location_id: int
+    location_name: str
     options: list[CartItemOptionOut] = []
 
 class CartOut(BaseModel):

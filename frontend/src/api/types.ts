@@ -113,6 +113,8 @@ export interface CartItem {
   price: number;
   qty: number;
   subtotal: number;
+  location_id: number;
+  location_name: string;
   options: CartItemOption[];
 }
 
@@ -126,4 +128,57 @@ export interface Location {
   name: string;
   address: string;
   phones: string[];
+}
+
+export interface OrderCreatePayload {
+  fulfillment_type: "delivery" | "pickup";
+  location_id?: number | null;
+  delivery_address?: string | null;
+  contact_name: string;
+  contact_phone: string;
+  payment_method: "cash" | "card";
+  comment?: string | null;
+}
+
+export interface OrderItemOption {
+  id: number;
+  option_group_name: string;
+  option_name: string;
+  price_delta: number;
+  qty: number;
+}
+
+export interface OrderItem {
+  id: number;
+  variant_id: number | null;
+  product_name: string;
+  variant_label: string;
+  unit_price: number;
+  qty: number;
+  subtotal: number;
+  options: OrderItemOption[];
+}
+
+export interface OrderGroup {
+  id: number;
+  location_id: number;
+  location_name: string;
+  status: string;
+  subtotal: number;
+  items: OrderItem[];
+}
+
+export interface Order {
+  id: number;
+  telegram_id: number;
+  status: string;
+  fulfillment_type: "delivery" | "pickup";
+  delivery_address: string | null;
+  contact_name: string;
+  contact_phone: string;
+  payment_method: "cash" | "card";
+  comment: string | null;
+  total_price: number;
+  created_at: string;
+  groups: OrderGroup[];
 }

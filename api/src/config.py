@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     database_url: str
     redis_url: str = "redis://redis:6379/0"
     bot_token: str
+    manager_chat_id: int | None = None
     api_debug: bool = False
 
     # Origins, яким дозволено ходити в API з браузера (Vite у dev, домен Mini App у проді).

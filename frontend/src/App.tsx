@@ -6,7 +6,9 @@ import { Layout } from "@/components/Layout";
 import { ErrorBox, Spinner } from "@/components/ui";
 import { CartPage } from "@/pages/CartPage";
 import { CategoriesPage } from "@/pages/CategoriesPage";
+import { CheckoutPage } from "@/pages/CheckoutPage";
 import { ContactsPage } from "@/pages/ContactsPage";
+import { OrderSuccessPage } from "@/pages/OrderSuccessPage";
 import { ProductPage } from "@/pages/ProductPage";
 import { ProductsPage } from "@/pages/ProductsPage";
 import { ProfilePage } from "@/pages/ProfilePage";
@@ -49,8 +51,10 @@ export function App() {
         <Route path="/contacts" element={<ContactsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
-      {/* Картка товару — на всю висоту, без нижньої панелі: там своя кнопка дії */}
+      {/* Картка товару, чекаут та екран успіху — без нижньої панелі */}
       <Route path="/products/:productId" element={<ProductPage />} />
+      <Route path="/checkout" element={<CheckoutPage />} />
+      <Route path="/orders/:orderId/success" element={<OrderSuccessPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

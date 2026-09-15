@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     bot_token: str
     mini_app_url: str
     database_url: str
+    manager_chat_id: int | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
