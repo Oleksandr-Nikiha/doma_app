@@ -2,17 +2,11 @@ import asyncpg
 from fastapi import Depends, HTTPException, status
 from fastapi.security import APIKeyHeader
 
+from src.auth.admin_token import verify_admin_token
 from src.auth.telegram_init_data import validate_init_data
 from src.config import get_settings
 from src.db.connection import get_pool
 
-# Схема безпеки, а не звичайний Header: завдяки їй у Swagger з'являється
-# кнопка Authorize — рядок initData вводиться один раз на всі ендпоінти,
-# а не в форму кожного окремо.
-#
-# auto_error=False, бо стандартна помилка APIKeyHeader — 403 "Not authenticated".
-# Відсутній і невалідний initData — той самий випадок «немає доступу»,
-# тож віддаємо на обидва 401 з внятним поясненням.
 init_data_header = APIKeyHeader(
     name="X-Telegram-Init-Data",
     scheme_name="TelegramInitData",
@@ -23,10 +17,16 @@ init_data_header = APIKeyHeader(
     auto_error=False,
 )
 
+admin_token_header = APIKeyHeader(
+    name="X-Admin-Token",
+    scheme_name="AdminToken",
+    description="Токен адміністратора для доступу з комп'ютера",
+    auto_error=False,
+)
+
 
 async def get_init_data(
-    init_data_raw: str | None = Depends(init_data_header),
-    settings = Depends(get_settings)
+    init_data_raw: str | None = Depends(init_data_header), settings=Depends(get_settings)
 ) -> dict:
     """
     Дістає заголовок X-Telegram-Init-Data, валідує його
@@ -39,44 +39,59 @@ async def get_init_data(
         )
 
     try:
-        return validate_init_data(
-            init_data=init_data_raw,
-            bot_token=settings.bot_token
-        )
+        return validate_init_data(init_data=init_data_raw, bot_token=settings.bot_token)
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Помилка авторизації: {e}"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Помилка авторизації: {e}"
         ) from e
 
 
 async def get_current_user(
-    init_data: dict = Depends(get_init_data),
-    pool: asyncpg.Pool = Depends(get_pool)
+    init_data_raw: str | None = Depends(init_data_header),
+    admin_token_raw: str | None = Depends(admin_token_header),
+    settings=Depends(get_settings),
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
     """
-    Використовує валідовані дані з get_init_data, шукає користувача 
-    в базі даних за telegram_id і повертає рядок користувача.
+    Авторизує користувача через X-Admin-Token або X-Telegram-Init-Data.
+    Повертає запис користувача з бази даних.
     """
-    user_data = init_data.get("user", {})
-    telegram_id = user_data.get("id")
+    telegram_id: int | None = None
+
+    if admin_token_raw:
+        telegram_id = verify_admin_token(admin_token_raw, settings.bot_token)
+        if not telegram_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Недійсний або прострочений токен адміністратора (X-Admin-Token)",
+            )
+    elif init_data_raw:
+        try:
+            init_data = validate_init_data(init_data=init_data_raw, bot_token=settings.bot_token)
+            user_data = init_data.get("user", {})
+            telegram_id = user_data.get("id")
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Помилка авторизації: {e}"
+            ) from e
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Відсутній заголовок авторизації (X-Telegram-Init-Data або X-Admin-Token)",
+        )
 
     if not telegram_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Не вдалося отримати telegram_id з даних авторизації"
+            detail="Не вдалося отримати telegram_id з даних авторизації",
         )
 
     async with pool.acquire() as conn:
-        user_row = await conn.fetchrow(
-            "SELECT * FROM users WHERE telegram_id = $1", 
-            telegram_id
-        )
+        user_row = await conn.fetchrow("SELECT * FROM users WHERE telegram_id = $1", telegram_id)
 
     if not user_row:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Користувача не зареєстровано"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Користувача не зареєстровано"
         )
 
     return user_row

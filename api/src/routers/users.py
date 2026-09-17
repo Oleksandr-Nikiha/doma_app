@@ -23,19 +23,19 @@ def _user_to_out(row: asyncpg.Record | dict) -> UserOut:
 async def register_user(
     payload: RegisterIn,
     init_data: dict = Depends(get_init_data),
-    pool: asyncpg.Pool = Depends(get_pool)
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
     """
     Реєструє нового користувача.
-    Бере telegram_id з валідованих даних Telegram, 
+    Бере telegram_id з валідованих даних Telegram,
     а решту даних (ім'я, телефон, адреса) — з тіла запиту.
     """
     telegram_id = init_data.get("user", {}).get("id")
-    
+
     if not telegram_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Не вдалося отримати telegram_id з даних авторизації"
+            detail="Не вдалося отримати telegram_id з даних авторизації",
         )
 
     first_name = payload.first_name or (

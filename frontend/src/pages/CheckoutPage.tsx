@@ -4,7 +4,9 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError } from "@/api/client";
 import { useCart, useCreateOrder, useLocations, useMe } from "@/api/queries";
 import { ErrorBox, ScreenTitle, SegmentedControl, Spinner, formatPrice } from "@/components/ui";
+import { WebHeader } from "@/components/WebHeader";
 import { useBackButton } from "@/hooks/useBackButton";
+import { isTelegramWebApp } from "@/telegram/env";
 import { haptic, hapticNotify } from "@/telegram/sdk";
 
 export function CheckoutPage() {
@@ -203,8 +205,9 @@ export function CheckoutPage() {
   const busy = createOrder.isPending;
 
   return (
-    <div className="pb-8">
-      <ScreenTitle>Оформлення</ScreenTitle>
+    <div className="mx-auto min-h-screen w-full max-w-lg pb-8 bg-[var(--tg-theme-bg-color)]">
+      <WebHeader title="Оформлення" showBack onBack={() => navigate("/cart")} />
+      {isTelegramWebApp() && <ScreenTitle>Оформлення</ScreenTitle>}
 
       <form onSubmit={handleSubmit} className="app-rise space-y-5 px-4">
         {/* Картка закладу */}
@@ -286,8 +289,8 @@ export function CheckoutPage() {
                 max={targetLocation?.delivery_end_time || "21:30"}
                 onChange={(e) => setScheduledTime(e.target.value)}
                 required
-                className="w-full rounded-xl p-3 text-sm font-semibold outline-none transition focus:ring-2 focus:ring-blue-500"
-                style={{ background: "var(--app-surface-2)" }}
+                className="w-full max-w-xs rounded-xl border border-[var(--app-border)] p-3 text-sm font-semibold outline-none transition focus:ring-2 focus:ring-blue-500"
+                style={{ background: "var(--app-surface-2)", color: "var(--tg-theme-text-color)" }}
               />
               <p className="text-[11px] opacity-50">
                 Доставка можлива з {targetLocation?.delivery_start_time || "10:30"} до {targetLocation?.delivery_end_time || "21:30"}.

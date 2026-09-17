@@ -39,7 +39,44 @@ export function ProfilePage() {
 
   if (isPending) return <Spinner />;
   if (error) return <ErrorBox message={error.message} onRetry={() => void refetch()} />;
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="pb-8">
+        <ScreenTitle>Профіль</ScreenTitle>
+        <div className="app-rise space-y-4 px-4">
+          <div className="app-card rounded-2xl p-5 text-center">
+            <div className="mb-3 text-4xl">👤</div>
+            <h2 className="text-lg font-bold">Гостьовий режим</h2>
+            <p className="mt-2 text-xs leading-relaxed opacity-70">
+              Ви переглядаєте меню та оформлюєте замовлення як гість.
+            </p>
+            <div
+              className="mt-4 rounded-xl p-3.5 text-left text-xs"
+              style={{ background: "var(--app-surface-2)" }}
+            >
+              <p className="mb-1.5 text-sm font-semibold">🎁 Переваги авторизації:</p>
+              <ul className="list-inside list-disc space-y-1 opacity-80">
+                <li>Накопичення та списання бонусів</li>
+                <li>Автозбереження адрес доставки</li>
+                <li>Історія та швидке повторення замовлень</li>
+                <li>Миттєві сповіщення про статус у боті</li>
+              </ul>
+            </div>
+            <a
+              href="https://t.me"
+              target="_blank"
+              rel="noreferrer"
+              className="app-press mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white transition-transform active:scale-98"
+              style={{ background: "var(--tg-theme-button-color)" }}
+            >
+              <span>Відкрити у боті Telegram</span>
+              <span>↗</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const isDirty =
     firstName.trim() !== (initialFirstName || "").trim() ||

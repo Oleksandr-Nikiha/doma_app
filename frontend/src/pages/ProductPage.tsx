@@ -1,11 +1,12 @@
 import { useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
-import { useAddToCart, useProduct } from "@/api/queries";
+import { useAddToCart, useLocations, useProduct } from "@/api/queries";
 import { ErrorBox, ProductDetailSkeleton, Thumb, formatPrice } from "@/components/ui";
 import { useBackButton } from "@/hooks/useBackButton";
+import { isTelegramWebApp } from "@/telegram/env";
 import { haptic, hapticNotify } from "@/telegram/sdk";
-import type { OptionGroup, OptionSelection } from "@/api/types";
+import type { CartItemOption, OptionGroup, OptionSelection } from "@/api/types";
 
 /** Скільки порцій обрано в групі: ключ — variant_id, значення — кількість. */
 type Picks = Record<number, number>;
@@ -82,6 +83,9 @@ function chipStyle(active: boolean): React.CSSProperties {
 export function ProductPage() {
   const { productId } = useParams();
   const navigate = useNavigate();
+  const { state } = useLocation();
+  const locationState = state as { location_id?: number; location_name?: string } | undefined;
+  const { data: locations } = useLocations();
   useBackButton();
 
   const { data, isPending, error, refetch } = useProduct(Number(productId));
@@ -157,10 +161,20 @@ export function ProductPage() {
   const total = selected ? selected.price * qty + optionsDelta : 0;
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col bg-[var(--tg-theme-bg-color)]">
       {/* Скролована частина зі стравою та опціями */}
       <div className="flex-1 pb-6">
         <div className="relative overflow-hidden">
+          {!isTelegramWebApp() && (
+            <button
+              type="button"
+              onClick={() => void navigate(-1)}
+              className="app-press absolute left-3.5 top-3.5 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition-transform active:scale-95 shadow-md"
+              aria-label="Назад"
+            >
+              ←
+            </button>
+          )}
           <Thumb src={data.image_url} rounded="" className="aspect-[4/3] w-full text-6xl" eager />
           <div
             className="absolute inset-x-0 bottom-0 h-10 pointer-events-none"
@@ -426,8 +440,50 @@ export function ProductPage() {
                     qty: optionQty,
                   })),
               );
+              const optionsDetails: CartItemOption[] = [];
+              const groupFreeCount: Record<number, number> = {};
+
+              for (const g of data.option_groups) {
+                groupFreeCount[g.group_id] = g.free_count;
+                const picks = picksFor(g);
+                for (const item of g.items) {
+                  const pickedQty = picks[item.variant_id] ?? 0;
+                  if (pickedQty > 0) {
+                    optionsDetails.push({
+                      group_id: g.group_id,
+                      variant_id: item.variant_id,
+                      name: item.name,
+                      label: "порція",
+                      price_delta: item.price_delta,
+                      qty: pickedQty,
+                    });
+                  }
+                }
+              }
+
+              const locId = locationState?.location_id ?? 1;
+              const locName =
+                locationState?.location_name ??
+                locations?.find((l) => l.id === locId)?.name ??
+                "Doma Pizza";
+
               addToCart.mutate(
-                { variant_id: selected.id, qty, options },
+                {
+                  variant_id: selected.id,
+                  qty,
+                  options,
+                  guest_meta: {
+                    product_id: data.id,
+                    product_name: data.name,
+                    variant_label: selected.label,
+                    weight: selected.weight,
+                    price: selected.price,
+                    location_id: locId,
+                    location_name: locName,
+                    options_details: optionsDetails,
+                    group_free_count: groupFreeCount,
+                  },
+                },
                 {
                   onSuccess: () => {
                     hapticNotify("success");

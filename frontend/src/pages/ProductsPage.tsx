@@ -117,7 +117,13 @@ export function ProductsPage() {
                   key={p.id}
                   onClick={() => {
                     haptic("light");
-                    void navigate(`/products/${p.id}`);
+                    const currentCategory = categories?.find((c) => c.id === p.category_id || c.id === id);
+                    void navigate(`/products/${p.id}`, {
+                      state: {
+                        location_id: currentCategory?.location_id,
+                        location_name: currentCategory?.location_name,
+                      },
+                    });
                   }}
                   className="app-card app-press flex w-full items-center gap-3.5 rounded-2xl p-3 text-left transition-all"
                 >

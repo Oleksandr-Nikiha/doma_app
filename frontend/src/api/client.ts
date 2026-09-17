@@ -17,14 +17,63 @@ export class ApiError extends Error {
  * Бекенд не має окремої авторизації: особу він дістає з підписаного initData.
  * Тож заголовок чіпляємо до кожного запиту — публічні ендпоінти його просто ігнорують.
  */
-function authHeaders(): Record<string, string> {
+export function getRawInitData(): string | null {
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
+    return null;
+  }
   try {
     const raw = retrieveRawInitData();
-    return raw ? { "X-Telegram-Init-Data": raw } : {};
+    if (raw) return raw;
   } catch {
-    // Поза Telegram і без моку initData немає — публічні ендпоінти все одно працюють
-    return {};
+    /* ignore */
   }
+  if (typeof window !== "undefined") {
+    const tg = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp;
+    if (tg?.initData) return tg.initData;
+  }
+  return null;
+}
+
+export function hasTelegramAuth(): boolean {
+  return Boolean(getRawInitData());
+}
+
+export const ADMIN_TOKEN_KEY = "doma_admin_token";
+
+export function getAdminToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(ADMIN_TOKEN_KEY);
+}
+
+export function setAdminToken(token: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(ADMIN_TOKEN_KEY, token);
+}
+
+export function removeAdminToken(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+}
+
+export function hasAdminAuth(): boolean {
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
+    return Boolean(getAdminToken());
+  }
+  return Boolean(getAdminToken()) || hasTelegramAuth();
+}
+
+function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const raw = getRawInitData();
+  if (raw) {
+    headers["X-Telegram-Init-Data"] = raw;
+  }
+  const adminToken = getAdminToken();
+  if (adminToken) {
+    headers["X-Admin-Token"] = adminToken;
+    headers["Authorization"] = `Bearer ${adminToken}`;
+  }
+  return headers;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

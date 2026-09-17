@@ -19,6 +19,7 @@ class ProductVariantOut(BaseModel):
 
 class ProductListItemOut(BaseModel):
     """Скорочена картка товару для списку категорії — без повного опису."""
+
     id: int
     name: str
     image_url: str | None = None
@@ -46,6 +47,7 @@ class OptionGroupOut(BaseModel):
 
 class ProductDetailOut(BaseModel):
     """Повна картка товару — з описом і усіма варіантами розмірів/цін."""
+
     id: int
     name: str
     description: str | None = None

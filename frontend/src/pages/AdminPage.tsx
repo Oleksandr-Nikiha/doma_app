@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 
+import { hasAdminAuth, removeAdminToken } from "@/api/client";
+import { isTelegramWebApp } from "@/telegram/env";
 import {
   useAddOptionGroupItem,
   useAdminCategories,
@@ -85,9 +87,31 @@ export function AdminPage() {
   const effectiveLocationId =
     adminMe?.role === "manager" ? adminMe.location_id : selectedLocationId;
 
+  // Якщо ми у звичайному браузері і немає авторизації адміна — переходимо на екран входу
+  if (!isTelegramWebApp() && !hasAdminAuth()) {
+    return <Navigate to="/admin/login" replace />;
+  }
+
+  const handleLogout = () => {
+    removeAdminToken();
+    navigate("/admin/login", { replace: true });
+  };
+
   if (mePending) return <Spinner />;
-  if (meError) return <ErrorBox message={meError.message} onRetry={() => window.location.reload()} />;
+
+  if (meError) {
+    if (!isTelegramWebApp()) {
+      removeAdminToken();
+      return <Navigate to="/admin/login" replace />;
+    }
+    return <ErrorBox message={meError.message} onRetry={() => window.location.reload()} />;
+  }
+
   if (!adminMe || !adminMe.is_staff) {
+    if (!isTelegramWebApp()) {
+      removeAdminToken();
+      return <Navigate to="/admin/login" replace />;
+    }
     return (
       <div className="flex min-h-screen flex-col items-center justify-center px-6 text-center">
         <div className="text-5xl">⛔</div>
@@ -114,11 +138,162 @@ export function AdminPage() {
       : "";
 
   return (
-    <div className="min-h-screen pb-16">
-      {/* Верхня панель */}
-      <div className="px-4 pt-3">
-        <div className="flex items-center justify-between">
-          <ScreenTitle>Адмін-панель</ScreenTitle>
+    <div className="min-h-screen pb-16 md:pb-8 flex flex-col md:flex-row bg-[var(--tg-theme-bg-color)]">
+      {/* 💻 ДЕСКТОПНИЙ САЙДБАР (відображається від md:) */}
+      <aside className="hidden md:flex w-64 shrink-0 flex-col justify-between border-r border-[var(--app-border)] bg-[var(--app-surface)] p-4 min-h-screen sticky top-0 h-screen overflow-y-auto">
+        <div className="space-y-5">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-2xl border border-amber-500/20">
+              🍕
+            </div>
+            <div>
+              <h1 className="font-bold text-sm leading-tight">Doma Admin</h1>
+              <p className="text-[10px] opacity-60">Панель керування</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-2)] p-3 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold truncate">
+                {adminMe.role === "admin" ? "Головний адмін" : "Менеджер закладу"}
+              </span>
+              <span
+                className="rounded-full px-2 py-0.5 text-[9px] font-bold"
+                style={{ background: "var(--app-tint)", color: "var(--tg-theme-button-color)" }}
+              >
+                {roleLabel}
+              </span>
+            </div>
+            {locationBadge && <p className="text-[11px] opacity-70">{locationBadge}</p>}
+          </div>
+
+          {adminMe.role === "admin" && (
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider opacity-60 block mb-1">
+                Заклад
+              </label>
+              <select
+                value={selectedLocationId ?? ""}
+                onChange={(e) => setSelectedLocationId(e.target.value ? Number(e.target.value) : null)}
+                className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-2)] px-2.5 py-2 text-xs font-medium focus:outline-none"
+              >
+                <option value="">🌐 Усі заклади</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    📍 {loc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <nav className="space-y-1">
+            <p className="text-[9px] font-bold uppercase tracking-wider opacity-40 px-2 mb-1.5">
+              Меню та страви
+            </p>
+            {[
+              { tab: "catalog" as AdminTab, label: "Меню та категорії", icon: "🍕" },
+              { tab: "options" as AdminTab, label: "Модифікатори та соуси", icon: "🥫" },
+              { tab: "stoplist" as AdminTab, label: "Стоп-лист", icon: "⛔" },
+              { tab: "delivery" as AdminTab, label: "Доставка та години", icon: "🛵" },
+            ].map((item) => (
+              <button
+                key={item.tab}
+                onClick={() => {
+                  setActiveSection("operations");
+                  setActiveTab(item.tab);
+                }}
+                className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all text-left ${
+                  activeTab === item.tab && activeSection === "operations"
+                    ? "shadow-sm font-bold"
+                    : "opacity-70 hover:opacity-100 hover:bg-[var(--app-surface-2)]"
+                }`}
+                style={
+                  activeTab === item.tab && activeSection === "operations"
+                    ? { background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }
+                    : undefined
+                }
+              >
+                <span>{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+
+            <p className="text-[9px] font-bold uppercase tracking-wider opacity-40 px-2 pt-3 mb-1.5">
+              Керування
+            </p>
+            {[
+              { tab: "orders" as AdminTab, label: "Замовлення", icon: "📦" },
+              { tab: "users" as AdminTab, label: "Клієнти", icon: "👥" },
+              { tab: "managers" as AdminTab, label: "Штат і ролі", icon: "👔" },
+            ].map((item) => (
+              <button
+                key={item.tab}
+                onClick={() => {
+                  setActiveSection(item.tab === "orders" ? "operations" : "management");
+                  setActiveTab(item.tab);
+                }}
+                className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all text-left ${
+                  activeTab === item.tab
+                    ? "shadow-sm font-bold"
+                    : "opacity-70 hover:opacity-100 hover:bg-[var(--app-surface-2)]"
+                }`}
+                style={
+                  activeTab === item.tab
+                    ? { background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }
+                    : undefined
+                }
+              >
+                <span>{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        <div className="pt-3 border-t border-[var(--app-border)]">
+          <button
+            onClick={handleLogout}
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-2 text-xs font-semibold text-rose-500 hover:bg-rose-500/10 transition-colors"
+          >
+            <span>🚪</span>
+            <span>Вийти з адмінки</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Головна робоча зона */}
+      <main className="flex-1 min-w-0">
+        {/* Десктопний верхній бар */}
+        <div className="hidden md:flex items-center justify-between border-b border-[var(--app-border)] bg-[var(--app-surface)] px-8 py-3.5">
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-bold tracking-tight">
+              {activeTab === "catalog" && "🍕 Меню та категорії"}
+              {activeTab === "options" && "🥫 Модифікатори та соуси"}
+              {activeTab === "stoplist" && "⛔ Стоп-лист страв"}
+              {activeTab === "delivery" && "🛵 Налаштування доставки"}
+              {activeTab === "orders" && "📦 Замовлення"}
+              {activeTab === "users" && "👥 Клієнти закладу"}
+              {activeTab === "managers" && "👔 Штат та ролі"}
+            </h2>
+            {locationBadge && (
+              <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ background: "var(--app-surface-2)" }}>
+                {locationBadge}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={handleLogout}
+            className="rounded-xl px-3 py-1.5 text-xs font-medium text-rose-500 hover:bg-rose-500/10 transition-colors"
+          >
+            Вийти
+          </button>
+        </div>
+
+        {/* Мобільна верхня панель */}
+        <div className="md:hidden px-4 pt-3">
+          <div className="flex items-center justify-between">
+            <ScreenTitle>Адмін-панель</ScreenTitle>
           <div className="flex flex-col items-end gap-1 pr-2 pt-2 text-right">
             <span
               className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
@@ -355,7 +530,7 @@ export function AdminPage() {
       </div>
 
       {/* Вміст вкладок */}
-      <div className="mt-4 px-4">
+      <div className="mt-4 px-4 md:px-8 max-w-7xl pb-12">
         {activeTab === "orders" && (
           <OrdersTab locationId={effectiveLocationId} />
         )}
@@ -378,6 +553,7 @@ export function AdminPage() {
         {activeTab === "users" && <UsersTab />}
         {activeTab === "managers" && <ManagersTab locations={locations} />}
       </div>
+      </main>
     </div>
   );
 }
@@ -938,19 +1114,19 @@ function OrderEditModal({
         )}
 
         {/* Основні параметри */}
-        <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <div>
-            <label className="block mb-1 font-semibold opacity-70">Статус:</label>
+            <label className="block mb-1 font-semibold opacity-70">Статус замовлення:</label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="w-full rounded-xl p-2.5 font-medium outline-none"
-              style={{ background: "var(--app-surface-2)" }}
+              className="w-full rounded-xl border border-[var(--app-border)] p-2.5 font-medium outline-none"
+              style={{ background: "var(--app-surface-2)", color: "var(--tg-theme-text-color)" }}
             >
-              <option value="pending_moderation">⏳ Очікує</option>
+              <option value="pending_moderation">⏳ Очікує підтвердження</option>
               <option value="confirmed">✅ Підтверджено</option>
               <option value="in_progress">👨‍🍳 Готується</option>
-              <option value="ready">🛵 Готово/В дорозі</option>
+              <option value="ready">🛵 Готове до видачі / доставки</option>
               <option value="completed">🏁 Виконано</option>
               <option value="rejected">❌ Відхилено</option>
               <option value="cancelled">🚫 Скасовано</option>
@@ -967,8 +1143,8 @@ function OrderEditModal({
               min="10:30"
               max="21:30"
               onChange={(e) => setScheduledTime(e.target.value)}
-              className="w-full rounded-xl p-2.5 font-medium outline-none"
-              style={{ background: "var(--app-surface-2)" }}
+              className="w-full rounded-xl border border-[var(--app-border)] p-2.5 font-medium outline-none"
+              style={{ background: "var(--app-surface-2)", color: "var(--tg-theme-text-color)" }}
             />
           </div>
         </div>
@@ -1604,11 +1780,24 @@ function CatalogTab({
 }) {
   const { data: categories = [], isPending: catLoading, error: catError } = useAdminCategories(locationId);
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: products = [], isPending: prodLoading, error: prodError } = useAdminProducts({
     categoryId: selectedCatId,
     locationId: locationId,
   });
+
+  const filteredProducts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) => {
+      const matchName = p.name.toLowerCase().includes(q);
+      const matchDesc = p.description ? p.description.toLowerCase().includes(q) : false;
+      const matchCat = p.category_name ? p.category_name.toLowerCase().includes(q) : false;
+      const matchVariant = p.variants?.some((v) => v.label.toLowerCase().includes(q)) ?? false;
+      return matchName || matchDesc || matchCat || matchVariant;
+    });
+  }, [products, search]);
 
   // Модальні вікна
   const [catModalOpen, setCatModalOpen] = useState(false);
@@ -1653,7 +1842,7 @@ function CatalogTab({
         </div>
 
         {/* Скрол списку категорій */}
-        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar md:flex-wrap">
           <button
             onClick={() => {
               haptic("light");
@@ -1706,9 +1895,13 @@ function CatalogTab({
 
       {/* Блок страв */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-bold">
-            Страви {selectedCatId ? `в категорії` : `(всі)`} ({products.length})
+            Страви {selectedCatId ? `в категорії` : `(всі)`}{" "}
+            <span className="text-xs font-normal opacity-60">
+              ({filteredProducts.length}
+              {search.trim() ? ` з ${products.length}` : ""})
+            </span>
           </h2>
           <button
             onClick={() => {
@@ -1723,15 +1916,56 @@ function CatalogTab({
           </button>
         </div>
 
+        {/* Швидкий пошук страв у меню */}
+        <div className="relative">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="🔍 Швидкий пошук страви за назвою, описом або складом..."
+            className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2.5 pl-10 text-sm outline-none transition focus:border-[var(--tg-theme-button-color)] focus:ring-1 focus:ring-[var(--tg-theme-button-color)]"
+            style={{ color: "var(--tg-theme-text-color)" }}
+          />
+          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm opacity-50">
+            🔍
+          </span>
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-xs opacity-50 hover:opacity-100"
+              title="Очистити пошук"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
         {prodLoading ? (
           <Spinner />
         ) : prodError ? (
           <ErrorBox message={prodError.message} />
         ) : products.length === 0 ? (
           <EmptyState icon="🍕" title="Немає страв" hint="Додайте першу страву за допомогою кнопки вище" />
+        ) : filteredProducts.length === 0 ? (
+          <div className="app-card rounded-2xl p-6 text-center space-y-3">
+            <span className="text-3xl">🔍</span>
+            <p className="font-bold text-sm">Нічого не знайдено</p>
+            <p className="text-xs opacity-60">
+              За запитом «{search}» не знайдено жодної страви. Спробуйте змінити пошуковий запит або обрати іншу категорію.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="app-press rounded-xl px-4 py-2 text-xs font-semibold"
+              style={{ background: "var(--app-surface-2)" }}
+            >
+              Скинути пошук
+            </button>
+          </div>
         ) : (
           <div className="space-y-3">
-            {products.map((p) => (
+            {filteredProducts.map((p) => (
               <div
                 key={p.id}
                 className="app-card rounded-2xl p-3.5 transition-shadow"
@@ -3701,22 +3935,24 @@ function DeliverySettingsTab({ locationId }: DeliverySettingsTabProps) {
         </p>
       </div>
 
-      {filtered.map((loc: LocationDeliverySettings) => (
-        <LocationDeliveryCard
-          key={loc.id}
-          location={loc}
-          onUpdate={(payload) => {
-            updateDelivery.mutate(
-              { locationId: loc.id, payload },
-              {
-                onSuccess: () => hapticNotify("success"),
-                onError: () => hapticNotify("error"),
-              },
-            );
-          }}
-          isUpdating={updateDelivery.isPending}
-        />
-      ))}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {filtered.map((loc: LocationDeliverySettings) => (
+          <LocationDeliveryCard
+            key={loc.id}
+            location={loc}
+            onUpdate={(payload) => {
+              updateDelivery.mutate(
+                { locationId: loc.id, payload },
+                {
+                  onSuccess: () => hapticNotify("success"),
+                  onError: () => hapticNotify("error"),
+                },
+              );
+            }}
+            isUpdating={updateDelivery.isPending}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -3804,9 +4040,12 @@ function LocationDeliveryCard({
         <label className="block text-xs font-semibold uppercase tracking-wider opacity-60">
           Години прийому доставки
         </label>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <span className="block text-[11px] opacity-70 mb-1">Початок роботи</span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg">
+          <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-2)] p-3">
+            <span className="block text-[11px] font-medium opacity-70 mb-1.5 flex items-center gap-1.5">
+              <span>⏰</span>
+              <span>Початок роботи</span>
+            </span>
             <input
               type="time"
               value={startTime}
@@ -3815,12 +4054,15 @@ function LocationDeliveryCard({
                 setHasHoursChanged(true);
               }}
               required
-              className="w-full rounded-xl p-2.5 text-sm font-semibold outline-none transition focus:ring-2 focus:ring-blue-500"
-              style={{ background: "var(--app-surface-2)" }}
+              className="w-full rounded-lg bg-transparent text-base font-bold outline-none transition focus:ring-1 focus:ring-[var(--tg-theme-button-color)]"
+              style={{ color: "var(--tg-theme-text-color)" }}
             />
           </div>
-          <div>
-            <span className="block text-[11px] opacity-70 mb-1">Кінець роботи</span>
+          <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-2)] p-3">
+            <span className="block text-[11px] font-medium opacity-70 mb-1.5 flex items-center gap-1.5">
+              <span>🌙</span>
+              <span>Кінець роботи</span>
+            </span>
             <input
               type="time"
               value={endTime}
@@ -3829,8 +4071,8 @@ function LocationDeliveryCard({
                 setHasHoursChanged(true);
               }}
               required
-              className="w-full rounded-xl p-2.5 text-sm font-semibold outline-none transition focus:ring-2 focus:ring-blue-500"
-              style={{ background: "var(--app-surface-2)" }}
+              className="w-full rounded-lg bg-transparent text-base font-bold outline-none transition focus:ring-1 focus:ring-[var(--tg-theme-button-color)]"
+              style={{ color: "var(--tg-theme-text-color)" }}
             />
           </div>
         </div>
@@ -3839,7 +4081,7 @@ function LocationDeliveryCard({
           <button
             type="submit"
             disabled={isUpdating}
-            className="app-press w-full rounded-xl py-2.5 text-xs font-bold shadow transition"
+            className="app-press w-full sm:w-auto px-6 rounded-xl py-2.5 text-xs font-bold shadow transition"
             style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
           >
             {isUpdating ? "Збереження..." : "Зберегти нові години"}

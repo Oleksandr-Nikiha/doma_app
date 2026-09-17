@@ -5,7 +5,14 @@ import {
   type UseQueryResult,
 } from "@tanstack/react-query";
 
-import { ApiError, api } from "@/api/client";
+import { ApiError, api, hasTelegramAuth } from "@/api/client";
+import {
+  addGuestItem,
+  clearGuestCart,
+  getGuestCart,
+  removeGuestItem,
+  updateGuestItemQty,
+} from "@/store/guestCart";
 import type {
   AdminCategory,
   AdminMe,
@@ -14,6 +21,7 @@ import type {
   AdminProduct,
   AdminVariant,
   Cart,
+  CartItemOption,
   Category,
   CategoryCreatePayload,
   CategoryUpdatePayload,
@@ -104,15 +112,19 @@ export function useLocations() {
 /**
  * 404 тут — не помилка, а «користувач ще не зареєстрований»: саме так бекенд
  * відповідає на /me для незнайомого telegram_id. Тому не ретраїмо і віддаємо null.
+ * У режимі звичайного вебу без Telegram або при 401 повертаємо null (гість).
  */
 export function useMe(): UseQueryResult<User | null> {
   return useQuery({
     queryKey: keys.me,
     queryFn: async () => {
+      if (!hasTelegramAuth()) {
+        return null;
+      }
       try {
         return await api.get<User>("/me");
       } catch (e) {
-        if (e instanceof ApiError && e.status === 404) return null;
+        if (e instanceof ApiError && (e.status === 404 || e.status === 401)) return null;
         throw e;
       }
     },
@@ -137,18 +149,74 @@ export function useUpdateProfile() {
 }
 
 // --- Кошик ---
-// Усі мутації бекенд повертає вже оновленим кошиком, тож замість інвалідації
-// одразу кладемо відповідь у кеш — на один зайвий запит менше.
+// Для авторизованих клієнтів (у Telegram) кошик живе на сервері.
+// Для гостей без авторизації зберігається у localStorage браузера.
 
 export function useCart() {
-  return useQuery({ queryKey: keys.cart, queryFn: () => api.get<Cart>("/cart") });
+  return useQuery({
+    queryKey: keys.cart,
+    queryFn: async () => {
+      if (!hasTelegramAuth()) {
+        return getGuestCart();
+      }
+      try {
+        return await api.get<Cart>("/cart");
+      } catch (e) {
+        if (e instanceof ApiError && (e.status === 401 || e.status === 404)) {
+          return getGuestCart();
+        }
+        throw e;
+      }
+    },
+  });
+}
+
+export interface AddToCartInput {
+  variant_id: number;
+  qty: number;
+  options: OptionSelection[];
+  guest_meta?: {
+    product_id: number;
+    product_name: string;
+    variant_label: string;
+    weight: string | null;
+    price: number;
+    location_id: number;
+    location_name: string;
+    options_details: CartItemOption[];
+    group_free_count?: Record<number, number>;
+  };
 }
 
 export function useAddToCart() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { variant_id: number; qty: number; options: OptionSelection[] }) =>
-      api.post<Cart>("/cart/items", v),
+    mutationFn: async (v: AddToCartInput) => {
+      if (!hasTelegramAuth()) {
+        if (!v.guest_meta) {
+          throw new Error("Не вистачає даних товару для кошика гостя");
+        }
+        return addGuestItem({
+          product_id: v.guest_meta.product_id,
+          product_name: v.guest_meta.product_name,
+          variant_id: v.variant_id,
+          variant_label: v.guest_meta.variant_label,
+          weight: v.guest_meta.weight,
+          price: v.guest_meta.price,
+          qty: v.qty,
+          location_id: v.guest_meta.location_id,
+          location_name: v.guest_meta.location_name,
+          options: v.options,
+          options_details: v.guest_meta.options_details,
+          group_free_count: v.guest_meta.group_free_count,
+        });
+      }
+      return api.post<Cart>("/cart/items", {
+        variant_id: v.variant_id,
+        qty: v.qty,
+        options: v.options,
+      });
+    },
     onSuccess: (cart) => qc.setQueryData(keys.cart, cart),
   });
 }
@@ -156,8 +224,12 @@ export function useAddToCart() {
 export function useUpdateCartItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { itemId: number; qty: number }) =>
-      api.patch<Cart>(`/cart/items/${v.itemId}`, { qty: v.qty }),
+    mutationFn: async (v: { itemId: number; qty: number }) => {
+      if (!hasTelegramAuth()) {
+        return updateGuestItemQty(v.itemId, v.qty);
+      }
+      return api.patch<Cart>(`/cart/items/${v.itemId}`, { qty: v.qty });
+    },
     onSuccess: (cart) => qc.setQueryData(keys.cart, cart),
   });
 }
@@ -165,7 +237,12 @@ export function useUpdateCartItem() {
 export function useRemoveCartItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (itemId: number) => api.delete<Cart>(`/cart/items/${itemId}`),
+    mutationFn: async (itemId: number) => {
+      if (!hasTelegramAuth()) {
+        return removeGuestItem(itemId);
+      }
+      return api.delete<Cart>(`/cart/items/${itemId}`);
+    },
     onSuccess: (cart) => qc.setQueryData(keys.cart, cart),
   });
 }
@@ -173,7 +250,12 @@ export function useRemoveCartItem() {
 export function useClearCart() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api.delete<Cart>("/cart"),
+    mutationFn: async () => {
+      if (!hasTelegramAuth()) {
+        return clearGuestCart();
+      }
+      return api.delete<Cart>("/cart");
+    },
     onSuccess: (cart) => qc.setQueryData(keys.cart, cart),
   });
 }
@@ -195,6 +277,7 @@ export function useOrders() {
   return useQuery({
     queryKey: keys.orders,
     queryFn: () => api.get<Order[]>("/orders"),
+    enabled: hasTelegramAuth(),
   });
 }
 

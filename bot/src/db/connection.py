@@ -43,3 +43,64 @@ async def get_user_by_telegram_id(telegram_id: int) -> asyncpg.Record | None:
             "FROM users WHERE telegram_id = $1",
             telegram_id,
         )
+
+
+async def get_manager_by_telegram_id(telegram_id: int) -> asyncpg.Record | None:
+    """Повертає профіль менеджера/адміністратора, якщо він активний."""
+    async with get_pool().acquire() as conn:
+        return await conn.fetchrow(
+            """
+            SELECT m.id, m.telegram_id, m.role, m.location_id, m.is_active,
+                   u.full_name, u.phone
+            FROM managers m
+            JOIN users u ON u.telegram_id = m.telegram_id
+            WHERE m.telegram_id = $1 AND m.is_active = true
+            """,
+            telegram_id,
+        )
+
+
+async def get_admin_session_by_id(session_id) -> asyncpg.Record | None:
+    """Повертає сесію авторизації за UUID."""
+    async with get_pool().acquire() as conn:
+        return await conn.fetchrow(
+            """
+            SELECT id, code, telegram_id, token, status, expires_at
+            FROM admin_auth_sessions
+            WHERE id = $1
+            """,
+            session_id,
+        )
+
+
+async def get_admin_session_by_code(code: str) -> asyncpg.Record | None:
+    """Повертає активну сесію авторизації за 6-значним кодом."""
+    async with get_pool().acquire() as conn:
+        return await conn.fetchrow(
+            """
+            SELECT id, code, telegram_id, token, status, expires_at 
+            FROM admin_auth_sessions 
+            WHERE code = $1 AND expires_at > NOW() AND status = 'pending'
+            ORDER BY created_at DESC 
+            LIMIT 1
+            """,
+            code,
+        )
+
+
+async def approve_admin_session(session_id, telegram_id: int, token: str) -> bool:
+    """Підтверджує сесію авторизації адміна."""
+    async with get_pool().acquire() as conn:
+        result = await conn.execute(
+            """
+            UPDATE admin_auth_sessions
+            SET status = 'approved',
+                telegram_id = $1,
+                token = $2
+            WHERE id = $3 AND status = 'pending' AND expires_at > NOW()
+            """,
+            telegram_id,
+            token,
+            session_id,
+        )
+        return result == "UPDATE 1"

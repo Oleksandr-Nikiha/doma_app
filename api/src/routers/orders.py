@@ -55,7 +55,7 @@ async def send_order_to_manager(order_id: int, order_data: dict[str, Any], setti
         opts_str = ""
         if item["options"]:
             opts = ", ".join(
-                f"{html.escape(str(o['name']))}" + (f" ×{o['qty']}" if o['qty'] > 1 else "")
+                f"{html.escape(str(o['name']))}" + (f" ×{o['qty']}" if o["qty"] > 1 else "")
                 for o in item["options"]
             )
             opts_str = f"\n   <i>↳ {opts}</i>"
@@ -76,7 +76,11 @@ async def send_order_to_manager(order_id: int, order_data: dict[str, Any], setti
         else "🛍️ Самовивіз"
     )
     scheduled_time = order_data.get("scheduled_time")
-    time_label = f"⏰ <b>Час:</b> На {html.escape(str(scheduled_time))}" if scheduled_time else "⏰ <b>Час:</b> Якнайшвидше"
+    time_label = (
+        f"⏰ <b>Час:</b> На {html.escape(str(scheduled_time))}"
+        if scheduled_time
+        else "⏰ <b>Час:</b> Якнайшвидше"
+    )
 
     if order_data["payment_method"] == "cash":
         payment_label = "💵 Готівка"
@@ -94,9 +98,7 @@ async def send_order_to_manager(order_id: int, order_data: dict[str, Any], setti
     )
     user_note = order_data.get("admin_note")
     user_note_line = (
-        f"\n⚠️ <b>Примітка про клієнта:</b> {html.escape(str(user_note))}"
-        if user_note
-        else ""
+        f"\n⚠️ <b>Примітка про клієнта:</b> {html.escape(str(user_note))}" if user_note else ""
     )
 
     text = (
@@ -145,21 +147,77 @@ async def _fetch_order_by_id(conn, order_id: int, telegram_id: int) -> OrderOut 
         FROM orders
         WHERE id = $1 AND telegram_id = $2
         """,
-        order_id, telegram_id,
+        order_id,
+        telegram_id,
     )
     if not order_row:
         return None
-    groups_rows = await conn.fetch("SELECT og.id, og.location_id, loc.name AS location_name, og.status, og.subtotal FROM order_groups og JOIN locations loc ON loc.id = og.location_id WHERE og.order_id = $1 ORDER BY og.id", order_id)
-    items_rows = await conn.fetch("SELECT id, order_group_id, variant_id, product_name, variant_label, unit_price, qty, subtotal FROM order_items WHERE order_group_id = ANY($1::int[]) ORDER BY id", [g["id"] for g in groups_rows])
-    options_rows = await conn.fetch("SELECT id, order_item_id, option_group_name, option_name, price_delta, qty FROM order_item_options WHERE order_item_id = ANY($1::int[]) ORDER BY id", [i["id"] for i in items_rows])
-    
+    groups_rows = await conn.fetch(
+        """
+        SELECT og.id, og.location_id, loc.name AS location_name, og.status, og.subtotal
+        FROM order_groups og
+        JOIN locations loc ON loc.id = og.location_id
+        WHERE og.order_id = $1
+        ORDER BY og.id
+        """,
+        order_id,
+    )
+    items_rows = await conn.fetch(
+        """
+        SELECT id, order_group_id, variant_id, product_name, variant_label,
+               unit_price, qty, subtotal
+        FROM order_items
+        WHERE order_group_id = ANY($1::int[])
+        ORDER BY id
+        """,
+        [g["id"] for g in groups_rows],
+    )
+    options_rows = await conn.fetch(
+        """
+        SELECT id, order_item_id, option_group_name, option_name, price_delta, qty
+        FROM order_item_options
+        WHERE order_item_id = ANY($1::int[])
+        ORDER BY id
+        """,
+        [i["id"] for i in items_rows],
+    )
+
     opts_by_item: dict[int, list[OrderItemOptionOut]] = {}
     for r in options_rows:
-        opts_by_item.setdefault(r["order_item_id"], []).append(OrderItemOptionOut(id=r["id"], option_group_name=r["option_group_name"], option_name=r["option_name"], price_delta=float(r["price_delta"]), qty=r["qty"]))
+        opts_by_item.setdefault(r["order_item_id"], []).append(
+            OrderItemOptionOut(
+                id=r["id"],
+                option_group_name=r["option_group_name"],
+                option_name=r["option_name"],
+                price_delta=float(r["price_delta"]),
+                qty=r["qty"],
+            )
+        )
     items_by_group: dict[int, list[OrderItemOut]] = {}
     for r in items_rows:
-        items_by_group.setdefault(r["order_group_id"], []).append(OrderItemOut(id=r["id"], variant_id=r["variant_id"], product_name=r["product_name"], variant_label=r["variant_label"], unit_price=float(r["unit_price"]), qty=r["qty"], subtotal=float(r["subtotal"]), options=opts_by_item.get(r["id"], [])))
-    groups: list[OrderGroupOut] = [OrderGroupOut(id=g["id"], location_id=g["location_id"], location_name=g["location_name"], status=g["status"], subtotal=float(g["subtotal"]), items=items_by_group.get(g["id"], [])) for g in groups_rows]
+        items_by_group.setdefault(r["order_group_id"], []).append(
+            OrderItemOut(
+                id=r["id"],
+                variant_id=r["variant_id"],
+                product_name=r["product_name"],
+                variant_label=r["variant_label"],
+                unit_price=float(r["unit_price"]),
+                qty=r["qty"],
+                subtotal=float(r["subtotal"]),
+                options=opts_by_item.get(r["id"], []),
+            )
+        )
+    groups: list[OrderGroupOut] = [
+        OrderGroupOut(
+            id=g["id"],
+            location_id=g["location_id"],
+            location_name=g["location_name"],
+            status=g["status"],
+            subtotal=float(g["subtotal"]),
+            items=items_by_group.get(g["id"], []),
+        )
+        for g in groups_rows
+    ]
     return OrderOut(
         id=order_row["id"],
         telegram_id=order_row["telegram_id"],
@@ -356,12 +414,14 @@ async def create_order(
                 for o_row in g_rows:
                     delta = float(o_row["price_delta"])
                     units.extend([delta] * o_row["qty"])
-                    item_options.append({
-                        "option_group_name": o_row["group_name"],
-                        "name": o_row["option_name"],
-                        "price_delta": delta,
-                        "qty": o_row["qty"],
-                    })
+                    item_options.append(
+                        {
+                            "option_group_name": o_row["group_name"],
+                            "name": o_row["option_name"],
+                            "price_delta": delta,
+                            "qty": o_row["qty"],
+                        }
+                    )
 
                 eff_free = g_rows[0]["free_count"] * item["qty"]
                 extra_cost += options_cost(units, eff_free)
@@ -370,15 +430,17 @@ async def create_order(
             item_subtotal = round(unit_price * item["qty"] + extra_cost, 2)
             total_order_price += item_subtotal
 
-            calculated_items.append({
-                "variant_id": item["variant_id"],
-                "product_name": item["product_name"],
-                "variant_label": item["variant_label"],
-                "unit_price": unit_price,
-                "qty": item["qty"],
-                "subtotal": item_subtotal,
-                "options": item_options,
-            })
+            calculated_items.append(
+                {
+                    "variant_id": item["variant_id"],
+                    "product_name": item["product_name"],
+                    "variant_label": item["variant_label"],
+                    "unit_price": unit_price,
+                    "qty": item["qty"],
+                    "subtotal": item_subtotal,
+                    "options": item_options,
+                }
+            )
 
         total_order_price = round(total_order_price, 2)
 
@@ -397,10 +459,14 @@ async def create_order(
             ORDER BY o.id DESC
             LIMIT 1
             """,
-            telegram_id, target_location_id, total_order_price,
+            telegram_id,
+            target_location_id,
+            total_order_price,
         )
         if recent_order_id:
-            logger.info("Повторний запит: знайдено нещодавно створене замовлення #%s", recent_order_id)
+            logger.info(
+                "Повторний запит: знайдено нещодавно створене замовлення #%s", recent_order_id
+            )
             # Отримуємо і повертаємо вже створене замовлення без створення дубля
             # Для цього транзакція завершиться без змін, і ми просто повернемо результат
             existing_order = await _fetch_order_by_id(conn, recent_order_id, telegram_id)
@@ -475,13 +541,15 @@ async def create_order(
             options_by_item_map[saved_item_id] = []
 
             for opt in calc_item["options"]:
-                options_batch.append((
-                    saved_item_id,
-                    opt["option_group_name"],
-                    opt["name"],
-                    opt["price_delta"],
-                    opt["qty"],
-                ))
+                options_batch.append(
+                    (
+                        saved_item_id,
+                        opt["option_group_name"],
+                        opt["name"],
+                        opt["price_delta"],
+                        opt["qty"],
+                    )
+                )
                 # Формуємо об'єкт для повернення
                 options_by_item_map[saved_item_id].append(
                     OrderItemOptionOut(
@@ -782,4 +850,3 @@ async def get_order(
         created_at=order_row["created_at"],
         groups=groups,
     )
-

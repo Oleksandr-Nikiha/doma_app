@@ -111,7 +111,7 @@ async def _fetch_cart(pool: asyncpg.Pool, telegram_id: int) -> CartOut:
                         qty=row["qty"],
                     )
                 )
-            
+
             effective_free = rows[0]["free_count"] * item["qty"]
             extra += options_cost(units, effective_free)
 
@@ -139,19 +139,14 @@ async def _fetch_cart(pool: asyncpg.Pool, telegram_id: int) -> CartOut:
 
 
 @router.get("", response_model=CartOut)
-async def get_cart(
-    user=Depends(get_current_user),
-    pool: asyncpg.Pool = Depends(get_pool)
-):
+async def get_cart(user=Depends(get_current_user), pool: asyncpg.Pool = Depends(get_pool)):
     """Отримує вміст кошика для поточного користувача."""
     return await _fetch_cart(pool, user["telegram_id"])
 
 
 @router.post("/items", response_model=CartOut)
 async def add_item_to_cart(
-    payload: CartItemIn,
-    user=Depends(get_current_user),
-    pool: asyncpg.Pool = Depends(get_pool)
+    payload: CartItemIn, user=Depends(get_current_user), pool: asyncpg.Pool = Depends(get_pool)
 ):
 
     seen_opts = set()
@@ -160,15 +155,18 @@ async def add_item_to_cart(
         if pair in seen_opts:
             raise HTTPException(status_code=400, detail="Дублювання опцій у запиті")
         seen_opts.add(pair)
-        
+
     async with pool.acquire() as conn, conn.transaction():
-        variant = await conn.fetchrow("""
+        variant = await conn.fetchrow(
+            """
             SELECT p.id as product_id, p.is_available as p_avail, pv.is_available as pv_avail 
             FROM product_variants pv
             JOIN products p ON p.id = pv.product_id
             WHERE pv.id = $1
-        """, payload.variant_id)
-        
+        """,
+            payload.variant_id,
+        )
+
         if not variant:
             raise HTTPException(status_code=404, detail="Варіант не знайдено")
         if not variant["p_avail"] or not variant["pv_avail"]:
@@ -176,11 +174,14 @@ async def add_item_to_cart(
 
         product_id = variant["product_id"]
 
-        groups = await conn.fetch("""
+        groups = await conn.fetch(
+            """
             SELECT group_id, min_select, max_select 
             FROM product_option_groups 
             WHERE product_id = $1
-        """, product_id)
+        """,
+            product_id,
+        )
         group_rules = {row["group_id"]: row for row in groups}
 
         requested_groups = {}
@@ -199,10 +200,10 @@ async def add_item_to_cart(
 
             effective_min = rule["min_select"] * payload.qty
             effective_max = rule["max_select"] * payload.qty
-            
+
             if count < effective_min or count > effective_max:
                 raise HTTPException(
-                    status_code=400, 
+                    status_code=400,
                     detail=(
                         f"Група {g_id}: вибрано {count}, "
                         f"дозволено {rule['min_select']}-{rule['max_select']}"
@@ -210,13 +211,16 @@ async def add_item_to_cart(
                 )
 
         if payload.options:
-            allowed_opts = await conn.fetch("""
+            allowed_opts = await conn.fetch(
+                """
                 SELECT group_id, variant_id 
                 FROM option_group_items 
                 WHERE group_id = ANY($1) AND is_available = true
-            """, list(group_rules.keys()))
+            """,
+                list(group_rules.keys()),
+            )
             allowed_set = {(row["group_id"], row["variant_id"]) for row in allowed_opts}
-            
+
             for opt in payload.options:
                 if (opt.group_id, opt.variant_id) not in allowed_set:
                     raise HTTPException(
@@ -243,19 +247,23 @@ async def add_item_to_cart(
 
         if row["is_insert"] and sorted_opts:
             opts_data = [(cart_item_id, o.group_id, o.variant_id, o.qty) for o in sorted_opts]
-            await conn.executemany("""
+            await conn.executemany(
+                """
                 INSERT INTO cart_item_options (cart_item_id, group_id, variant_id, qty)
                 VALUES ($1, $2, $3, $4)
-            """, opts_data)
+            """,
+                opts_data,
+            )
 
     return await _fetch_cart(pool, user["telegram_id"])
+
 
 @router.patch("/items/{item_id}", response_model=CartOut)
 async def update_cart_item(
     item_id: int,
     payload: CartItemUpdateIn,
     user=Depends(get_current_user),
-    pool: asyncpg.Pool = Depends(get_pool)
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
     """
     Оновлює кількість товару в кошику.
@@ -281,7 +289,8 @@ async def update_cart_item(
             WHERE ci.id = $1 AND c.telegram_id = $2
             FOR UPDATE OF ci
             """,
-            item_id, user["telegram_id"],
+            item_id,
+            user["telegram_id"],
         )
         if item is None:
             raise HTTPException(status_code=404, detail="Товар не знайдено в кошику")
@@ -321,7 +330,9 @@ async def update_cart_item(
                         unit_qty = r["qty"] // old_qty
                         scaled_qty = unit_qty * new_qty
                         scaled_options.append((r["group_id"], r["variant_id"], scaled_qty))
-                        new_group_totals[r["group_id"]] = new_group_totals.get(r["group_id"], 0) + scaled_qty
+                        new_group_totals[r["group_id"]] = (
+                            new_group_totals.get(r["group_id"], 0) + scaled_qty
+                        )
 
                     # Перевіряємо валідність масштабованих опцій проти правил
                     valid = True
@@ -342,7 +353,10 @@ async def update_cart_item(
                                 SET qty = $1 
                                 WHERE cart_item_id = $2 AND group_id = $3 AND variant_id = $4
                                 """,
-                                s_qty, item_id, g_id, v_id
+                                s_qty,
+                                item_id,
+                                g_id,
+                                v_id,
                             )
 
                         # Перераховуємо options_key
@@ -351,17 +365,25 @@ async def update_cart_item(
 
                         await conn.execute(
                             "UPDATE cart_items SET qty = $1, options_key = $2 WHERE id = $3",
-                            new_qty, new_key, item_id,
+                            new_qty,
+                            new_key,
+                            item_id,
                         )
                     else:
                         raise HTTPException(
                             status_code=409,
-                            detail="Кількість вибраних опцій неможливо автоматично масштабувати. Будь ласка, налаштуйте страву в меню."
+                            detail=(
+                                "Кількість вибраних опцій неможливо автоматично масштабувати. "
+                                "Будь ласка, налаштуйте страву в меню."
+                            ),
                         )
                 else:
                     raise HTTPException(
                         status_code=409,
-                        detail="Опції вибрано несиметрично. Будь ласка, налаштуйте страву в меню з новою кількістю."
+                        detail=(
+                            "Опції вибрано несиметрично. "
+                            "Будь ласка, налаштуйте страву в меню з новою кількістю."
+                        ),
                     )
             else:
                 # Опцій немає — перевіряємо, чи не з'явилися обов'язкові опції
@@ -369,19 +391,19 @@ async def update_cart_item(
                     if rule["min_select"] * new_qty > 0:
                         raise HTTPException(
                             status_code=409,
-                            detail="Страва потребує вибору обов'язкових опцій. Налаштуйте страву в меню."
+                            detail=(
+                                "Страва потребує вибору обов'язкових опцій. "
+                                "Налаштуйте страву в меню."
+                            ),
                         )
-                await conn.execute(
-                    "UPDATE cart_items SET qty = $1 WHERE id = $2", new_qty, item_id
-                )
+                await conn.execute("UPDATE cart_items SET qty = $1 WHERE id = $2", new_qty, item_id)
 
     return await _fetch_cart(pool, user["telegram_id"])
 
+
 @router.delete("/items/{item_id}", response_model=CartOut)
 async def delete_cart_item(
-    item_id: int,
-    user=Depends(get_current_user),
-    pool: asyncpg.Pool = Depends(get_pool)
+    item_id: int, user=Depends(get_current_user), pool: asyncpg.Pool = Depends(get_pool)
 ):
     """
     Видаляє товар з кошика.
@@ -403,10 +425,7 @@ async def delete_cart_item(
 
 
 @router.delete("", response_model=CartOut)
-async def clear_cart(
-    user=Depends(get_current_user),
-    pool: asyncpg.Pool = Depends(get_pool)
-):
+async def clear_cart(user=Depends(get_current_user), pool: asyncpg.Pool = Depends(get_pool)):
     """
     Повністю очищає кошик. Сам кошик (`carts`) не видаляємо — лише позиції,
     щоб не смикати get_or_create_cart_id при наступному додаванні.

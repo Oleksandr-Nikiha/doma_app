@@ -81,12 +81,26 @@ export function hideBackButton(): void {
 /** Тактильний відгук на дії: додати в кошик, +/−, видалити. */
 export function haptic(style: "light" | "medium" | "heavy" = "light"): void {
   try {
-    if (hapticFeedback.impactOccurred.isAvailable()) hapticFeedback.impactOccurred(style);
+    if (hapticFeedback.impactOccurred.isAvailable()) {
+      hapticFeedback.impactOccurred(style);
+      return;
+    }
   } catch { /* ignore */ }
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+    const ms = style === "heavy" ? 25 : style === "medium" ? 15 : 8;
+    try { navigator.vibrate(ms); } catch { /* ignore */ }
+  }
 }
 
 export function hapticNotify(type: "error" | "success" | "warning"): void {
   try {
-    if (hapticFeedback.notificationOccurred.isAvailable()) hapticFeedback.notificationOccurred(type);
+    if (hapticFeedback.notificationOccurred.isAvailable()) {
+      hapticFeedback.notificationOccurred(type);
+      return;
+    }
   } catch { /* ignore */ }
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+    const pattern = type === "error" ? [30, 40, 30] : [15, 30];
+    try { navigator.vibrate(pattern); } catch { /* ignore */ }
+  }
 }

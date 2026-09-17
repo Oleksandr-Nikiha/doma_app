@@ -1,9 +1,26 @@
 // frontend/src/telegram/env.ts
 import { isTMA, mockTelegramEnv } from "@telegram-apps/sdk-react";
 
+export function isTelegramWebApp(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.location.pathname.startsWith("/admin")) {
+    return false;
+  }
+  const tg = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp;
+  if (tg && typeof tg.initData === "string" && tg.initData.trim().length > 0) {
+    return true;
+  }
+  return isTMA();
+}
+
 export function initTelegramEnv(): void {
   // Блокуємо мокинг у продакшені на рівні збірки
   if (import.meta.env.PROD) {
+    return;
+  }
+
+  // Не мокаємо Telegram для адмін-панелі на ПК
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
     return;
   }
 
@@ -15,12 +32,16 @@ export function initTelegramEnv(): void {
   const initDataRaw = import.meta.env.VITE_DEV_INIT_DATA;
 
   if (!initDataRaw) {
-    console.error(
-      "❌ VITE_DEV_INIT_DATA не знайдено.\n" +
-      "Для тестування захищених роутів згенеруйте токен за допомогою вашого скрипта:\n" +
-      "python scripts/generate_test_init_data.py\n" +
-      "та додайте результат у файл .env як VITE_DEV_INIT_DATA=ваш_рядок"
-    );
+    // У режимі браузера без токена працюємо як звичайний гість
+    return;
+  }
+
+  // Ініціалізуємо мокове середовище для SDK 3.x тільки за явним запитом
+  if (
+    typeof window !== "undefined" &&
+    !window.location.search.includes("mock") &&
+    !window.location.hash.includes("tgWebAppData")
+  ) {
     return;
   }
 

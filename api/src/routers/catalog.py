@@ -84,7 +84,7 @@ async def get_product(product_id: int, pool: asyncpg.Pool = Depends(get_pool)):
     )
     if product_row is None:
         raise HTTPException(status_code=404, detail="Товар не знайдено або він недоступний")
-    
+
     variant_rows = await pool.fetch(
         """
         SELECT id, label, weight, price 
@@ -124,17 +124,19 @@ async def get_product(product_id: int, pool: asyncpg.Pool = Depends(get_pool)):
                 "min_select": row["min_select"],
                 "max_select": row["max_select"],
                 "free_count": row["free_count"],
-                "items": []
+                "items": [],
             }
-        
-        groups_dict[g_id]["items"].append({
-            "variant_id": row["variant_id"],
-            "name": row["name"],
-            "price_delta": row["price_delta"]
-        })
+
+        groups_dict[g_id]["items"].append(
+            {
+                "variant_id": row["variant_id"],
+                "name": row["name"],
+                "price_delta": row["price_delta"],
+            }
+        )
 
     return ProductDetailOut(
         **dict(product_row),
         variants=[ProductVariantOut(**dict(v)) for v in variant_rows],
-        option_groups=list(groups_dict.values())
+        option_groups=list(groups_dict.values()),
     )

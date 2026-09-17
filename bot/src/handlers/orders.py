@@ -4,8 +4,8 @@ import logging
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
 
-from src.db.connection import get_pool
 from src.config import get_settings
+from src.db.connection import get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,8 @@ async def handle_order_moderation(callback: CallbackQuery) -> None:
         await callback.answer("⛔ У вас немає прав для модерації замовлень", show_alert=True)
         return
 
-    # Якщо менеджер закріплений за конкретним закладом — перевіряємо, чи замовлення належить цьому закладу
+    # Якщо менеджер закріплений за конкретним закладом —
+    # перевіряємо, чи замовлення належить цьому закладу
     if manager and manager["role"] == "manager" and manager["location_id"] is not None:
         async with pool.acquire() as conn:
             loc_match = await conn.fetchval(
@@ -63,7 +64,9 @@ async def handle_order_moderation(callback: CallbackQuery) -> None:
                 manager["location_id"],
             )
         if not loc_match:
-            await callback.answer("⛔ Це замовлення належить іншому закладу", show_alert=True)
+            await callback.answer(
+                "⛔ Ви можете керувати замовленнями тільки свого закладу", show_alert=True
+            )
             return
 
     manager_name = (
@@ -108,8 +111,9 @@ async def handle_order_moderation(callback: CallbackQuery) -> None:
             group_status = "accepted"
             action_label = f"✅ <b>Підтверджено менеджером {manager_name}</b>"
             time_part = f" на {order['scheduled_time']}" if order.get("scheduled_time") else ""
+            addr = order["delivery_address"]
             client_fulfillment = (
-                f"🛵 Очікуйте кур'єра{time_part} за адресою: <code>{order['delivery_address']}</code>"
+                f"🛵 Очікуйте кур'єра{time_part} за адресою: <code>{addr}</code>"
                 if order["fulfillment_type"] == "delivery"
                 else f"🛍️ Замовлення буде чекати на вас у закладі{time_part}!"
             )
@@ -168,4 +172,3 @@ async def handle_order_moderation(callback: CallbackQuery) -> None:
             order["telegram_id"],
             e,
         )
-

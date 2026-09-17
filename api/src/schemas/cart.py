@@ -8,13 +8,16 @@ class OptionSelectionIn(BaseModel):
     # Первинний ключ cart_item_options не дав би вставити пару двічі.
     qty: int = Field(1, gt=0)
 
+
 class CartItemIn(BaseModel):
     variant_id: int
     qty: int = Field(..., gt=0)
     options: list[OptionSelectionIn] = []
 
+
 class CartItemUpdateIn(BaseModel):
     qty: int = Field(..., gt=0)
+
 
 class CartItemOptionOut(BaseModel):
     name: str
@@ -23,6 +26,7 @@ class CartItemOptionOut(BaseModel):
     label: str
     price_delta: float
     qty: int
+
 
 class CartItemOut(BaseModel):
     id: int
@@ -36,6 +40,7 @@ class CartItemOut(BaseModel):
     location_id: int
     location_name: str
     options: list[CartItemOptionOut] = []
+
 
 class CartOut(BaseModel):
     items: list[CartItemOut]

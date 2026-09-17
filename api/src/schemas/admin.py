@@ -1,8 +1,9 @@
 from typing import Literal
+
 from pydantic import BaseModel, Field
 
-
 # --- Права поточного користувача ---
+
 
 class AdminMeOut(BaseModel):
     is_staff: bool
@@ -12,6 +13,7 @@ class AdminMeOut(BaseModel):
 
 
 # --- Менеджери (Штат) ---
+
 
 class ManagerCreateIn(BaseModel):
     telegram_id: int
@@ -38,6 +40,7 @@ class ManagerOut(BaseModel):
 
 # --- Категорії ---
 
+
 class CategoryCreateIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     location_id: int
@@ -58,6 +61,7 @@ class CategoryUpdateIn(BaseModel):
 
 # --- Варіанти страв (Розміри / ціни) ---
 
+
 class VariantCreateIn(BaseModel):
     label: str = Field(..., min_length=1, max_length=50)
     price: float = Field(..., ge=0)
@@ -75,6 +79,7 @@ class VariantUpdateIn(BaseModel):
 
 
 # --- Страви (Товари) ---
+
 
 class ProductCreateIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=150)
@@ -97,11 +102,13 @@ class ProductUpdateIn(BaseModel):
 
 # --- Швидкий стоп-лист ---
 
+
 class AvailabilityUpdateIn(BaseModel):
     is_available: bool
-    
+
 
 # --- Додатки (Модифікатори та групи опцій) ---
+
 
 class OptionGroupCreateIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -142,6 +149,7 @@ class ProductOptionGroupUpdateIn(BaseModel):
 
 
 # --- Моделі відповідей для адмінки ---
+
 
 class VariantAdminOut(BaseModel):
     id: int
@@ -220,6 +228,7 @@ class VariantSelectorOut(BaseModel):
 
 # --- Налаштування доставки закладів ---
 
+
 class LocationDeliveryAdminOut(BaseModel):
     id: int
     name: str
@@ -236,6 +245,7 @@ class LocationDeliveryUpdateIn(BaseModel):
 
 
 # --- Керування клієнтами (Users) ---
+
 
 class AdminUserOut(BaseModel):
     id: int
@@ -255,6 +265,7 @@ class AdminUserUpdateIn(BaseModel):
 
 
 # --- Керування та редагування замовлень (Orders) ---
+
 
 class AdminOrderItemOptionIn(BaseModel):
     option_group_name: str

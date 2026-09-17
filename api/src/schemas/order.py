@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.schemas.user import normalize_phone
 
@@ -26,7 +26,7 @@ class OrderCreateIn(BaseModel):
         if self.payment_method == "qr" and self.fulfillment_type != "delivery":
             raise ValueError("Оплата по QR-коду доступна лише при доставці")
         return self
-    
+
     @field_validator("contact_phone")
     @classmethod
     def validate_contact_phone(cls, v: str) -> str:
@@ -75,4 +75,3 @@ class OrderOut(BaseModel):
     total_price: float
     created_at: datetime
     groups: list[OrderGroupOut] = []
-

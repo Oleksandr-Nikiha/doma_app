@@ -3,7 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { useCart, useOrder } from "@/api/queries";
 import { ErrorBox, ScreenTitle, Spinner, formatPrice } from "@/components/ui";
+import { WebHeader } from "@/components/WebHeader";
 import { useBackButton } from "@/hooks/useBackButton";
+import { isTelegramWebApp } from "@/telegram/env";
 import { haptic, hapticNotify } from "@/telegram/sdk";
 
 const STEPS = [
@@ -107,8 +109,9 @@ export function OrderSuccessPage() {
   const isRejected = order.status === "rejected";
 
   return (
-    <div className="pb-8">
-      <ScreenTitle>Статус замовлення</ScreenTitle>
+    <div className="mx-auto min-h-screen w-full max-w-lg pb-8 bg-[var(--tg-theme-bg-color)]">
+      <WebHeader title="Статус замовлення" showBack onBack={() => navigate("/")} />
+      {isTelegramWebApp() && <ScreenTitle>Статус замовлення</ScreenTitle>}
 
       <div className="app-rise space-y-4 px-4">
         {/* Головна картка статусу */}

@@ -1,20 +1,18 @@
-import asyncio
 import html
 import json
 import logging
 import urllib.request
+
 import asyncpg
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
-from src.auth.deps import get_current_admin, get_current_staff, get_current_user
+from src.auth.deps import get_current_staff, get_current_user
 from src.config import get_settings
 from src.db.connection import get_pool
 from src.schemas.admin import (
     AdminMeOut,
     AdminOrderDetailOut,
     AdminOrderGroupOut,
-    AdminOrderItemIn,
-    AdminOrderItemOptionIn,
     AdminOrderItemOptionOut,
     AdminOrderItemOut,
     AdminOrderListItemOut,
@@ -57,6 +55,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 # 1. Права поточного користувача
 # ============================================================================
 
+
 @router.get("/me", response_model=AdminMeOut)
 async def get_admin_me(
     user: asyncpg.Record = Depends(get_current_user),
@@ -91,6 +90,7 @@ async def get_admin_me(
 # ============================================================================
 # 2. Управління менеджерами (Тільки Admin)
 # ============================================================================
+
 
 @router.get("/managers", response_model=list[ManagerOut])
 async def list_managers(
@@ -271,6 +271,7 @@ async def delete_manager(
 # 3. Категорії (Staff)
 # ============================================================================
 
+
 @router.get("/categories", response_model=list[CategoryAdminOut])
 async def list_admin_categories(
     location_id: int | None = Query(None),
@@ -306,8 +307,14 @@ async def create_category(
     staff: asyncpg.Record = Depends(get_current_staff),
 ):
     """Створення нової категорії страв."""
-    if staff["role"] == "manager" and staff["location_id"] and data.location_id != staff["location_id"]:
-        raise HTTPException(status_code=403, detail="Ви можете додавати категорії лише для свого закладу")
+    if (
+        staff["role"] == "manager"
+        and staff["location_id"]
+        and data.location_id != staff["location_id"]
+    ):
+        raise HTTPException(
+            status_code=403, detail="Ви можете додавати категорії лише для свого закладу"
+        )
 
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -344,7 +351,11 @@ async def update_category(
         if not cat:
             raise HTTPException(status_code=404, detail="Категорію не знайдено")
 
-        if staff["role"] == "manager" and staff["location_id"] and cat["location_id"] != staff["location_id"]:
+        if (
+            staff["role"] == "manager"
+            and staff["location_id"]
+            and cat["location_id"] != staff["location_id"]
+        ):
             raise HTTPException(status_code=403, detail="Немає доступу до категорій іншого закладу")
 
         updates = []
@@ -388,7 +399,11 @@ async def delete_category(
         if not cat:
             raise HTTPException(status_code=404, detail="Категорію не знайдено")
 
-        if staff["role"] == "manager" and staff["location_id"] and cat["location_id"] != staff["location_id"]:
+        if (
+            staff["role"] == "manager"
+            and staff["location_id"]
+            and cat["location_id"] != staff["location_id"]
+        ):
             raise HTTPException(status_code=403, detail="Немає доступу до категорій іншого закладу")
 
         await conn.execute("DELETE FROM categories WHERE id = $1", category_id)
@@ -399,6 +414,7 @@ async def delete_category(
 # ============================================================================
 # 4. Страви та Варіанти (Products & Variants)
 # ============================================================================
+
 
 @router.get("/products", response_model=list[ProductAdminOut])
 async def list_admin_products(
@@ -486,12 +502,18 @@ async def create_product(
         if not cat:
             raise HTTPException(status_code=404, detail="Категорію не знайдено")
 
-        if staff["role"] == "manager" and staff["location_id"] and cat["location_id"] != staff["location_id"]:
+        if (
+            staff["role"] == "manager"
+            and staff["location_id"]
+            and cat["location_id"] != staff["location_id"]
+        ):
             raise HTTPException(status_code=403, detail="Немає доступу до цієї категорії")
 
         p_row = await conn.fetchrow(
             """
-            INSERT INTO products (category_id, name, description, image_url, sort_order, is_available)
+            INSERT INTO products (
+                category_id, name, description, image_url, sort_order, is_available
+            )
             VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id, category_id, name, description, image_url, sort_order, is_available
             """,
@@ -512,7 +534,9 @@ async def create_product(
         for v in variants_to_insert:
             v_row = await conn.fetchrow(
                 """
-                INSERT INTO product_variants (product_id, label, price, weight, sort_order, is_available)
+                INSERT INTO product_variants (
+                    product_id, label, price, weight, sort_order, is_available
+                )
                 VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING id, product_id, label, price, weight, sort_order, is_available
                 """,
@@ -554,7 +578,11 @@ async def update_product(
         if not p:
             raise HTTPException(status_code=404, detail="Страву не знайдено")
 
-        if staff["role"] == "manager" and staff["location_id"] and p["location_id"] != staff["location_id"]:
+        if (
+            staff["role"] == "manager"
+            and staff["location_id"]
+            and p["location_id"] != staff["location_id"]
+        ):
             raise HTTPException(status_code=403, detail="Немає доступу до страви іншого закладу")
 
         updates = []
@@ -611,7 +639,11 @@ async def delete_product(
         if not p:
             raise HTTPException(status_code=404, detail="Страву не знайдено")
 
-        if staff["role"] == "manager" and staff["location_id"] and p["location_id"] != staff["location_id"]:
+        if (
+            staff["role"] == "manager"
+            and staff["location_id"]
+            and p["location_id"] != staff["location_id"]
+        ):
             raise HTTPException(status_code=403, detail="Немає доступу до страви іншого закладу")
 
         await conn.execute("DELETE FROM products WHERE id = $1", product_id)
@@ -622,6 +654,7 @@ async def delete_product(
 # ============================================================================
 # 5. Керування варіантами цін (Variants)
 # ============================================================================
+
 
 @router.post("/products/{product_id}/variants", response_model=VariantAdminOut)
 async def create_variant(
@@ -644,12 +677,18 @@ async def create_variant(
         if not p:
             raise HTTPException(status_code=404, detail="Страву не знайдено")
 
-        if staff["role"] == "manager" and staff["location_id"] and p["location_id"] != staff["location_id"]:
+        if (
+            staff["role"] == "manager"
+            and staff["location_id"]
+            and p["location_id"] != staff["location_id"]
+        ):
             raise HTTPException(status_code=403, detail="Немає доступу")
 
         row = await conn.fetchrow(
             """
-            INSERT INTO product_variants (product_id, label, price, weight, sort_order, is_available)
+            INSERT INTO product_variants (
+                product_id, label, price, weight, sort_order, is_available
+            )
             VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id, product_id, label, price, weight, sort_order, is_available
             """,
@@ -686,7 +725,11 @@ async def update_variant(
         if not v:
             raise HTTPException(status_code=404, detail="Варіант не знайдено")
 
-        if staff["role"] == "manager" and staff["location_id"] and v["location_id"] != staff["location_id"]:
+        if (
+            staff["role"] == "manager"
+            and staff["location_id"]
+            and v["location_id"] != staff["location_id"]
+        ):
             raise HTTPException(status_code=403, detail="Немає доступу")
 
         updates = []
@@ -730,7 +773,11 @@ async def delete_variant(
         if not v:
             raise HTTPException(status_code=404, detail="Варіант не знайдено")
 
-        if staff["role"] == "manager" and staff["location_id"] and v["location_id"] != staff["location_id"]:
+        if (
+            staff["role"] == "manager"
+            and staff["location_id"]
+            and v["location_id"] != staff["location_id"]
+        ):
             raise HTTPException(status_code=403, detail="Немає доступу")
 
         variants_count = await conn.fetchval(
@@ -751,6 +798,7 @@ async def delete_variant(
 # ============================================================================
 # 6. Швидкий стоп-лист (Швидке перемикання наявності)
 # ============================================================================
+
 
 @router.patch("/products/{product_id}/toggle-availability")
 async def toggle_product_availability(
@@ -773,7 +821,11 @@ async def toggle_product_availability(
         if not p:
             raise HTTPException(status_code=404, detail="Страву не знайдено")
 
-        if staff["role"] == "manager" and staff["location_id"] and p["location_id"] != staff["location_id"]:
+        if (
+            staff["role"] == "manager"
+            and staff["location_id"]
+            and p["location_id"] != staff["location_id"]
+        ):
             raise HTTPException(status_code=403, detail="Немає доступу")
 
         await conn.execute(
@@ -807,7 +859,11 @@ async def toggle_variant_availability(
         if not v:
             raise HTTPException(status_code=404, detail="Варіант не знайдено")
 
-        if staff["role"] == "manager" and staff["location_id"] and v["location_id"] != staff["location_id"]:
+        if (
+            staff["role"] == "manager"
+            and staff["location_id"]
+            and v["location_id"] != staff["location_id"]
+        ):
             raise HTTPException(status_code=403, detail="Немає доступу")
 
         await conn.execute(
@@ -822,6 +878,7 @@ async def toggle_variant_availability(
 # ============================================================================
 # 7. Групи додатків (Option Groups)
 # ============================================================================
+
 
 @router.get("/option-groups", response_model=list[OptionGroupAdminOut])
 async def list_option_groups(
@@ -935,6 +992,7 @@ async def delete_option_group(
 # 8. Позиції всередині групи додатків (Option Group Items)
 # ============================================================================
 
+
 @router.get("/option-groups/{group_id}/items", response_model=list[OptionGroupItemAdminOut])
 async def list_option_group_items(
     group_id: int,
@@ -981,7 +1039,9 @@ async def add_option_group_item(
 
         row = await conn.fetchrow(
             """
-            INSERT INTO option_group_items (group_id, variant_id, price_delta, sort_order, is_available)
+            INSERT INTO option_group_items (
+                group_id, variant_id, price_delta, sort_order, is_available
+            )
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (group_id, variant_id) DO UPDATE
                 SET price_delta = EXCLUDED.price_delta,
@@ -1003,7 +1063,9 @@ async def add_option_group_item(
     return OptionGroupItemAdminOut(**res)
 
 
-@router.patch("/option-groups/{group_id}/items/{variant_id}", response_model=OptionGroupItemAdminOut)
+@router.patch(
+    "/option-groups/{group_id}/items/{variant_id}", response_model=OptionGroupItemAdminOut
+)
 async def update_option_group_item(
     group_id: int,
     variant_id: int,
@@ -1034,8 +1096,10 @@ async def update_option_group_item(
             updates.append(f"is_available = ${len(params)}")
 
         if updates:
+            set_clause = ", ".join(updates)
             await conn.execute(
-                f"UPDATE option_group_items SET {', '.join(updates)} WHERE group_id = $1 AND variant_id = $2",
+                f"UPDATE option_group_items SET {set_clause} "
+                "WHERE group_id = $1 AND variant_id = $2",
                 *params,
             )
 
@@ -1075,6 +1139,7 @@ async def delete_option_group_item(
 # 9. Прив'язка груп додатків до страв (Product Option Groups)
 # ============================================================================
 
+
 @router.post("/products/{product_id}/option-groups", response_model=ProductOptionGroupAdminOut)
 async def attach_option_group_to_product(
     product_id: int,
@@ -1095,7 +1160,11 @@ async def attach_option_group_to_product(
         )
         if not p:
             raise HTTPException(status_code=404, detail="Страву не знайдено")
-        if staff["role"] == "manager" and staff["location_id"] and p["location_id"] != staff["location_id"]:
+        if (
+            staff["role"] == "manager"
+            and staff["location_id"]
+            and p["location_id"] != staff["location_id"]
+        ):
             raise HTTPException(status_code=403, detail="Немає доступу до страви іншого закладу")
 
         group = await conn.fetchrow("SELECT name FROM option_groups WHERE id = $1", data.group_id)
@@ -1103,11 +1172,16 @@ async def attach_option_group_to_product(
             raise HTTPException(status_code=404, detail="Групу додатків не знайдено")
 
         if data.min_select < 0 or data.max_select < data.min_select:
-            raise HTTPException(status_code=400, detail="Некоректні ліміти: max_select повинен бути >= min_select >= 0")
+            raise HTTPException(
+                status_code=400,
+                detail="Некоректні ліміти: max_select повинен бути >= min_select >= 0",
+            )
 
         row = await conn.fetchrow(
             """
-            INSERT INTO product_option_groups (product_id, group_id, min_select, max_select, free_count, sort_order)
+            INSERT INTO product_option_groups (
+                product_id, group_id, min_select, max_select, free_count, sort_order
+            )
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (product_id, group_id) DO UPDATE
                 SET min_select = EXCLUDED.min_select,
@@ -1129,7 +1203,9 @@ async def attach_option_group_to_product(
     return ProductOptionGroupAdminOut(**res)
 
 
-@router.patch("/products/{product_id}/option-groups/{group_id}", response_model=ProductOptionGroupAdminOut)
+@router.patch(
+    "/products/{product_id}/option-groups/{group_id}", response_model=ProductOptionGroupAdminOut
+)
 async def update_product_option_group(
     product_id: int,
     group_id: int,
@@ -1150,12 +1226,17 @@ async def update_product_option_group(
         )
         if not p:
             raise HTTPException(status_code=404, detail="Страву не знайдено")
-        if staff["role"] == "manager" and staff["location_id"] and p["location_id"] != staff["location_id"]:
+        if (
+            staff["role"] == "manager"
+            and staff["location_id"]
+            and p["location_id"] != staff["location_id"]
+        ):
             raise HTTPException(status_code=403, detail="Немає доступу")
 
         existing = await conn.fetchrow(
             """
-            SELECT pog.min_select, pog.max_select, pog.free_count, pog.sort_order, g.name AS group_name
+            SELECT pog.min_select, pog.max_select, pog.free_count,
+                   pog.sort_order, g.name AS group_name
             FROM product_option_groups pog
             JOIN option_groups g ON g.id = pog.group_id
             WHERE pog.product_id = $1 AND pog.group_id = $2
@@ -1172,7 +1253,9 @@ async def update_product_option_group(
         new_sort = data.sort_order if data.sort_order is not None else existing["sort_order"]
 
         if new_min < 0 or new_max < new_min:
-            raise HTTPException(status_code=400, detail="max_select повинен бути >= min_select >= 0")
+            raise HTTPException(
+                status_code=400, detail="max_select повинен бути >= min_select >= 0"
+            )
 
         await conn.execute(
             """
@@ -1219,7 +1302,11 @@ async def detach_option_group_from_product(
         )
         if not p:
             raise HTTPException(status_code=404, detail="Страву не знайдено")
-        if staff["role"] == "manager" and staff["location_id"] and p["location_id"] != staff["location_id"]:
+        if (
+            staff["role"] == "manager"
+            and staff["location_id"]
+            and p["location_id"] != staff["location_id"]
+        ):
             raise HTTPException(status_code=403, detail="Немає доступу")
 
         await conn.execute(
@@ -1233,6 +1320,7 @@ async def detach_option_group_from_product(
 # ============================================================================
 # 10. Допоміжний список варіантів для селектора (Variant Selector)
 # ============================================================================
+
 
 @router.get("/variant-choices", response_model=list[VariantSelectorOut])
 async def list_variant_choices(
@@ -1257,6 +1345,7 @@ async def list_variant_choices(
 # ============================================================================
 # 11. Налаштування доставки закладів
 # ============================================================================
+
 
 @router.get("/locations/delivery", response_model=list[LocationDeliveryAdminOut])
 async def list_admin_locations_delivery(
@@ -1336,7 +1425,7 @@ async def update_location_delivery(
     values.append(location_id)
     update_sql = f"""
         UPDATE locations
-        SET {', '.join(updates)}
+        SET {", ".join(updates)}
         WHERE id = ${idx}
         RETURNING id, name, address, is_delivery_enabled,
                   to_char(delivery_start_time, 'HH24:MI') AS delivery_start_time,
@@ -1354,6 +1443,7 @@ async def update_location_delivery(
 # ============================================================================
 # 8. Керування користувачами / клієнтами (Users)
 # ============================================================================
+
 
 @router.get("/users", response_model=list[AdminUserOut])
 async def list_admin_users(
@@ -1454,6 +1544,7 @@ async def delete_admin_user(
 # ============================================================================
 # 9. Керування та редагування замовлень (Orders)
 # ============================================================================
+
 
 def _send_tg_order_notification(token: str, payload: dict) -> None:
     try:
@@ -1622,9 +1713,12 @@ async def update_admin_order(
         if not group_rows:
             raise HTTPException(status_code=400, detail="У замовлення немає групи закладів")
 
-        if staff["role"] == "manager" and staff["location_id"] is not None:
-            if staff["location_id"] not in [g["location_id"] for g in group_rows]:
-                raise HTTPException(status_code=403, detail="Це замовлення належить іншому закладу")
+        if (
+            staff["role"] == "manager"
+            and staff["location_id"] is not None
+            and staff["location_id"] not in [g["location_id"] for g in group_rows]
+        ):
+            raise HTTPException(status_code=403, detail="Це замовлення належить іншому закладу")
 
         # 1. Оновлення полів замовлення
         order_updates = []
