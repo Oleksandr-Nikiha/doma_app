@@ -76,7 +76,7 @@ async def handle_order_moderation(callback: CallbackQuery) -> None:
         order = await conn.fetchrow(
             """
             SELECT id, telegram_id, status, fulfillment_type, delivery_address,
-                   contact_name, contact_phone, total_price
+                   contact_name, contact_phone, total_price, scheduled_time
             FROM orders
             WHERE id = $1
             FOR UPDATE
@@ -107,10 +107,11 @@ async def handle_order_moderation(callback: CallbackQuery) -> None:
             new_status = "confirmed"
             group_status = "accepted"
             action_label = f"✅ <b>Підтверджено менеджером {manager_name}</b>"
+            time_part = f" на {order['scheduled_time']}" if order.get("scheduled_time") else ""
             client_fulfillment = (
-                f"🛵 Очікуйте кур'єра за адресою: <code>{order['delivery_address']}</code>"
+                f"🛵 Очікуйте кур'єра{time_part} за адресою: <code>{order['delivery_address']}</code>"
                 if order["fulfillment_type"] == "delivery"
-                else "🛍️ Замовлення буде чекати на вас у закладі!"
+                else f"🛍️ Замовлення буде чекати на вас у закладі{time_part}!"
             )
             client_msg = (
                 f"🎉 <b>Ваше замовлення #{order_id} підтверджено!</b>\n\n"

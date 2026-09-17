@@ -20,6 +20,17 @@ async def list_categories(pool: asyncpg.Pool = Depends(get_pool)):
         FROM categories c
         JOIN locations l ON l.id = c.location_id
         WHERE c.is_visible = true
+          AND (
+              c.parent_id IS NULL
+              OR EXISTS (
+                  SELECT 1
+                  FROM products p
+                  JOIN product_variants v ON v.product_id = p.id
+                  WHERE p.category_id = c.id
+                    AND p.is_available = true
+                    AND v.is_available = true
+              )
+          )
         ORDER BY c.location_id,
             COALESCE(c.parent_id, c.id),
             c.parent_id NULLS FIRST,

@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { useAddToCart, useProduct } from "@/api/queries";
-import { ErrorBox, Spinner, Thumb, formatPrice } from "@/components/ui";
+import { ErrorBox, ProductDetailSkeleton, Thumb, formatPrice } from "@/components/ui";
 import { useBackButton } from "@/hooks/useBackButton";
 import { haptic, hapticNotify } from "@/telegram/sdk";
 import type { OptionGroup, OptionSelection } from "@/api/types";
@@ -25,9 +25,7 @@ function unitsIn(picks: Picks) {
 /**
  * Ефективні межі групи з урахуванням кількості товару в позиції: скільки
  * одиниць товару беремо (qty), стільки разів множаться ліміти й безкоштовна
- * квота. Дзеркалить бекенд (api/src/routers/cart.py): effective_min/max/free
- * = rule * qty. Якщо ці два підрахунки розійдуться — бекенд поверне 400
- * на запит, який фронт вважав валідним.
+ * квота. Дзеркалить бекенд (api/src/routers/cart.py): effective_min/max/free = rule * qty.
  */
 function effectiveLimits(group: OptionGroup, qty: number) {
   return {
@@ -39,8 +37,6 @@ function effectiveLimits(group: OptionGroup, qty: number) {
 
 /**
  * Вартість опцій групи з урахуванням безкоштовної квоти, помноженої на qty.
- * Повторює алгоритм бекенда (options_cost): розгортаємо вибір по окремих
- * порціях, найдорожчі йдуть безкоштовно.
  */
 function groupCost(group: OptionGroup, picks: Picks, qty: number) {
   const { free } = effectiveLimits(group, qty);
@@ -55,7 +51,7 @@ function groupCost(group: OptionGroup, picks: Picks, qty: number) {
     .reduce((sum, price) => sum + price, 0);
 }
 
-/** Підказка біля назви групи: скільки брати і що з цього безкоштовно, з урахуванням qty. */
+/** Підказка біля назви групи: скільки брати і що з цього безкоштовно. */
 function selectionHint(group: OptionGroup, qty: number) {
   if (isFixed(group)) return "усе включено";
 
@@ -78,7 +74,8 @@ function chipStyle(active: boolean): React.CSSProperties {
   return {
     background: active ? "var(--tg-theme-button-color)" : "var(--app-surface)",
     color: active ? "var(--tg-theme-button-text-color)" : "inherit",
-    boxShadow: active ? "var(--app-shadow)" : undefined,
+    boxShadow: active ? "var(--app-shadow-sm)" : undefined,
+    border: active ? "1px solid transparent" : "1px solid var(--app-border)",
   };
 }
 
@@ -90,46 +87,49 @@ export function ProductPage() {
   const { data, isPending, error, refetch } = useProduct(Number(productId));
   const addToCart = useAddToCart();
 
-  // null = ще не обрано; після завантаження підставляємо перший варіант
   const [variantId, setVariantId] = useState<number | null>(null);
   const [qty, setQty] = useState(1);
   const [showErrors, setShowErrors] = useState(false);
-  // Вибір опцій за group_id. Групи, яких тут немає, беруть значення за
-  // замовчуванням — так стан лишається коректним і до завантаження даних,
-  // без useEffect на підстановку.
   const [picked, setPicked] = useState<Record<number, Picks>>({});
+  const optionsContainerRef = useRef<HTMLDivElement>(null);
 
-  if (isPending) return <Spinner />;
+  if (isPending) return <ProductDetailSkeleton />;
   if (error) return <ErrorBox message={error.message} onRetry={() => void refetch()} />;
 
   const selected = data.variants.find((v) => v.id === variantId) ?? data.variants[0];
 
-  // Фіксована група (СЕТ) бере всі позиції по разу НА КОЖНУ одиницю товару:
-  // 2 СЕТи = 2 порції кожного соусу, інакше бекенд відхилить запит
-  // (effective_min тепер = min_select * qty).
-  const picksFor = (group: OptionGroup): Picks =>
-    picked[group.group_id] ??
-    (isFixed(group) ? Object.fromEntries(group.items.map((i) => [i.variant_id, qty])) : {});
+  const picksFor = (group: OptionGroup): Picks => {
+    if (picked[group.group_id] !== undefined) {
+      return picked[group.group_id];
+    }
+    if (isFixed(group)) {
+      return Object.fromEntries(group.items.map((i) => [i.variant_id, qty]));
+    }
+    // Для груп з одним товаром і безкоштовною квотою (наприклад, Васабі, Імбир)
+    // за замовчуванням підставляємо включену безкоштовну кількість
+    if (group.items.length === 1 && group.free_count > 0) {
+      return { [group.items[0].variant_id]: group.free_count * qty };
+    }
+    return {};
+  };
 
   function setPicks(group: OptionGroup, next: Picks) {
     setShowErrors(false);
     setPicked((prev) => ({ ...prev, [group.group_id]: next }));
   }
 
-  /** Одиночний вибір: тап заміщує попередній. */
   function pickOne(group: OptionGroup, optionVariantId: number) {
     const current = picksFor(group);
     haptic("light");
     setPicks(group, current[optionVariantId] ? {} : { [optionVariantId]: 1 });
   }
 
-  /** Множинний вибір: ±1 порція, у межах max_select * qty на всю групу. */
   function changeQty(group: OptionGroup, optionVariantId: number, delta: number) {
     const current = picksFor(group);
     const { max } = effectiveLimits(group, qty);
 
     if (delta > 0 && unitsIn(current) >= max) {
-      hapticNotify("warning"); // ліміт групи вичерпано
+      hapticNotify("warning");
       return;
     }
 
@@ -142,15 +142,9 @@ export function ProductPage() {
     setPicks(group, next);
   }
 
-  // Бекенд перевіряє ті самі межі й віддає 400 — тут дублюємо, щоб не
-  // ганяти завідомо невалідний запит і одразу пояснити, чого бракує.
   const unfilled = data.option_groups.filter(
     (g) => unitsIn(picksFor(g)) < effectiveLimits(g, qty).min,
   );
-  // Симетрична перевірка зверху: якщо юзер зменшив qty ПІСЛЯ вибору опцій
-  // (наприклад, узяв 4 соуси на qty=2, потім зменшив qty до 1) — старий вибір
-  // може перевищити новий effective_max. Без цього кнопка була б активна,
-  // а бекенд усе одно відхилив би запит.
   const overLimit = data.option_groups.filter(
     (g) => unitsIn(picksFor(g)) > effectiveLimits(g, qty).max,
   );
@@ -164,18 +158,31 @@ export function ProductPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <div className="flex-1 pb-4">
-        <Thumb src={data.image_url} rounded="" className="aspect-[4/3] w-full text-6xl" eager />
+      {/* Скролована частина зі стравою та опціями */}
+      <div className="flex-1 pb-6">
+        <div className="relative overflow-hidden">
+          <Thumb src={data.image_url} rounded="" className="aspect-[4/3] w-full text-6xl" eager />
+          <div
+            className="absolute inset-x-0 bottom-0 h-10 pointer-events-none"
+            style={{
+              background: "linear-gradient(to top, var(--tg-theme-bg-color), transparent)",
+            }}
+          />
+        </div>
 
-        <div className="px-4">
-          <div className="app-rise pt-4">
-            <h1 className="text-xl font-bold">{data.name}</h1>
-            {data.description && <p className="mt-2 text-sm opacity-70">{data.description}</p>}
+        <div className="px-4" ref={optionsContainerRef}>
+          <div className="app-rise pt-3">
+            <h1 className="text-2xl font-bold tracking-tight">{data.name}</h1>
+            {data.description && (
+              <p className="mt-2 text-sm leading-relaxed opacity-70">{data.description}</p>
+            )}
           </div>
 
           {data.variants.length > 0 && (
             <div className="app-rise mt-5">
-              <p className="mb-2 text-sm font-semibold uppercase tracking-wide opacity-50">Розмір</p>
+              <p className="mb-2.5 text-xs font-semibold uppercase tracking-wider opacity-50">
+                Варіант / Розмір
+              </p>
               <div className="flex flex-wrap gap-2">
                 {data.variants.map((v) => {
                   const active = v.id === selected?.id;
@@ -186,12 +193,12 @@ export function ProductPage() {
                         haptic("light");
                         setVariantId(v.id);
                       }}
-                      className="app-press rounded-xl px-3 py-2 text-left text-sm"
+                      className="app-press rounded-xl px-3.5 py-2.5 text-left text-sm transition-all"
                       style={chipStyle(active)}
                     >
                       <span className="font-semibold">{v.label}</span>
-                      {v.weight && <span className="ml-2 opacity-70">{v.weight}</span>}
-                      <span className="ml-2 font-medium">{formatPrice(v.price)}</span>
+                      {v.weight && <span className="ml-2 text-xs opacity-65">{v.weight}</span>}
+                      <span className="ml-2.5 font-bold">{formatPrice(v.price)}</span>
                     </button>
                   );
                 })}
@@ -204,69 +211,67 @@ export function ProductPage() {
             const fixed = isFixed(group);
             const { min: effMin, max: effMax } = effectiveLimits(group, qty);
             const multi = !fixed && effMax > 1;
-            const isUnfilled = !fixed && unitsIn(picks) < effMin;
-            const isUrgentError = isUnfilled && showErrors;
+            const currentUnits = unitsIn(picks);
+            const isUnfilled = !fixed && currentUnits < effMin;
+            const isFilled = !fixed && effMin > 0 && currentUnits >= effMin;
+            const isUrgentNotice = isUnfilled && showErrors;
 
             return (
               <div
                 key={group.group_id}
-                className={`app-rise rounded-2xl transition-all ${
-                  isUrgentError
-                    ? "mt-6 -mx-3 px-3.5 py-3.5"
-                    : isUnfilled
-                    ? "mt-5 -mx-3 px-3.5 py-2.5"
-                    : "mt-5 -mx-3 px-3.5 py-1"
+                className={`app-rise rounded-2xl transition-all p-3.5 mt-4 ${
+                  isUrgentNotice
+                    ? "ring-2 ring-amber-500/50"
+                    : isUnfilled && effMin > 0
+                      ? ""
+                      : ""
                 }`}
-                style={
-                  isUrgentError
-                    ? {
-                      background: "color-mix(in srgb, #ef4444 10%, transparent)",
-                      boxShadow: "0 0 0 1px color-mix(in srgb, #ef4444 40%, transparent)",
-                    }
-                    : isUnfilled
-                    ? {
-                      background: "var(--app-tint)",
-                      boxShadow: "0 0 0 1px color-mix(in srgb, var(--tg-theme-link-color) 20%, transparent)",
-                    }
-                    : undefined
-                }
+                style={{
+                  background: isUrgentNotice
+                    ? "color-mix(in srgb, #f59e0b 8%, var(--app-surface))"
+                    : "var(--app-surface)",
+                  border: isUrgentNotice
+                    ? "1px solid color-mix(in srgb, #f59e0b 40%, transparent)"
+                    : "1px solid var(--app-border)",
+                  boxShadow: "var(--app-shadow-sm)",
+                }}
               >
-                <div className="mb-2.5 flex items-baseline justify-between gap-2">
+                <div className="mb-3 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <p
-                      className="text-sm font-semibold uppercase tracking-wide"
-                      style={{
-                        opacity: isUrgentError ? 1 : isUnfilled ? 0.9 : 0.5,
-                        color: isUrgentError
-                          ? "#ef4444"
-                          : isUnfilled
-                          ? "var(--tg-theme-link-color)"
-                          : undefined,
-                      }}
-                    >
-                      {group.name}
-                    </p>
-                    {isUnfilled && (
+                    <p className="text-sm font-bold tracking-tight">{group.name}</p>
+                    {isFilled ? (
                       <span
-                        className="rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                        className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide flex items-center gap-1"
                         style={{
-                          background: isUrgentError
-                            ? "color-mix(in srgb, #ef4444 20%, transparent)"
-                            : "color-mix(in srgb, var(--tg-theme-link-color) 15%, transparent)",
-                          color: isUrgentError ? "#ef4444" : "var(--tg-theme-link-color)",
+                          background: "color-mix(in srgb, #22c55e 14%, transparent)",
+                          color: "#22c55e",
+                        }}
+                      >
+                        ✓ Обрано
+                      </span>
+                    ) : isUrgentNotice ? (
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide"
+                        style={{
+                          background: "color-mix(in srgb, #f59e0b 20%, transparent)",
+                          color: "#d97706",
+                        }}
+                      >
+                        Оберіть варіант
+                      </span>
+                    ) : effMin > 0 ? (
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide"
+                        style={{
+                          background: "var(--app-tint)",
+                          color: "var(--tg-theme-button-color)",
                         }}
                       >
                         Обов'язково
                       </span>
-                    )}
+                    ) : null}
                   </div>
-                  <p
-                    className="shrink-0 text-xs"
-                    style={{
-                      opacity: isUrgentError ? 0.9 : 0.6,
-                      color: isUrgentError ? "#ef4444" : undefined,
-                    }}
-                  >
+                  <p className="shrink-0 text-xs opacity-60">
                     {selectionHint(group, qty)}
                   </p>
                 </div>
@@ -278,33 +283,36 @@ export function ProductPage() {
                       return (
                         <div
                           key={item.variant_id}
-                          className="flex items-center gap-3 rounded-xl px-3 py-2"
-                          style={{ background: "var(--app-surface)" }}
+                          className="flex items-center gap-3 rounded-xl px-3 py-2 transition-all"
+                          style={{
+                            background: count > 0 ? "var(--app-surface-2)" : "transparent",
+                            border: "1px solid var(--app-border)",
+                          }}
                         >
                           <span className={`flex-1 text-sm ${count ? "font-semibold" : ""}`}>
                             {item.name}
                           </span>
                           {item.price_delta > 0 && (
-                            <span className="text-sm opacity-60">
+                            <span className="text-xs font-medium opacity-65">
                               +{formatPrice(item.price_delta)}
                             </span>
                           )}
                           <div
-                            className="flex items-center gap-2 rounded-lg px-1"
+                            className="flex items-center gap-1.5 rounded-lg px-1 py-0.5"
                             style={{ background: "var(--app-surface-2)" }}
                           >
                             <button
                               onClick={() => changeQty(group, item.variant_id, -1)}
                               disabled={count === 0}
-                              className="app-press h-7 w-7 text-lg font-bold disabled:opacity-25"
+                              className="app-press h-7 w-7 text-base font-bold disabled:opacity-20 flex items-center justify-center rounded-lg"
                               aria-label={`Менше: ${item.name}`}
                             >
                               −
                             </button>
-                            <span className="w-4 text-center text-sm font-semibold">{count}</span>
+                            <span className="w-5 text-center text-xs font-bold">{count}</span>
                             <button
                               onClick={() => changeQty(group, item.variant_id, 1)}
-                              className="app-press h-7 w-7 text-lg font-bold"
+                              className="app-press h-7 w-7 text-base font-bold flex items-center justify-center rounded-lg"
                               aria-label={`Більше: ${item.name}`}
                             >
                               +
@@ -323,17 +331,19 @@ export function ProductPage() {
                           key={item.variant_id}
                           disabled={fixed}
                           onClick={() => pickOne(group, item.variant_id)}
-                          className={`rounded-xl px-3 py-2 text-sm disabled:opacity-100 ${fixed ? "" : "app-press"}`}
+                          className={`rounded-xl px-3.5 py-2 text-xs font-semibold disabled:opacity-100 transition-all ${
+                            fixed ? "" : "app-press"
+                          }`}
                           style={chipStyle(active)}
                         >
                           {active && (
-                            <span className="app-pop mr-1.5 inline-block text-xs" aria-hidden>
+                            <span className="app-pop mr-1.5 inline-block text-[11px]" aria-hidden>
                               ✓
                             </span>
                           )}
-                          <span className={active ? "font-semibold" : undefined}>{item.name}</span>
+                          <span>{item.name}</span>
                           {item.price_delta > 0 && (
-                            <span className="ml-2 opacity-70">+{formatPrice(item.price_delta)}</span>
+                            <span className="ml-2 opacity-75">+{formatPrice(item.price_delta)}</span>
                           )}
                         </button>
                       );
@@ -343,68 +353,78 @@ export function ProductPage() {
               </div>
             );
           })}
-
-          <div className="app-rise mt-6 flex items-center gap-4">
-            <p className="text-sm font-semibold uppercase tracking-wide opacity-50">Кількість</p>
-            <div className="flex items-center gap-3 rounded-xl px-2 py-1" style={{ background: "var(--app-surface)" }}>
-              <button
-                onClick={() => { haptic("light"); setQty((q) => Math.max(1, q - 1)); }}
-                disabled={qty <= 1}
-                className="app-press h-8 w-8 text-lg font-bold disabled:opacity-30"
-                aria-label="Менше"
-              >
-                −
-              </button>
-              <span className="w-6 text-center font-semibold">{qty}</span>
-              <button
-                onClick={() => { haptic("light"); setQty((q) => q + 1); }}
-                className="app-press h-8 w-8 text-lg font-bold"
-                aria-label="Більше"
-              >
-                +
-              </button>
-            </div>
-          </div>
         </div>
+      </div>
 
-        <div
-          className="sticky bottom-0 border-t p-4"
-          style={{
-            background: "var(--app-veil)",
-            backdropFilter: "blur(12px)",
-            borderColor: "var(--app-border)",
-            paddingBottom: "calc(1rem + env(safe-area-inset-bottom))",
-          }}
-        >
-          {addToCart.isError && (
-            <p className="mb-2 text-center text-sm text-red-500">{addToCart.error.message}</p>
-          )}
-          {unfilled.length > 0 && (
-            <p className="mb-2 text-center text-sm opacity-60">
-              Оберіть: {unfilled.map((g) => g.name.toLowerCase()).join(", ")}
-            </p>
-          )}
-          {overLimit.length > 0 && (
-            <p className="mb-2 text-center text-sm opacity-60">
-              Забагато вибрано: {overLimit.map((g) => g.name.toLowerCase()).join(", ")} —
-              зменшіть кількість товару або опцій
-            </p>
-          )}
+      {/* Фіксована плаваюча панель дії внизу */}
+      <div
+        className="sticky bottom-0 z-30 app-glass border-t p-4"
+        style={{
+          borderColor: "var(--app-border)",
+          paddingBottom: "calc(1rem + env(safe-area-inset-bottom))",
+          boxShadow: "0 -4px 16px -4px rgb(0 0 0 / 8%)",
+        }}
+      >
+        {addToCart.isError && (
+          <p className="mb-2 text-center text-xs font-semibold text-rose-500">
+            {addToCart.error.message}
+          </p>
+        )}
+
+        {unfilled.length > 0 && showErrors && (
+          <p className="mb-2.5 text-center text-xs font-semibold text-amber-600 dark:text-amber-400">
+            Будь ласка, оберіть: {unfilled.map((g) => g.name.toLowerCase()).join(", ")}
+          </p>
+        )}
+
+        <div className="flex items-center gap-3">
+          {/* Лічильник кількості порцій */}
+          <div
+            className="flex items-center gap-2 rounded-xl px-2 py-1.5 shrink-0"
+            style={{ background: "var(--app-surface-2)", border: "1px solid var(--app-border)" }}
+          >
+            <button
+              onClick={() => {
+                haptic("light");
+                setQty((q) => Math.max(1, q - 1));
+              }}
+              disabled={qty <= 1}
+              className="app-press h-8 w-8 text-lg font-bold disabled:opacity-25 flex items-center justify-center rounded-lg"
+              aria-label="Менше"
+            >
+              −
+            </button>
+            <span className="w-5 text-center text-sm font-bold">{qty}</span>
+            <button
+              onClick={() => {
+                haptic("light");
+                setQty((q) => q + 1);
+              }}
+              className="app-press h-8 w-8 text-lg font-bold flex items-center justify-center rounded-lg"
+              aria-label="Більше"
+            >
+              +
+            </button>
+          </div>
+
+          {/* Головна кнопка додавання */}
           <button
             disabled={addToCart.isPending}
             onClick={() => {
               if (!canAdd) {
                 setShowErrors(true);
-                hapticNotify("error");
+                hapticNotify("warning");
                 return;
               }
               if (!selected) return;
               const options: OptionSelection[] = data.option_groups.flatMap((g) =>
-                Object.entries(picksFor(g)).map(([optionVariantId, optionQty]) => ({
-                  group_id: g.group_id,
-                  variant_id: Number(optionVariantId),
-                  qty: optionQty,
-                })),
+                Object.entries(picksFor(g))
+                  .filter(([_, optionQty]) => optionQty > 0)
+                  .map(([optionVariantId, optionQty]) => ({
+                    group_id: g.group_id,
+                    variant_id: Number(optionVariantId),
+                    qty: optionQty,
+                  })),
               );
               addToCart.mutate(
                 { variant_id: selected.id, qty, options },
@@ -417,22 +437,23 @@ export function ProductPage() {
                 },
               );
             }}
-            className="app-press w-full rounded-xl py-3 font-semibold transition"
+            className="app-press flex-1 rounded-xl py-3.5 px-4 font-bold text-sm shadow-md transition-all flex items-center justify-between"
             style={
               canAdd
                 ? {
-                  background: "var(--tg-theme-button-color)",
-                  color: "var(--tg-theme-button-text-color)",
-                  boxShadow: "var(--app-shadow)",
-                }
+                    background: "var(--tg-theme-button-color)",
+                    color: "var(--tg-theme-button-text-color)",
+                    boxShadow: "var(--app-shadow)",
+                  }
                 : {
-                  background: "color-mix(in srgb, currentColor 15%, transparent)",
-                  color: "currentColor",
-                  opacity: 0.65,
-                }
+                    background: "var(--app-surface-2)",
+                    color: "inherit",
+                    opacity: 0.8,
+                  }
             }
           >
-            {addToCart.isPending ? "Додаємо…" : `Додати в кошик — ${formatPrice(total)}`}
+            <span>{addToCart.isPending ? "Додаємо…" : "В кошик"}</span>
+            <span className="font-extrabold">{formatPrice(total)}</span>
           </button>
         </div>
       </div>

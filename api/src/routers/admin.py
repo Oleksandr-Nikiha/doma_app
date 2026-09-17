@@ -1,14 +1,32 @@
+import asyncio
+import html
+import json
+import logging
+import urllib.request
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
 from src.auth.deps import get_current_admin, get_current_staff, get_current_user
+from src.config import get_settings
 from src.db.connection import get_pool
 from src.schemas.admin import (
     AdminMeOut,
+    AdminOrderDetailOut,
+    AdminOrderGroupOut,
+    AdminOrderItemIn,
+    AdminOrderItemOptionIn,
+    AdminOrderItemOptionOut,
+    AdminOrderItemOut,
+    AdminOrderListItemOut,
+    AdminOrderUpdateIn,
+    AdminUserOut,
+    AdminUserUpdateIn,
     AvailabilityUpdateIn,
     CategoryAdminOut,
     CategoryCreateIn,
     CategoryUpdateIn,
+    LocationDeliveryAdminOut,
+    LocationDeliveryUpdateIn,
     ManagerCreateIn,
     ManagerOut,
     ManagerUpdateIn,
@@ -29,6 +47,8 @@ from src.schemas.admin import (
     VariantSelectorOut,
     VariantUpdateIn,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -75,7 +95,7 @@ async def get_admin_me(
 @router.get("/managers", response_model=list[ManagerOut])
 async def list_managers(
     pool: asyncpg.Pool = Depends(get_pool),
-    _: asyncpg.Record = Depends(get_current_admin),
+    staff: asyncpg.Record = Depends(get_current_staff),
 ):
     """Список усіх менеджерів та адміністраторів."""
     async with pool.acquire() as conn:
@@ -96,9 +116,15 @@ async def list_managers(
 async def create_manager(
     data: ManagerCreateIn,
     pool: asyncpg.Pool = Depends(get_pool),
-    _: asyncpg.Record = Depends(get_current_admin),
+    staff: asyncpg.Record = Depends(get_current_staff),
 ):
     """Призначення користувача менеджером або адміном."""
+    if staff["role"] != "admin" and data.role == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Тільки головний адміністратор може призначати роль 'admin'.",
+        )
+
     async with pool.acquire() as conn:
         user = await conn.fetchrow(
             "SELECT full_name, phone FROM users WHERE telegram_id = $1",
@@ -154,7 +180,7 @@ async def update_manager(
     manager_id: int,
     data: ManagerUpdateIn,
     pool: asyncpg.Pool = Depends(get_pool),
-    current_admin: asyncpg.Record = Depends(get_current_admin),
+    staff: asyncpg.Record = Depends(get_current_staff),
 ):
     """Оновлення ролі, закладу або статусу активності менеджера."""
     async with pool.acquire() as conn:
@@ -164,7 +190,19 @@ async def update_manager(
         if not existing:
             raise HTTPException(status_code=404, detail="Менеджера не знайдено")
 
-        if existing["telegram_id"] == current_admin["telegram_id"] and data.is_active is False:
+        if existing["role"] == "admin" and staff["role"] != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Менеджер не може змінювати головного адміністратора.",
+            )
+
+        if data.role == "admin" and staff["role"] != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Тільки головний адміністратор може призначати роль 'admin'.",
+            )
+
+        if existing["telegram_id"] == staff["telegram_id"] and data.is_active is False:
             raise HTTPException(status_code=400, detail="Не можна деактивувати власний акаунт")
 
         updates = []
@@ -206,20 +244,26 @@ async def update_manager(
 async def delete_manager(
     manager_id: int,
     pool: asyncpg.Pool = Depends(get_pool),
-    current_admin: asyncpg.Record = Depends(get_current_admin),
+    staff: asyncpg.Record = Depends(get_current_staff),
 ):
     """Видалення менеджера зі штату."""
     async with pool.acquire() as conn:
         existing = await conn.fetchrow(
-            "SELECT telegram_id FROM managers WHERE id = $1", manager_id
+            "SELECT telegram_id, role FROM managers WHERE id = $1", manager_id
         )
         if not existing:
             raise HTTPException(status_code=404, detail="Менеджера не знайдено")
-        if existing["telegram_id"] == current_admin["telegram_id"]:
-            raise HTTPException(status_code=400, detail="Не можна видалити самого себе")
+
+        if existing["role"] == "admin" and staff["role"] != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Менеджер не може видаляти головного адміністратора.",
+            )
+
+        if existing["telegram_id"] == staff["telegram_id"]:
+            raise HTTPException(status_code=400, detail="Не можна видалити власний акаунт")
 
         await conn.execute("DELETE FROM managers WHERE id = $1", manager_id)
-
     return {"status": "ok", "message": "Менеджера успішно видалено"}
 
 
@@ -1208,3 +1252,541 @@ async def list_variant_choices(
             """
         )
     return [VariantSelectorOut(**dict(r)) for r in rows]
+
+
+# ============================================================================
+# 11. Налаштування доставки закладів
+# ============================================================================
+
+@router.get("/locations/delivery", response_model=list[LocationDeliveryAdminOut])
+async def list_admin_locations_delivery(
+    staff: asyncpg.Record = Depends(get_current_staff),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Отримує статус доставки та робочі години для закладів.
+    Адміністратор бачить усі заклади, менеджер — лише свій (або всі, якщо не закріплений).
+    """
+    async with pool.acquire() as conn:
+        if staff["role"] == "admin" or staff["location_id"] is None:
+            rows = await conn.fetch(
+                """
+                SELECT id, name, address, is_delivery_enabled,
+                       to_char(delivery_start_time, 'HH24:MI') AS delivery_start_time,
+                       to_char(delivery_end_time, 'HH24:MI') AS delivery_end_time
+                FROM locations
+                ORDER BY id
+                """
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT id, name, address, is_delivery_enabled,
+                       to_char(delivery_start_time, 'HH24:MI') AS delivery_start_time,
+                       to_char(delivery_end_time, 'HH24:MI') AS delivery_end_time
+                FROM locations
+                WHERE id = $1
+                ORDER BY id
+                """,
+                staff["location_id"],
+            )
+    return [LocationDeliveryAdminOut(**dict(r)) for r in rows]
+
+
+@router.patch("/locations/{location_id}/delivery", response_model=LocationDeliveryAdminOut)
+async def update_location_delivery(
+    location_id: int,
+    payload: LocationDeliveryUpdateIn,
+    staff: asyncpg.Record = Depends(get_current_staff),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Оновлює налаштування доставки закладу:
+    - аварійне вимкнення доставки при високому навантаженні
+    - години роботи доставки (початок і кінець)
+    """
+    if staff["role"] != "admin" and staff["location_id"] != location_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="У вас немає прав для керування доставкою цього закладу",
+        )
+
+    updates = []
+    values = []
+    idx = 1
+
+    if payload.is_delivery_enabled is not None:
+        updates.append(f"is_delivery_enabled = ${idx}")
+        values.append(payload.is_delivery_enabled)
+        idx += 1
+
+    if payload.delivery_start_time is not None:
+        updates.append(f"delivery_start_time = ${idx}::time")
+        values.append(payload.delivery_start_time)
+        idx += 1
+
+    if payload.delivery_end_time is not None:
+        updates.append(f"delivery_end_time = ${idx}::time")
+        values.append(payload.delivery_end_time)
+        idx += 1
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="Не вказано жодних змін")
+
+    values.append(location_id)
+    update_sql = f"""
+        UPDATE locations
+        SET {', '.join(updates)}
+        WHERE id = ${idx}
+        RETURNING id, name, address, is_delivery_enabled,
+                  to_char(delivery_start_time, 'HH24:MI') AS delivery_start_time,
+                  to_char(delivery_end_time, 'HH24:MI') AS delivery_end_time
+    """
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(update_sql, *values)
+        if not row:
+            raise HTTPException(status_code=404, detail="Заклад не знайдено")
+
+    return LocationDeliveryAdminOut(**dict(row))
+
+
+# ============================================================================
+# 8. Керування користувачами / клієнтами (Users)
+# ============================================================================
+
+@router.get("/users", response_model=list[AdminUserOut])
+async def list_admin_users(
+    query: str = Query("", description="Пошук за номером телефону або ПІБ"),
+    limit: int = Query(50, ge=1, le=100),
+    pool: asyncpg.Pool = Depends(get_pool),
+    staff: asyncpg.Record = Depends(get_current_staff),
+):
+    """Пошук клієнтів за номером телефону або ПІБ."""
+    clean_q = query.strip()
+    sql = """
+        SELECT u.id, u.telegram_id, u.full_name, u.phone, u.delivery_address,
+               u.is_blocked, u.admin_note,
+               to_char(u.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
+               COUNT(o.id)::int AS orders_count
+        FROM users u
+        LEFT JOIN orders o ON o.telegram_id = u.telegram_id
+        WHERE ($1 = '' OR u.phone ILIKE '%' || $1 || '%' OR u.full_name ILIKE '%' || $1 || '%')
+        GROUP BY u.id
+        ORDER BY u.id DESC
+        LIMIT $2
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(sql, clean_q, limit)
+    return [AdminUserOut(**dict(r)) for r in rows]
+
+
+@router.patch("/users/{user_id}", response_model=AdminUserOut)
+async def update_admin_user(
+    user_id: int,
+    data: AdminUserUpdateIn,
+    pool: asyncpg.Pool = Depends(get_pool),
+    staff: asyncpg.Record = Depends(get_current_staff),
+):
+    """Оновлення статусу блокування та примітки про клієнта."""
+    updates = []
+    params = [user_id]
+
+    if data.is_blocked is not None:
+        params.append(data.is_blocked)
+        updates.append(f"is_blocked = ${len(params)}")
+
+    if data.admin_note is not None:
+        params.append(data.admin_note.strip() if data.admin_note else None)
+        updates.append(f"admin_note = ${len(params)}")
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="Не вказано полів для оновлення")
+
+    updates.append("updated_at = now()")
+
+    async with pool.acquire() as conn:
+        update_sql = f"UPDATE users SET {', '.join(updates)} WHERE id = $1 RETURNING id"
+        row_id = await conn.fetchval(update_sql, *params)
+        if not row_id:
+            raise HTTPException(status_code=404, detail="Користувача не знайдено")
+
+        row = await conn.fetchrow(
+            """
+            SELECT u.id, u.telegram_id, u.full_name, u.phone, u.delivery_address,
+                   u.is_blocked, u.admin_note,
+                   to_char(u.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
+                   COUNT(o.id)::int AS orders_count
+            FROM users u
+            LEFT JOIN orders o ON o.telegram_id = u.telegram_id
+            WHERE u.id = $1
+            GROUP BY u.id
+            """,
+            user_id,
+        )
+
+    return AdminUserOut(**dict(row))
+
+
+@router.delete("/users/{user_id}")
+async def delete_admin_user(
+    user_id: int,
+    pool: asyncpg.Pool = Depends(get_pool),
+    staff: asyncpg.Record = Depends(get_current_staff),
+):
+    """Видалення користувача."""
+    async with pool.acquire() as conn:
+        existing = await conn.fetchrow("SELECT id, telegram_id FROM users WHERE id = $1", user_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Користувача не знайдено")
+
+        if existing["telegram_id"] == staff["telegram_id"]:
+            raise HTTPException(status_code=400, detail="Не можна видалити власний акаунт")
+
+        await conn.execute("DELETE FROM managers WHERE telegram_id = $1", existing["telegram_id"])
+        await conn.execute("DELETE FROM carts WHERE telegram_id = $1", existing["telegram_id"])
+        await conn.execute("DELETE FROM orders WHERE telegram_id = $1", existing["telegram_id"])
+        await conn.execute("DELETE FROM users WHERE id = $1", user_id)
+
+    return {"status": "ok", "message": "Користувача успішно видалено"}
+
+
+# ============================================================================
+# 9. Керування та редагування замовлень (Orders)
+# ============================================================================
+
+def _send_tg_order_notification(token: str, payload: dict) -> None:
+    try:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            resp.read()
+    except Exception as e:
+        logger.error("Не вдалося відправити повідомлення в Telegram: %s", e)
+
+
+@router.get("/orders", response_model=list[AdminOrderListItemOut])
+async def list_admin_orders(
+    status: str | None = Query(None),
+    location_id: int | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    pool: asyncpg.Pool = Depends(get_pool),
+    staff: asyncpg.Record = Depends(get_current_staff),
+):
+    """Список замовлень для менеджера/адміністратора."""
+    target_loc = staff["location_id"] if staff["role"] == "manager" else location_id
+
+    sql = """
+        SELECT o.id, o.telegram_id, o.status, o.fulfillment_type, o.delivery_address,
+               o.contact_name, o.contact_phone, o.payment_method, o.scheduled_time,
+               o.comment, o.total_price::float AS total_price,
+               to_char(o.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
+               u.is_blocked AS user_is_blocked, u.admin_note AS user_admin_note,
+               og.location_id, loc.name AS location_name,
+               COALESCE(
+                   (SELECT string_agg(oi.product_name || ' ×' || oi.qty, ', ')
+                    FROM order_items oi
+                    JOIN order_groups g ON g.id = oi.order_group_id
+                    WHERE g.order_id = o.id), ''
+               ) AS items_summary
+        FROM orders o
+        JOIN users u ON u.telegram_id = o.telegram_id
+        LEFT JOIN order_groups og ON og.order_id = o.id
+        LEFT JOIN locations loc ON loc.id = og.location_id
+        WHERE ($1::text IS NULL OR o.status = $1)
+          AND ($2::int IS NULL OR og.location_id = $2)
+        GROUP BY o.id, u.is_blocked, u.admin_note, og.location_id, loc.name
+        ORDER BY o.id DESC
+        LIMIT $3
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(sql, status, target_loc, limit)
+    return [AdminOrderListItemOut(**dict(r)) for r in rows]
+
+
+@router.get("/orders/{order_id}", response_model=AdminOrderDetailOut)
+async def get_admin_order(
+    order_id: int,
+    pool: asyncpg.Pool = Depends(get_pool),
+    staff: asyncpg.Record = Depends(get_current_staff),
+):
+    """Детальна інформація про замовлення."""
+    async with pool.acquire() as conn:
+        order_row = await conn.fetchrow(
+            """
+            SELECT o.id, o.telegram_id, o.status, o.fulfillment_type, o.delivery_address,
+                   o.contact_name, o.contact_phone, o.payment_method, o.scheduled_time,
+                   o.comment, o.total_price::float AS total_price,
+                   to_char(o.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
+                   u.is_blocked AS user_is_blocked, u.admin_note AS user_admin_note
+            FROM orders o
+            JOIN users u ON u.telegram_id = o.telegram_id
+            WHERE o.id = $1
+            """,
+            order_id,
+        )
+        if not order_row:
+            raise HTTPException(status_code=404, detail="Замовлення не знайдено")
+
+        group_rows = await conn.fetch(
+            """
+            SELECT og.id, og.order_id, og.location_id, l.name AS location_name,
+                   og.status, og.subtotal::float AS subtotal
+            FROM order_groups og
+            JOIN locations l ON l.id = og.location_id
+            WHERE og.order_id = $1
+            ORDER BY og.id
+            """,
+            order_id,
+        )
+
+        if staff["role"] == "manager" and staff["location_id"] is not None:
+            loc_ids = [g["location_id"] for g in group_rows]
+            if staff["location_id"] not in loc_ids:
+                raise HTTPException(status_code=403, detail="Це замовлення належить іншому закладу")
+
+        item_rows = await conn.fetch(
+            """
+            SELECT oi.id, oi.order_group_id, oi.variant_id, oi.product_name,
+                   oi.variant_label, oi.unit_price::float AS unit_price,
+                   oi.qty, oi.subtotal::float AS subtotal
+            FROM order_items oi
+            JOIN order_groups og ON og.id = oi.order_group_id
+            WHERE og.order_id = $1
+            ORDER BY oi.id
+            """,
+            order_id,
+        )
+
+        item_ids = [r["id"] for r in item_rows]
+        option_rows = []
+        if item_ids:
+            option_rows = await conn.fetch(
+                """
+                SELECT id, order_item_id, option_group_name, option_name,
+                       price_delta::float AS price_delta, qty
+                FROM order_item_options
+                WHERE order_item_id = ANY($1::int[])
+                ORDER BY id
+                """,
+                item_ids,
+            )
+
+    options_by_item: dict[int, list[AdminOrderItemOptionOut]] = {}
+    for opt in option_rows:
+        item_id = opt["order_item_id"]
+        if item_id not in options_by_item:
+            options_by_item[item_id] = []
+        options_by_item[item_id].append(AdminOrderItemOptionOut(**dict(opt)))
+
+    items_by_group: dict[int, list[AdminOrderItemOut]] = {}
+    for it in item_rows:
+        gid = it["order_group_id"]
+        if gid not in items_by_group:
+            items_by_group[gid] = []
+        it_dict = dict(it)
+        it_dict["options"] = options_by_item.get(it["id"], [])
+        items_by_group[gid].append(AdminOrderItemOut(**it_dict))
+
+    groups_out = []
+    for g in group_rows:
+        g_dict = dict(g)
+        g_dict["items"] = items_by_group.get(g["id"], [])
+        groups_out.append(AdminOrderGroupOut(**g_dict))
+
+    res_dict = dict(order_row)
+    res_dict["groups"] = groups_out
+    return AdminOrderDetailOut(**res_dict)
+
+
+@router.put("/orders/{order_id}", response_model=AdminOrderDetailOut)
+async def update_admin_order(
+    order_id: int,
+    data: AdminOrderUpdateIn,
+    pool: asyncpg.Pool = Depends(get_pool),
+    staff: asyncpg.Record = Depends(get_current_staff),
+):
+    """Редагування замовлення: час доставки, позиції, додатки, контакти, статус."""
+    async with pool.acquire() as conn, conn.transaction():
+        existing = await conn.fetchrow("SELECT id FROM orders WHERE id = $1 FOR UPDATE", order_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Замовлення не знайдено")
+
+        group_rows = await conn.fetch(
+            "SELECT id, location_id FROM order_groups WHERE order_id = $1", order_id
+        )
+        if not group_rows:
+            raise HTTPException(status_code=400, detail="У замовлення немає групи закладів")
+
+        if staff["role"] == "manager" and staff["location_id"] is not None:
+            if staff["location_id"] not in [g["location_id"] for g in group_rows]:
+                raise HTTPException(status_code=403, detail="Це замовлення належить іншому закладу")
+
+        # 1. Оновлення полів замовлення
+        order_updates = []
+        order_params = [order_id]
+
+        if data.scheduled_time is not None:
+            clean_time = data.scheduled_time.strip() or None
+            order_params.append(clean_time)
+            order_updates.append(f"scheduled_time = ${len(order_params)}")
+
+        if data.status is not None:
+            order_params.append(data.status)
+            order_updates.append(f"status = ${len(order_params)}")
+            group_status = (
+                "cancelled"
+                if data.status in ("rejected", "cancelled")
+                else "accepted"
+                if data.status == "confirmed"
+                else "pending"
+            )
+            await conn.execute(
+                "UPDATE order_groups SET status = $1 WHERE order_id = $2", group_status, order_id
+            )
+
+        if data.delivery_address is not None:
+            order_params.append(data.delivery_address.strip())
+            order_updates.append(f"delivery_address = ${len(order_params)}")
+
+        if data.contact_name is not None:
+            order_params.append(data.contact_name.strip())
+            order_updates.append(f"contact_name = ${len(order_params)}")
+
+        if data.contact_phone is not None:
+            order_params.append(data.contact_phone.strip())
+            order_updates.append(f"contact_phone = ${len(order_params)}")
+
+        if data.comment is not None:
+            order_params.append(data.comment.strip())
+            order_updates.append(f"comment = ${len(order_params)}")
+
+        if order_updates:
+            order_updates.append("updated_at = now()")
+            await conn.execute(
+                f"UPDATE orders SET {', '.join(order_updates)} WHERE id = $1", *order_params
+            )
+
+        # 2. Якщо передано новий склад страв (items) — перераховуємо та замінюємо
+        if data.items is not None:
+            if len(data.items) == 0:
+                raise HTTPException(status_code=400, detail="Замовлення не може бути порожнім")
+
+            primary_group_id = group_rows[0]["id"]
+
+            await conn.execute(
+                "DELETE FROM order_items WHERE order_group_id = ANY($1::int[])",
+                [g["id"] for g in group_rows],
+            )
+
+            total_calculated_price = 0.0
+            for item in data.items:
+                options_price = sum(opt.price_delta * opt.qty for opt in item.options)
+                item_subtotal = round((item.unit_price + options_price) * item.qty, 2)
+                total_calculated_price += item_subtotal
+
+                item_db = await conn.fetchrow(
+                    """
+                    INSERT INTO order_items (
+                        order_group_id, variant_id, product_name, variant_label,
+                        unit_price, qty, subtotal
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    RETURNING id
+                    """,
+                    primary_group_id,
+                    item.variant_id,
+                    item.product_name,
+                    item.variant_label,
+                    item.unit_price,
+                    item.qty,
+                    item_subtotal,
+                )
+                saved_item_id = item_db["id"]
+
+                for opt in item.options:
+                    await conn.execute(
+                        """
+                        INSERT INTO order_item_options (
+                            order_item_id, option_group_name, option_name, price_delta, qty
+                        )
+                        VALUES ($1, $2, $3, $4, $5)
+                        """,
+                        saved_item_id,
+                        opt.option_group_name,
+                        opt.option_name,
+                        opt.price_delta,
+                        opt.qty,
+                    )
+
+            await conn.execute(
+                "UPDATE order_groups SET subtotal = $1 WHERE id = $2",
+                total_calculated_price,
+                primary_group_id,
+            )
+            await conn.execute(
+                "UPDATE orders SET total_price = $1, updated_at = now() WHERE id = $2",
+                total_calculated_price,
+                order_id,
+            )
+
+    return await get_admin_order(order_id, pool, staff)
+
+
+@router.post("/orders/{order_id}/notify")
+async def notify_order_updated(
+    order_id: int,
+    background_tasks: BackgroundTasks,
+    pool: asyncpg.Pool = Depends(get_pool),
+    staff: asyncpg.Record = Depends(get_current_staff),
+):
+    """Надсилання оновленого чека / статусу замовлення клієнту в Telegram."""
+    settings = get_settings()
+    if not settings.bot_token:
+        raise HTTPException(status_code=500, detail="BOT_TOKEN не налаштовано")
+
+    order = await get_admin_order(order_id, pool, staff)
+
+    items_text_list = []
+    for g in order.groups:
+        for it in g.items:
+            opts_str = ""
+            if it.options:
+                opts = ", ".join(
+                    f"{html.escape(o.option_name)}" + (f" ×{o.qty}" if o.qty > 1 else "")
+                    for o in it.options
+                )
+                opts_str = f"\n   <i>↳ {opts}</i>"
+            p_name = html.escape(it.product_name)
+            v_label = html.escape(it.variant_label)
+            items_text_list.append(
+                f"• <b>{p_name}</b> ({v_label}) × {it.qty} — {it.subtotal:.2f} ₴{opts_str}"
+            )
+    items_block = "\n".join(items_text_list)
+
+    time_line = f"⏰ <b>Бажаний час:</b> {order.scheduled_time}\n" if order.scheduled_time else ""
+
+    text = (
+        f"📝 <b>Оновлення замовлення #{order.id}</b>\n\n"
+        f"Менеджер оновив деталі вашого замовлення:\n"
+        f"{time_line}"
+        f"📋 <b>Позиції:</b>\n{items_block}\n\n"
+        f"💵 <b>Разом до сплати: {order.total_price:.2f} ₴</b>"
+    )
+
+    payload = {
+        "chat_id": order.telegram_id,
+        "text": text,
+        "parse_mode": "HTML",
+    }
+
+    background_tasks.add_task(
+        _send_tg_order_notification,
+        settings.bot_token,
+        payload,
+    )
+    return {"status": "ok", "message": "Сповіщення надіслано клієнту"}

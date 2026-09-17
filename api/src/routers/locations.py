@@ -14,6 +14,13 @@ async def list_locations(pool: asyncpg.Pool = Depends(get_pool)):
     Публічний ендпоінт — не потребує initData, бо контакти доступні всім.
     """
     rows = await pool.fetch(
-        "SELECT id, name, address, phones FROM locations ORDER BY id"
+        """
+        SELECT id, name, address, phones,
+               is_delivery_enabled,
+               to_char(delivery_start_time, 'HH24:MI') AS delivery_start_time,
+               to_char(delivery_end_time, 'HH24:MI') AS delivery_end_time
+        FROM locations
+        ORDER BY id
+        """
     )
     return [LocationOut(**dict(row)) for row in rows]

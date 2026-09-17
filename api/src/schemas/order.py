@@ -12,7 +12,8 @@ class OrderCreateIn(BaseModel):
     delivery_address: str | None = None
     contact_name: str = Field(..., min_length=1, max_length=100)
     contact_phone: str = Field(..., min_length=5, max_length=30)
-    payment_method: Literal["cash", "card"]
+    payment_method: Literal["cash", "card", "qr"]
+    scheduled_time: str | None = Field(None, max_length=20)
     comment: str | None = Field(None, max_length=500)
 
     @model_validator(mode="after")
@@ -22,6 +23,8 @@ class OrderCreateIn(BaseModel):
                 raise ValueError("Адреса доставки обов'язкова для кур'єрської доставки")
         elif self.fulfillment_type == "pickup" and not self.location_id:
             raise ValueError("Локація обов'язкова для самовивозу")
+        if self.payment_method == "qr" and self.fulfillment_type != "delivery":
+            raise ValueError("Оплата по QR-коду доступна лише при доставці")
         return self
     
     @field_validator("contact_phone")
@@ -67,6 +70,7 @@ class OrderOut(BaseModel):
     contact_name: str
     contact_phone: str
     payment_method: str
+    scheduled_time: str | None = None
     comment: str | None = None
     total_price: float
     created_at: datetime

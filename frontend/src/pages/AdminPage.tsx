@@ -1,14 +1,18 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
   useAddOptionGroupItem,
   useAdminCategories,
+  useAdminLocationsDelivery,
   useAdminManagers,
   useAdminMe,
+  useAdminOrderDetail,
+  useAdminOrders,
   useAdminOptionGroupItems,
   useAdminOptionGroups,
   useAdminProducts,
+  useAdminUsers,
   useAdminVariantChoices,
   useAttachProductOptionGroup,
   useCreateCategory,
@@ -16,6 +20,7 @@ import {
   useCreateOptionGroup,
   useCreateProduct,
   useCreateVariant,
+  useDeleteAdminUser,
   useDeleteCategory,
   useDeleteManager,
   useDeleteOptionGroup,
@@ -24,9 +29,13 @@ import {
   useDeleteVariant,
   useDetachProductOptionGroup,
   useLocations,
+  useNotifyAdminOrder,
   useToggleProductAvailability,
   useToggleVariantAvailability,
+  useUpdateAdminOrder,
+  useUpdateAdminUser,
   useUpdateCategory,
+  useUpdateLocationDelivery,
   useUpdateManager,
   useUpdateOptionGroup,
   useUpdateOptionGroupItem,
@@ -38,10 +47,12 @@ import type {
   AdminCategory,
   AdminOptionGroup,
   AdminProduct,
+  AdminUser,
   AdminVariant,
   CategoryCreatePayload,
   CategoryUpdatePayload,
   Location,
+  LocationDeliverySettings,
   Manager,
   OptionGroupCreatePayload,
   OptionGroupItemCreatePayload,
@@ -52,11 +63,12 @@ import type {
   VariantCreatePayload,
   VariantUpdatePayload,
 } from "@/api/types";
-import { EmptyState, ErrorBox, ScreenTitle, Spinner, Thumb } from "@/components/ui";
+import { EmptyState, ErrorBox, ScreenTitle, Spinner, Thumb, formatPrice } from "@/components/ui";
 import { useBackButton } from "@/hooks/useBackButton";
 import { haptic, hapticNotify } from "@/telegram/sdk";
 
-type AdminTab = "catalog" | "options" | "stoplist" | "managers";
+type AdminSection = "operations" | "management";
+type AdminTab = "orders" | "stoplist" | "delivery" | "catalog" | "options" | "users" | "managers";
 
 export function AdminPage() {
   const navigate = useNavigate();
@@ -65,7 +77,8 @@ export function AdminPage() {
   const { data: adminMe, isPending: mePending, error: meError } = useAdminMe();
   const { data: locations = [] } = useLocations();
 
-  const [activeTab, setActiveTab] = useState<AdminTab>("catalog");
+  const [activeSection, setActiveSection] = useState<AdminSection>("operations");
+  const [activeTab, setActiveTab] = useState<AdminTab>("orders");
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
 
   // Якщо менеджер прив'язаний до закладу — автоматично фіксуємо локацію
@@ -117,69 +130,162 @@ export function AdminPage() {
           </div>
         </div>
 
-        {/* Перемикач вкладок */}
+        {/* 1. Глобальний перемикач на 2 розділи: Заклад (Менеджер) vs Керування (Штат і Клієнти) */}
         <div
-          className="mt-3 flex rounded-xl p-1 text-xs font-medium"
+          className="mt-3 grid grid-cols-2 gap-1 rounded-xl p-1 text-xs font-semibold"
           style={{ background: "var(--app-surface-2)" }}
         >
           <button
             onClick={() => {
               haptic("light");
-              setActiveTab("catalog");
+              setActiveSection("operations");
+              if (activeTab === "users" || activeTab === "managers") {
+                setActiveTab("orders");
+              }
             }}
-            className={`app-press flex-1 rounded-lg py-2 text-center transition-all ${
-              activeTab === "catalog" ? "shadow-sm font-bold" : "opacity-70"
+            className={`app-press rounded-lg py-2 text-center transition-all ${
+              activeSection === "operations" ? "shadow-sm font-bold" : "opacity-65"
             }`}
             style={
-              activeTab === "catalog"
-                ? {
-                    background: "var(--tg-theme-bg-color)",
-                    color: "var(--tg-theme-text-color)",
-                  }
+              activeSection === "operations"
+                ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
                 : undefined
             }
           >
-            🍕 Меню
+            🍕 Заклад (Операційний)
           </button>
           <button
             onClick={() => {
               haptic("light");
-              setActiveTab("options");
+              setActiveSection("management");
+              if (activeTab !== "users" && activeTab !== "managers") {
+                setActiveTab("users");
+              }
             }}
-            className={`app-press flex-1 rounded-lg py-2 text-center transition-all ${
-              activeTab === "options" ? "shadow-sm font-bold" : "opacity-70"
+            className={`app-press rounded-lg py-2 text-center transition-all ${
+              activeSection === "management" ? "shadow-sm font-bold" : "opacity-65"
             }`}
             style={
-              activeTab === "options"
-                ? {
-                    background: "var(--tg-theme-bg-color)",
-                    color: "var(--tg-theme-text-color)",
-                  }
+              activeSection === "management"
+                ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
                 : undefined
             }
           >
-            🧩 Додатки
+            👥 Керування (Штат / Клієнти)
           </button>
-          <button
-            onClick={() => {
-              haptic("light");
-              setActiveTab("stoplist");
-            }}
-            className={`app-press flex-1 rounded-lg py-2 text-center transition-all ${
-              activeTab === "stoplist" ? "shadow-sm font-bold" : "opacity-70"
-            }`}
-            style={
-              activeTab === "stoplist"
-                ? {
-                    background: "var(--tg-theme-bg-color)",
-                    color: "var(--tg-theme-text-color)",
-                  }
-                : undefined
-            }
+        </div>
+
+        {/* 2. Підвкладки розділу "Заклад" */}
+        {activeSection === "operations" && (
+          <div
+            className="mt-2 flex rounded-xl p-1 text-xs font-medium overflow-x-auto no-scrollbar gap-1"
+            style={{ background: "var(--app-surface-2)" }}
           >
-            ⛔ Стоп
-          </button>
-          {adminMe.role === "admin" && (
+            <button
+              onClick={() => {
+                haptic("light");
+                setActiveTab("orders");
+              }}
+              className={`app-press flex-1 min-w-[90px] rounded-lg py-2 text-center transition-all ${
+                activeTab === "orders" ? "shadow-sm font-bold" : "opacity-70"
+              }`}
+              style={
+                activeTab === "orders"
+                  ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
+                  : undefined
+              }
+            >
+              📦 Замовлення
+            </button>
+            <button
+              onClick={() => {
+                haptic("light");
+                setActiveTab("stoplist");
+              }}
+              className={`app-press flex-1 min-w-[70px] rounded-lg py-2 text-center transition-all ${
+                activeTab === "stoplist" ? "shadow-sm font-bold" : "opacity-70"
+              }`}
+              style={
+                activeTab === "stoplist"
+                  ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
+                  : undefined
+              }
+            >
+              ⛔ Стоп
+            </button>
+            <button
+              onClick={() => {
+                haptic("light");
+                setActiveTab("delivery");
+              }}
+              className={`app-press flex-1 min-w-[80px] rounded-lg py-2 text-center transition-all ${
+                activeTab === "delivery" ? "shadow-sm font-bold" : "opacity-70"
+              }`}
+              style={
+                activeTab === "delivery"
+                  ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
+                  : undefined
+              }
+            >
+              🛵 Доставка
+            </button>
+            <button
+              onClick={() => {
+                haptic("light");
+                setActiveTab("catalog");
+              }}
+              className={`app-press flex-1 min-w-[70px] rounded-lg py-2 text-center transition-all ${
+                activeTab === "catalog" ? "shadow-sm font-bold" : "opacity-70"
+              }`}
+              style={
+                activeTab === "catalog"
+                  ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
+                  : undefined
+              }
+            >
+              🍕 Меню
+            </button>
+            <button
+              onClick={() => {
+                haptic("light");
+                setActiveTab("options");
+              }}
+              className={`app-press flex-1 min-w-[75px] rounded-lg py-2 text-center transition-all ${
+                activeTab === "options" ? "shadow-sm font-bold" : "opacity-70"
+              }`}
+              style={
+                activeTab === "options"
+                  ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
+                  : undefined
+              }
+            >
+              🧩 Додатки
+            </button>
+          </div>
+        )}
+
+        {/* 2. Підвкладки розділу "Керування" */}
+        {activeSection === "management" && (
+          <div
+            className="mt-2 flex rounded-xl p-1 text-xs font-medium gap-1"
+            style={{ background: "var(--app-surface-2)" }}
+          >
+            <button
+              onClick={() => {
+                haptic("light");
+                setActiveTab("users");
+              }}
+              className={`app-press flex-1 rounded-lg py-2 text-center transition-all ${
+                activeTab === "users" ? "shadow-sm font-bold" : "opacity-70"
+              }`}
+              style={
+                activeTab === "users"
+                  ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
+                  : undefined
+              }
+            >
+              👤 Клієнти (Пошук за телефоном)
+            </button>
             <button
               onClick={() => {
                 haptic("light");
@@ -190,58 +296,69 @@ export function AdminPage() {
               }`}
               style={
                 activeTab === "managers"
-                  ? {
-                      background: "var(--tg-theme-bg-color)",
-                      color: "var(--tg-theme-text-color)",
-                    }
+                  ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
                   : undefined
               }
             >
               👥 Штат
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Фільтр по закладах для Admin */}
-        {adminMe.role === "admin" && (activeTab === "catalog" || activeTab === "stoplist") && locations.length > 1 && (
-          <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
-            <button
-              onClick={() => {
-                haptic("light");
-                setSelectedLocationId(null);
-              }}
-              className="app-press shrink-0 rounded-full px-3 py-1.5 font-medium transition-all"
-              style={
-                selectedLocationId === null
-                  ? { background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }
-                  : { background: "var(--app-surface)", color: "var(--tg-theme-text-color)" }
-              }
-            >
-              Всі заклади
-            </button>
-            {locations.map((loc) => (
+        {adminMe.role === "admin" &&
+          (activeTab === "orders" ||
+            activeTab === "catalog" ||
+            activeTab === "stoplist" ||
+            activeTab === "delivery") &&
+          locations.length > 1 && (
+            <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
               <button
-                key={loc.id}
                 onClick={() => {
                   haptic("light");
-                  setSelectedLocationId(loc.id);
+                  setSelectedLocationId(null);
                 }}
                 className="app-press shrink-0 rounded-full px-3 py-1.5 font-medium transition-all"
                 style={
-                  selectedLocationId === loc.id
-                    ? { background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }
+                  selectedLocationId === null
+                    ? {
+                        background: "var(--tg-theme-button-color)",
+                        color: "var(--tg-theme-button-text-color)",
+                      }
                     : { background: "var(--app-surface)", color: "var(--tg-theme-text-color)" }
                 }
               >
-                📍 {loc.name}
+                Всі заклади
               </button>
-            ))}
-          </div>
-        )}
+              {locations.map((loc) => (
+                <button
+                  key={loc.id}
+                  onClick={() => {
+                    haptic("light");
+                    setSelectedLocationId(loc.id);
+                  }}
+                  className="app-press shrink-0 rounded-full px-3 py-1.5 font-medium transition-all"
+                  style={
+                    selectedLocationId === loc.id
+                      ? {
+                          background: "var(--tg-theme-button-color)",
+                          color: "var(--tg-theme-button-text-color)",
+                        }
+                      : { background: "var(--app-surface)", color: "var(--tg-theme-text-color)" }
+                  }
+                >
+                  📍 {loc.name}
+                </button>
+              ))}
+            </div>
+          )}
       </div>
 
       {/* Вміст вкладок */}
       <div className="mt-4 px-4">
+        {activeTab === "orders" && (
+          <OrdersTab locationId={effectiveLocationId} />
+        )}
         {activeTab === "catalog" && (
           <CatalogTab
             locationId={effectiveLocationId}
@@ -250,15 +367,1221 @@ export function AdminPage() {
             userLocationId={adminMe.location_id}
           />
         )}
-        {activeTab === "options" && (
-          <OptionGroupsTab />
+        {activeTab === "options" && <OptionGroupsTab />}
+        {activeTab === "stoplist" && <StopListTab locationId={effectiveLocationId} />}
+        {activeTab === "delivery" && (
+          <DeliverySettingsTab
+            locationId={effectiveLocationId}
+            isSuperAdmin={adminMe.role === "admin"}
+          />
         )}
-        {activeTab === "stoplist" && (
-          <StopListTab locationId={effectiveLocationId} />
+        {activeTab === "users" && <UsersTab />}
+        {activeTab === "managers" && <ManagersTab locations={locations} />}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 0. ВКЛАДКА ЗАМОВЛЕНЬ (OrdersTab + OrderEditModal)
+// ============================================================================
+
+const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+  pending_moderation: {
+    label: "Очікує модерації",
+    bg: "color-mix(in srgb, #f59e0b 20%, transparent)",
+    text: "#d97706",
+  },
+  confirmed: {
+    label: "Підтверджено",
+    bg: "color-mix(in srgb, #10b981 20%, transparent)",
+    text: "#059669",
+  },
+  in_progress: {
+    label: "Готується",
+    bg: "color-mix(in srgb, #3b82f6 20%, transparent)",
+    text: "#2563eb",
+  },
+  ready: {
+    label: "Готове / В дорозі",
+    bg: "color-mix(in srgb, #8b5cf6 20%, transparent)",
+    text: "#7c3aed",
+  },
+  completed: {
+    label: "Виконано",
+    bg: "color-mix(in srgb, #6b7280 20%, transparent)",
+    text: "#4b5563",
+  },
+  rejected: {
+    label: "Відхилено",
+    bg: "color-mix(in srgb, #ef4444 20%, transparent)",
+    text: "#dc2626",
+  },
+  cancelled: {
+    label: "Скасовано",
+    bg: "color-mix(in srgb, #ef4444 20%, transparent)",
+    text: "#dc2626",
+  },
+};
+
+function OrdersTab({
+  locationId,
+}: {
+  locationId?: number | null;
+}) {
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const {
+    data: orders = [],
+    isPending,
+    error,
+    refetch,
+  } = useAdminOrders({
+    status: statusFilter,
+    locationId,
+  });
+  const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
+  const updateOrder = useUpdateAdminOrder();
+
+  const statusFilters = [
+    { key: null, label: "Всі" },
+    { key: "pending_moderation", label: "⏳ Очікують" },
+    { key: "confirmed", label: "✅ Підтверджені" },
+    { key: "in_progress", label: "👨‍🍳 Готуються" },
+    { key: "ready", label: "🛵 Готові" },
+    { key: "completed", label: "🏁 Виконані" },
+    { key: "rejected", label: "❌ Відхилені" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-bold">Замовлення ({orders.length})</h2>
+          <p className="text-xs opacity-60">Модерація та зміна складу замовлень</p>
+        </div>
+        <button
+          onClick={() => {
+            haptic("light");
+            void refetch();
+          }}
+          className="app-press rounded-xl px-3 py-1.5 text-xs font-semibold"
+          style={{ background: "var(--app-surface-2)" }}
+        >
+          🔄 Оновити
+        </button>
+      </div>
+
+      {/* Фільтри за статусом */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
+        {statusFilters.map((sf) => (
+          <button
+            key={String(sf.key)}
+            onClick={() => {
+              haptic("light");
+              setStatusFilter(sf.key);
+            }}
+            className="app-press shrink-0 rounded-full px-3 py-1.5 font-medium transition-all"
+            style={
+              statusFilter === sf.key
+                ? {
+                    background: "var(--tg-theme-button-color)",
+                    color: "var(--tg-theme-button-text-color)",
+                  }
+                : { background: "var(--app-surface)", color: "var(--tg-theme-text-color)" }
+            }
+          >
+            {sf.label}
+          </button>
+        ))}
+      </div>
+
+      {isPending ? (
+        <Spinner />
+      ) : error ? (
+        <ErrorBox message={error.message} />
+      ) : orders.length === 0 ? (
+        <EmptyState icon="📦" title="Замовлень немає" hint="Не знайдено замовлень із обраним статусом" />
+      ) : (
+        <div className="space-y-3">
+          {orders.map((o) => {
+            const sc = STATUS_CONFIG[o.status] || {
+              label: o.status,
+              bg: "var(--app-surface-2)",
+              text: "inherit",
+            };
+            return (
+              <div
+                key={o.id}
+                className="app-card rounded-2xl p-4 transition-all"
+                style={{ border: "1px solid var(--app-border)" }}
+              >
+                {/* Шапка картки */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold">#{o.id}</span>
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                        style={{ background: sc.bg, color: sc.text }}
+                      >
+                        {sc.label}
+                      </span>
+                      {o.location_name && (
+                        <span className="text-[11px] opacity-60">📍 {o.location_name}</span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-[11px] opacity-50">📅 {o.created_at}</p>
+                  </div>
+
+                  <div className="text-right">
+                    <span
+                      className="text-sm font-bold"
+                      style={{ color: "var(--tg-theme-button-color)" }}
+                    >
+                      {formatPrice(o.total_price)}
+                    </span>
+                    <p className="text-[11px] opacity-60">
+                      {o.payment_method === "cash"
+                        ? "💵 Готівка"
+                        : o.payment_method === "card"
+                        ? "💳 Картка"
+                        : "📱 QR"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Примітка про клієнта */}
+                {o.user_admin_note && (
+                  <div
+                    className="mt-2.5 rounded-xl p-2.5 text-xs"
+                    style={{
+                      background: "color-mix(in srgb, #f59e0b 15%, transparent)",
+                      color: "#b45309",
+                    }}
+                  >
+                    ⚠️ <b>Примітка про клієнта:</b> {o.user_admin_note}
+                  </div>
+                )}
+                {o.user_is_blocked && (
+                  <div
+                    className="mt-1.5 rounded-xl p-2 text-xs font-semibold"
+                    style={{
+                      background: "color-mix(in srgb, #ef4444 15%, transparent)",
+                      color: "#ef4444",
+                    }}
+                  >
+                    ⛔ Клієнт заблокований в системі!
+                  </div>
+                )}
+
+                {/* Дані клієнта та доставки */}
+                <div className="mt-2.5 space-y-1 text-xs opacity-80">
+                  <p>
+                    👤 <b>{o.contact_name}</b> (
+                    <a href={`tel:${o.contact_phone}`} className="text-blue-500 hover:underline">
+                      {o.contact_phone}
+                    </a>
+                    )
+                  </p>
+                  <p>
+                    {o.fulfillment_type === "delivery"
+                      ? `🛵 Доставка: ${o.delivery_address || ""}`
+                      : "🛍️ Самовивіз"}
+                  </p>
+                  <p>
+                    ⏰ Час: <b>{o.scheduled_time ? `На ${o.scheduled_time}` : "Якнайшвидше"}</b>
+                  </p>
+                  {o.comment && <p className="italic opacity-70">💬 {o.comment}</p>}
+                </div>
+
+                {/* Список страв */}
+                <div
+                  className="mt-2.5 rounded-xl p-2.5 text-xs font-medium"
+                  style={{ background: "var(--app-surface-2)" }}
+                >
+                  <p className="opacity-60 mb-0.5 text-[11px]">Страви:</p>
+                  <p className="line-clamp-2">{o.items_summary || "Немає позицій"}</p>
+                </div>
+
+                {/* Кнопки дій */}
+                <div
+                  className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-2.5"
+                  style={{ borderColor: "var(--app-border)" }}
+                >
+                  <div className="flex items-center gap-1.5">
+                    {o.status === "pending_moderation" && (
+                      <>
+                        <button
+                          onClick={() => {
+                            haptic("medium");
+                            updateOrder.mutate({
+                              orderId: o.id,
+                              payload: { status: "confirmed" },
+                            });
+                          }}
+                          className="app-press rounded-xl px-3 py-1.5 text-xs font-semibold"
+                          style={{
+                            background: "var(--tg-theme-button-color)",
+                            color: "var(--tg-theme-button-text-color)",
+                          }}
+                        >
+                          ✅ Підтвердити
+                        </button>
+                        <button
+                          onClick={() => {
+                            haptic("medium");
+                            updateOrder.mutate({
+                              orderId: o.id,
+                              payload: { status: "rejected" },
+                            });
+                          }}
+                          className="app-press rounded-xl px-2.5 py-1.5 text-xs font-semibold"
+                          style={{
+                            background: "color-mix(in srgb, #ef4444 15%, transparent)",
+                            color: "#ef4444",
+                          }}
+                        >
+                          ❌ Відхилити
+                        </button>
+                      </>
+                    )}
+                    {o.status === "confirmed" && (
+                      <button
+                        onClick={() => {
+                          haptic("light");
+                          updateOrder.mutate({
+                            orderId: o.id,
+                            payload: { status: "in_progress" },
+                          });
+                        }}
+                        className="app-press rounded-xl px-2.5 py-1.5 text-xs font-semibold"
+                        style={{
+                          background: "color-mix(in srgb, #3b82f6 15%, transparent)",
+                          color: "#3b82f6",
+                        }}
+                      >
+                        👨‍🍳 Готувати
+                      </button>
+                    )}
+                    {o.status === "in_progress" && (
+                      <button
+                        onClick={() => {
+                          haptic("light");
+                          updateOrder.mutate({
+                            orderId: o.id,
+                            payload: { status: "ready" },
+                          });
+                        }}
+                        className="app-press rounded-xl px-2.5 py-1.5 text-xs font-semibold"
+                        style={{
+                          background: "color-mix(in srgb, #8b5cf6 15%, transparent)",
+                          color: "#8b5cf6",
+                        }}
+                      >
+                        🛵 Готово
+                      </button>
+                    )}
+                    {o.status === "ready" && (
+                      <button
+                        onClick={() => {
+                          haptic("light");
+                          updateOrder.mutate({
+                            orderId: o.id,
+                            payload: { status: "completed" },
+                          });
+                        }}
+                        className="app-press rounded-xl px-2.5 py-1.5 text-xs font-semibold"
+                        style={{
+                          background: "color-mix(in srgb, #10b981 15%, transparent)",
+                          color: "#10b981",
+                        }}
+                      >
+                        🏁 Виконано
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      haptic("light");
+                      setEditingOrderId(o.id);
+                    }}
+                    className="app-press rounded-xl px-3 py-1.5 text-xs font-semibold border"
+                    style={{ borderColor: "var(--app-border)" }}
+                  >
+                    ✏️ Змінити замовлення
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {editingOrderId !== null && (
+        <OrderEditModal
+          orderId={editingOrderId}
+          onClose={() => setEditingOrderId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+interface OrderItemOptionDraft {
+  option_group_name: string;
+  option_name: string;
+  price_delta: number;
+  qty: number;
+}
+
+interface OrderItemDraft {
+  id?: number;
+  variant_id?: number | null;
+  product_name: string;
+  variant_label: string;
+  unit_price: number;
+  qty: number;
+  options: OrderItemOptionDraft[];
+}
+
+function OrderEditModal({
+  orderId,
+  onClose,
+}: {
+  orderId: number;
+  onClose: () => void;
+}) {
+  const { data: order, isPending, error } = useAdminOrderDetail(orderId);
+  const { data: variantChoices = [] } = useAdminVariantChoices();
+  const updateOrder = useUpdateAdminOrder();
+  const notifyOrder = useNotifyAdminOrder();
+
+  const [status, setStatus] = useState<string>("");
+  const [scheduledTime, setScheduledTime] = useState<string>("");
+  const [deliveryAddress, setDeliveryAddress] = useState<string>("");
+  const [contactName, setContactName] = useState<string>("");
+  const [contactPhone, setContactPhone] = useState<string>("");
+  const [comment, setComment] = useState<string>("");
+  const [items, setItems] = useState<OrderItemDraft[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  const [addDishOpen, setAddDishOpen] = useState(false);
+  const [dishSearch, setDishSearch] = useState("");
+
+  const [targetItemIdx, setTargetItemIdx] = useState<number | null>(null);
+  const [optName, setOptName] = useState("");
+  const [optGroup, setOptGroup] = useState("Додатки");
+  const [optPrice, setOptPrice] = useState("0");
+
+  const [notified, setNotified] = useState(false);
+
+  if (order && !isInitialized) {
+    setStatus(order.status);
+    setScheduledTime(order.scheduled_time || "");
+    setDeliveryAddress(order.delivery_address || "");
+    setContactName(order.contact_name);
+    setContactPhone(order.contact_phone);
+    setComment(order.comment || "");
+
+    const initialItems: OrderItemDraft[] = [];
+    for (const g of order.groups) {
+      for (const it of g.items) {
+        initialItems.push({
+          id: it.id,
+          variant_id: it.variant_id,
+          product_name: it.product_name,
+          variant_label: it.variant_label,
+          unit_price: it.unit_price,
+          qty: it.qty,
+          options: it.options.map((o) => ({
+            option_group_name: o.option_group_name,
+            option_name: o.option_name,
+            price_delta: o.price_delta,
+            qty: o.qty,
+          })),
+        });
+      }
+    }
+    setItems(initialItems);
+    setIsInitialized(true);
+  }
+
+  const calculatedTotal = useMemo(() => {
+    return items.reduce((sum, it) => {
+      const optsTotal = it.options.reduce((oSum, o) => oSum + o.price_delta * o.qty, 0);
+      return sum + (it.unit_price + optsTotal) * it.qty;
+    }, 0);
+  }, [items]);
+
+  const handleSave = () => {
+    if (items.length === 0) {
+      alert("Замовлення повинно містити щонайменше одну позицію!");
+      return;
+    }
+    haptic("medium");
+    updateOrder.mutate(
+      {
+        orderId,
+        payload: {
+          status,
+          scheduled_time: scheduledTime || null,
+          delivery_address: deliveryAddress,
+          contact_name: contactName,
+          contact_phone: contactPhone,
+          comment: comment || null,
+          items,
+        },
+      },
+      {
+        onSuccess: () => {
+          hapticNotify("success");
+          onClose();
+        },
+      },
+    );
+  };
+
+  const handleNotify = () => {
+    haptic("medium");
+    notifyOrder.mutate(orderId, {
+      onSuccess: () => {
+        setNotified(true);
+        hapticNotify("success");
+        setTimeout(() => setNotified(false), 3000);
+      },
+    });
+  };
+
+  useEffect(() => {
+    const origOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = origOverflow;
+    };
+  }, []);
+
+  if (isPending) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overscroll-contain">
+        <div
+          className="rounded-2xl p-6 shadow-2xl"
+          style={{ background: "var(--tg-theme-bg-color, #ffffff)", border: "1px solid var(--app-border)" }}
+        >
+          <Spinner />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !order) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overscroll-contain">
+        <div
+          className="rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+          style={{ background: "var(--tg-theme-bg-color, #ffffff)", border: "1px solid var(--app-border)" }}
+        >
+          <ErrorBox message={error?.message || "Замовлення не знайдено"} onRetry={onClose} />
+        </div>
+      </div>
+    );
+  }
+
+  const filteredChoices = variantChoices.filter((vc) => {
+    if (!dishSearch) return true;
+    const q = dishSearch.toLowerCase();
+    return (
+      vc.product_name.toLowerCase().includes(q) ||
+      vc.variant_label.toLowerCase().includes(q) ||
+      (vc.category_name && vc.category_name.toLowerCase().includes(q))
+    );
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4 overscroll-contain">
+      <div
+        className="w-full max-h-[90dvh] overflow-y-auto rounded-t-3xl sm:rounded-2xl p-4 sm:max-w-lg space-y-4 overscroll-contain touch-pan-y shadow-2xl"
+        style={{
+          background: "var(--tg-theme-bg-color, #ffffff)",
+          border: "1px solid var(--app-border)",
+          color: "var(--tg-theme-text-color)",
+        }}
+      >
+        {/* Заголовок */}
+        <div
+          className="flex items-center justify-between border-b pb-3"
+          style={{ borderColor: "var(--app-border)" }}
+        >
+          <div>
+            <h3 className="text-base font-bold">Зміна замовлення #{order.id}</h3>
+            <p className="text-xs opacity-60">
+              {order.fulfillment_type === "delivery" ? "🛵 Доставка" : "🛍️ Самовивіз"} • 📅{" "}
+              {order.created_at}
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-full p-1 opacity-50 hover:opacity-100">
+            ✕
+          </button>
+        </div>
+
+        {/* Примітка про клієнта */}
+        {order.user_admin_note && (
+          <div
+            className="rounded-xl p-2.5 text-xs"
+            style={{
+              background: "color-mix(in srgb, #f59e0b 15%, transparent)",
+              color: "#b45309",
+            }}
+          >
+            ⚠️ <b>Примітка про клієнта:</b> {order.user_admin_note}
+          </div>
         )}
-        {activeTab === "managers" && adminMe.role === "admin" && (
-          <ManagersTab locations={locations} />
+
+        {/* Основні параметри */}
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label className="block mb-1 font-semibold opacity-70">Статус:</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full rounded-xl p-2.5 font-medium outline-none"
+              style={{ background: "var(--app-surface-2)" }}
+            >
+              <option value="pending_moderation">⏳ Очікує</option>
+              <option value="confirmed">✅ Підтверджено</option>
+              <option value="in_progress">👨‍🍳 Готується</option>
+              <option value="ready">🛵 Готово/В дорозі</option>
+              <option value="completed">🏁 Виконано</option>
+              <option value="rejected">❌ Відхилено</option>
+              <option value="cancelled">🚫 Скасовано</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block mb-1 font-semibold opacity-70">
+              ⏰ Бажаний час (10:30-21:30):
+            </label>
+            <input
+              type="time"
+              value={scheduledTime}
+              min="10:30"
+              max="21:30"
+              onChange={(e) => setScheduledTime(e.target.value)}
+              className="w-full rounded-xl p-2.5 font-medium outline-none"
+              style={{ background: "var(--app-surface-2)" }}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2 text-xs">
+          {order.fulfillment_type === "delivery" && (
+            <div>
+              <label className="block mb-1 font-semibold opacity-70">Адреса доставки:</label>
+              <input
+                type="text"
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
+                className="w-full rounded-xl p-2.5 font-medium outline-none"
+                style={{ background: "var(--app-surface-2)" }}
+              />
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block mb-1 font-semibold opacity-70">Ім'я клієнта:</label>
+              <input
+                type="text"
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
+                className="w-full rounded-xl p-2.5 font-medium outline-none"
+                style={{ background: "var(--app-surface-2)" }}
+              />
+            </div>
+            <div>
+              <label className="block mb-1 font-semibold opacity-70">Телефон:</label>
+              <input
+                type="text"
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+                className="w-full rounded-xl p-2.5 font-medium outline-none"
+                style={{ background: "var(--app-surface-2)" }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block mb-1 font-semibold opacity-70">Коментар:</label>
+            <input
+              type="text"
+              value={comment}
+              placeholder="Коментар клієнта або менеджера..."
+              onChange={(e) => setComment(e.target.value)}
+              className="w-full rounded-xl p-2.5 font-medium outline-none"
+              style={{ background: "var(--app-surface-2)" }}
+            />
+          </div>
+        </div>
+
+        {/* Блок страв та позицій */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold uppercase tracking-wider opacity-70">
+              Позиції замовлення ({items.length})
+            </h4>
+            <button
+              onClick={() => {
+                haptic("light");
+                setAddDishOpen(true);
+              }}
+              className="app-press rounded-xl px-2.5 py-1 text-xs font-semibold"
+              style={{ background: "var(--app-tint)", color: "var(--tg-theme-button-color)" }}
+            >
+              + Додати страву
+            </button>
+          </div>
+
+          <div className="space-y-2.5">
+            {items.map((it, idx) => {
+              const optsSum = it.options.reduce((s, o) => s + o.price_delta * o.qty, 0);
+              const itemTotal = (it.unit_price + optsSum) * it.qty;
+
+              return (
+                <div
+                  key={idx}
+                  className="rounded-2xl p-3 border space-y-2 text-xs"
+                  style={{ borderColor: "var(--app-border)", background: "var(--app-surface-2)" }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold">{it.product_name}</p>
+                      <p className="opacity-60 text-[11px]">
+                        {it.variant_label} • {formatPrice(it.unit_price)}/шт
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 rounded-lg bg-black/10 px-2 py-0.5">
+                        <button
+                          onClick={() => {
+                            haptic("light");
+                            if (it.qty > 1) {
+                              const next = [...items];
+                              next[idx].qty -= 1;
+                              setItems(next);
+                            }
+                          }}
+                          className="font-bold px-1"
+                        >
+                          -
+                        </button>
+                        <span className="font-bold px-1">{it.qty}</span>
+                        <button
+                          onClick={() => {
+                            haptic("light");
+                            const next = [...items];
+                            next[idx].qty += 1;
+                            setItems(next);
+                          }}
+                          className="font-bold px-1"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      <span className="font-bold min-w-[60px] text-right">
+                        {formatPrice(itemTotal)}
+                      </span>
+
+                      <button
+                        onClick={() => {
+                          haptic("light");
+                          setItems(items.filter((_, i) => i !== idx));
+                        }}
+                        className="text-red-500 opacity-60 hover:opacity-100 p-1"
+                        title="Видалити"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Додатки до цієї страви */}
+                  {it.options.length > 0 && (
+                    <div
+                      className="space-y-1 pl-2 border-l-2"
+                      style={{ borderColor: "var(--tg-theme-button-color)" }}
+                    >
+                      {it.options.map((opt, oIdx) => (
+                        <div
+                          key={oIdx}
+                          className="flex items-center justify-between text-[11px] opacity-75"
+                        >
+                          <span>
+                            ↳ {opt.option_name} {opt.qty > 1 ? `×${opt.qty}` : ""} (+
+                            {formatPrice(opt.price_delta * opt.qty)})
+                          </span>
+                          <button
+                            onClick={() => {
+                              const next = [...items];
+                              next[idx].options = next[idx].options.filter((_, i) => i !== oIdx);
+                              setItems(next);
+                            }}
+                            className="text-red-500 opacity-50 hover:opacity-100 px-1"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      haptic("light");
+                      setTargetItemIdx(idx);
+                      setOptName("");
+                      setOptPrice("0");
+                    }}
+                    className="text-[11px] font-semibold opacity-60 hover:opacity-100 text-blue-500"
+                  >
+                    + Додати опцію / соус до страви
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Підсумок */}
+        <div
+          className="flex items-center justify-between border-t pt-3"
+          style={{ borderColor: "var(--app-border)" }}
+        >
+          <span className="text-sm font-bold">Разом до сплати:</span>
+          <span className="text-lg font-bold" style={{ color: "var(--tg-theme-button-color)" }}>
+            {formatPrice(calculatedTotal)}
+          </span>
+        </div>
+
+        {/* Кнопки збереження та сповіщення */}
+        <div className="space-y-2 pt-2">
+          <button
+            onClick={handleSave}
+            disabled={updateOrder.isPending}
+            className="app-press w-full rounded-xl py-3 text-sm font-bold shadow-sm"
+            style={{
+              background: "var(--tg-theme-button-color)",
+              color: "var(--tg-theme-button-text-color)",
+            }}
+          >
+            {updateOrder.isPending ? "Збереження..." : "💾 Зберегти зміни"}
+          </button>
+
+          <button
+            onClick={handleNotify}
+            disabled={notifyOrder.isPending || notified}
+            className="app-press w-full rounded-xl py-2.5 text-xs font-semibold border"
+            style={{ borderColor: "var(--app-border)" }}
+          >
+            {notified
+              ? "✅ Сповіщення надіслано в Telegram!"
+              : notifyOrder.isPending
+              ? "Надсилання..."
+              : "💬 Надіслати оновлений чек клієнту в Telegram"}
+          </button>
+        </div>
+
+        {/* Модалка вибору страви для додавання */}
+        {addDishOpen && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-4 overscroll-contain">
+            <div
+              className="w-full max-h-[85dvh] overflow-y-auto rounded-2xl p-4 max-w-sm space-y-3 overscroll-contain touch-pan-y shadow-2xl"
+              style={{ background: "var(--tg-theme-bg-color, #ffffff)", border: "1px solid var(--app-border)" }}
+            >
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-bold">Додати страву до замовлення</h4>
+                <button
+                  onClick={() => setAddDishOpen(false)}
+                  className="opacity-50 hover:opacity-100"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <input
+                type="text"
+                placeholder="🔍 Пошук страви..."
+                value={dishSearch}
+                onChange={(e) => setDishSearch(e.target.value)}
+                className="w-full rounded-xl p-2.5 text-xs outline-none"
+                style={{ background: "var(--app-surface-2)" }}
+              />
+
+              <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
+                {filteredChoices.slice(0, 40).map((vc) => (
+                  <button
+                    key={vc.variant_id}
+                    onClick={() => {
+                      haptic("light");
+                      setItems([
+                        ...items,
+                        {
+                          variant_id: vc.variant_id,
+                          product_name: vc.product_name,
+                          variant_label: vc.variant_label,
+                          unit_price: vc.price,
+                          qty: 1,
+                          options: [],
+                        },
+                      ]);
+                      setAddDishOpen(false);
+                      setDishSearch("");
+                    }}
+                    className="app-press flex w-full items-center justify-between rounded-xl p-2 text-left text-xs hover:bg-black/5"
+                    style={{ background: "var(--app-surface-2)" }}
+                  >
+                    <div>
+                      <p className="font-bold">{vc.product_name}</p>
+                      <p className="opacity-60 text-[10px]">
+                        {vc.category_name ? `${vc.category_name} • ` : ""}
+                        {vc.variant_label}
+                      </p>
+                    </div>
+                    <span className="font-bold">{formatPrice(vc.price)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
+
+        {/* Модалка додавання опції */}
+        {targetItemIdx !== null && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-4 overscroll-contain">
+            <div
+              className="w-full rounded-2xl p-4 max-w-xs space-y-3 overscroll-contain shadow-2xl"
+              style={{ background: "var(--tg-theme-bg-color, #ffffff)", border: "1px solid var(--app-border)" }}
+            >
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-bold">Додати опцію / додаток</h4>
+                <button
+                  onClick={() => setTargetItemIdx(null)}
+                  className="opacity-50 hover:opacity-100"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div>
+                  <label className="block mb-1 font-semibold opacity-70">Назва групи:</label>
+                  <input
+                    type="text"
+                    value={optGroup}
+                    onChange={(e) => setOptGroup(e.target.value)}
+                    className="w-full rounded-xl p-2 outline-none"
+                    style={{ background: "var(--app-surface-2)" }}
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 font-semibold opacity-70">
+                    Назва додатку / соусу:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Наприклад: Сирний бортик, Соус"
+                    value={optName}
+                    onChange={(e) => setOptName(e.target.value)}
+                    className="w-full rounded-xl p-2 outline-none"
+                    style={{ background: "var(--app-surface-2)" }}
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 font-semibold opacity-70">Доплата (₴):</label>
+                  <input
+                    type="number"
+                    value={optPrice}
+                    onChange={(e) => setOptPrice(e.target.value)}
+                    className="w-full rounded-xl p-2 outline-none"
+                    style={{ background: "var(--app-surface-2)" }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => setTargetItemIdx(null)}
+                  className="app-press flex-1 rounded-xl py-2 text-xs font-semibold"
+                  style={{ background: "var(--app-surface-2)" }}
+                >
+                  Скасувати
+                </button>
+                <button
+                  onClick={() => {
+                    if (!optName.trim()) return;
+                    haptic("light");
+                    const next = [...items];
+                    next[targetItemIdx].options.push({
+                      option_group_name: optGroup.trim() || "Додатки",
+                      option_name: optName.trim(),
+                      price_delta: parseFloat(optPrice) || 0,
+                      qty: 1,
+                    });
+                    setItems(next);
+                    setTargetItemIdx(null);
+                  }}
+                  className="app-press flex-1 rounded-xl py-2 text-xs font-semibold"
+                  style={{
+                    background: "var(--tg-theme-button-color)",
+                    color: "var(--tg-theme-button-text-color)",
+                  }}
+                >
+                  Додати
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 0.1. ВКЛАДКА КЛІЄНТІВ (UsersTab + UserCard)
+// ============================================================================
+
+function UsersTab() {
+  const [searchInput, setSearchInput] = useState("");
+  const [query, setQuery] = useState("");
+  const { data: users = [], isPending, error } = useAdminUsers(query);
+
+  const updateUser = useUpdateAdminUser();
+  const deleteUser = useDeleteAdminUser();
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setQuery(searchInput.trim());
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-base font-bold">База клієнтів ({users.length})</h2>
+        <p className="text-xs opacity-60">
+          Пошук за номером телефону, блокування та примітки до профілю
+        </p>
+      </div>
+
+      {/* Пошук за номером телефону */}
+      <form onSubmit={handleSearch} className="flex gap-2">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            placeholder="Номер телефону (+380...) або ім'я"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="w-full rounded-xl p-3 pr-8 text-xs font-medium outline-none transition focus:ring-2 focus:ring-blue-500"
+            style={{ background: "var(--app-surface-2)" }}
+          />
+          {searchInput && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchInput("");
+                setQuery("");
+              }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm opacity-40 hover:opacity-100"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <button
+          type="submit"
+          className="app-press rounded-xl px-4 py-2.5 text-xs font-semibold"
+          style={{
+            background: "var(--tg-theme-button-color)",
+            color: "var(--tg-theme-button-text-color)",
+          }}
+        >
+          🔍 Пошук
+        </button>
+      </form>
+
+      {isPending ? (
+        <Spinner />
+      ) : error ? (
+        <ErrorBox message={error.message} />
+      ) : users.length === 0 ? (
+        <EmptyState
+          icon="👤"
+          title="Користувачів не знайдено"
+          hint="Спробуйте змінити критерії пошуку"
+        />
+      ) : (
+        <div className="space-y-3">
+          {users.map((u) => (
+            <UserCard
+              key={u.id}
+              user={u}
+              onToggleBlock={() => {
+                const action = u.is_blocked ? "розблокувати" : "заблокувати";
+                if (
+                  window.confirm(
+                    `Ви впевнені, що хочете ${action} користувача ${u.full_name}?`,
+                  )
+                ) {
+                  updateUser.mutate({ userId: u.id, payload: { is_blocked: !u.is_blocked } });
+                }
+              }}
+              onSaveNote={(note) => {
+                updateUser.mutate({ userId: u.id, payload: { admin_note: note } });
+              }}
+              onDelete={() => {
+                if (
+                  window.confirm(
+                    `Видалити користувача ${u.full_name} (${u.phone})? Будуть видалені всі його дані та замовлення.`,
+                  )
+                ) {
+                  deleteUser.mutate(u.id);
+                }
+              }}
+              isUpdating={updateUser.isPending}
+              isDeleting={deleteUser.isPending}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserCard({
+  user,
+  onToggleBlock,
+  onSaveNote,
+  onDelete,
+  isUpdating,
+  isDeleting,
+}: {
+  user: AdminUser;
+  onToggleBlock: () => void;
+  onSaveNote: (note: string) => void;
+  onDelete: () => void;
+  isUpdating: boolean;
+  isDeleting: boolean;
+}) {
+  const [note, setNote] = useState(user.admin_note || "");
+  const [isNoteDirty, setIsNoteDirty] = useState(false);
+
+  return (
+    <div
+      className="app-card rounded-2xl p-4 transition-all"
+      style={{
+        border: user.is_blocked ? "1px solid #ef4444" : "1px solid var(--app-border)",
+        background: user.is_blocked
+          ? "color-mix(in srgb, #ef4444 6%, var(--app-surface))"
+          : "var(--app-surface)",
+      }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-base">{user.is_blocked ? "⛔" : "👤"}</span>
+            <span className="text-sm font-bold">{user.full_name}</span>
+            <span
+              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              style={{
+                background: user.is_blocked
+                  ? "color-mix(in srgb, #ef4444 20%, transparent)"
+                  : "color-mix(in srgb, #10b981 20%, transparent)",
+                color: user.is_blocked ? "#ef4444" : "#10b981",
+              }}
+            >
+              {user.is_blocked ? "Заблоковано" : "Активний"}
+            </span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs opacity-70">
+            <a href={`tel:${user.phone}`} className="font-semibold text-blue-500 hover:underline">
+              📞 {user.phone}
+            </a>
+            <span>🆔 {user.telegram_id}</span>
+            <span>🛍️ Замовлень: {user.orders_count}</span>
+            <span>📅 {user.created_at}</span>
+          </div>
+          {user.delivery_address && (
+            <p className="mt-1 text-xs opacity-60">📍 Адреса: {user.delivery_address}</p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => {
+              haptic("light");
+              onToggleBlock();
+            }}
+            disabled={isUpdating}
+            className="app-press rounded-xl px-2.5 py-1.5 text-xs font-semibold"
+            style={{
+              background: user.is_blocked
+                ? "var(--tg-theme-button-color)"
+                : "color-mix(in srgb, #ef4444 15%, transparent)",
+              color: user.is_blocked ? "var(--tg-theme-button-text-color)" : "#ef4444",
+            }}
+          >
+            {user.is_blocked ? "Розблокувати" : "Заблокувати"}
+          </button>
+          <button
+            onClick={() => {
+              haptic("light");
+              onDelete();
+            }}
+            disabled={isDeleting}
+            title="Видалити"
+            className="app-press rounded-xl p-1.5 text-xs opacity-50 hover:opacity-100 hover:text-red-500"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+
+      {/* Поле примітки до профілю */}
+      <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--app-border)" }}>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-[11px] font-semibold opacity-70">
+            📝 Примітка до профілю (надходить менеджеру для підтвердження):
+          </label>
+          {isNoteDirty && (
+            <button
+              onClick={() => {
+                haptic("medium");
+                onSaveNote(note);
+                setIsNoteDirty(false);
+              }}
+              disabled={isUpdating}
+              className="app-press rounded-lg px-2 py-0.5 text-[11px] font-bold"
+              style={{
+                background: "var(--tg-theme-button-color)",
+                color: "var(--tg-theme-button-text-color)",
+              }}
+            >
+              Зберегти
+            </button>
+          )}
+        </div>
+        <textarea
+          value={note}
+          rows={2}
+          placeholder="Наприклад: Постійний клієнт, просить не дзвонити у двері"
+          onChange={(e) => {
+            setNote(e.target.value);
+            setIsNoteDirty(true);
+          }}
+          className="w-full rounded-xl p-2.5 text-xs outline-none transition focus:ring-2 focus:ring-blue-500"
+          style={{ background: "var(--app-surface-2)" }}
+        />
       </div>
     </div>
   );
@@ -2330,6 +3653,199 @@ function ManagerModal({
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 5. ВКЛАДКА НАЛАШТУВАННЯ ДОСТАВКИ ТА НАВАНТАЖЕННЯ
+// ============================================================================
+
+interface DeliverySettingsTabProps {
+  locationId?: number | null;
+  isSuperAdmin: boolean;
+}
+
+function DeliverySettingsTab({ locationId }: DeliverySettingsTabProps) {
+  const { data: deliverySettings = [], isPending, error, refetch } = useAdminLocationsDelivery();
+  const updateDelivery = useUpdateLocationDelivery();
+
+  const filtered = useMemo(() => {
+    if (!locationId) return deliverySettings;
+    return deliverySettings.filter((loc: LocationDeliverySettings) => loc.id === locationId);
+  }, [deliverySettings, locationId]);
+
+  if (isPending) return <Spinner />;
+  if (error) return <ErrorBox message={error.message} onRetry={() => void refetch()} />;
+
+  if (filtered.length === 0) {
+    return <EmptyState icon="🛵" title="Закладів не знайдено" hint="Не вдалося знайти налаштування для обраного закладу" />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div
+        className="rounded-2xl p-4 text-xs leading-relaxed border"
+        style={{
+          background: "var(--app-tint)",
+          color: "var(--tg-theme-link-color)",
+          borderColor: "color-mix(in srgb, var(--tg-theme-link-color) 30%, transparent)",
+        }}
+      >
+        <p className="font-semibold text-[13px] flex items-center gap-1.5">
+          <span>🛵</span>
+          <span>Керування доставкою та навантаженням</span>
+        </p>
+        <p className="mt-1 opacity-90">
+          У разі перевантаження кухні або браку кур'єрів ви можете <b>вимкнути доставку</b> для закладу в один клік. Клієнти зможуть оформлювати замовлення виключно на самовивіз. Також тут налаштовуються години роботи доставки.
+        </p>
+      </div>
+
+      {filtered.map((loc: LocationDeliverySettings) => (
+        <LocationDeliveryCard
+          key={loc.id}
+          location={loc}
+          onUpdate={(payload) => {
+            updateDelivery.mutate(
+              { locationId: loc.id, payload },
+              {
+                onSuccess: () => hapticNotify("success"),
+                onError: () => hapticNotify("error"),
+              },
+            );
+          }}
+          isUpdating={updateDelivery.isPending}
+        />
+      ))}
+    </div>
+  );
+}
+
+function LocationDeliveryCard({
+  location,
+  onUpdate,
+  isUpdating,
+}: {
+  location: LocationDeliverySettings;
+  onUpdate: (payload: { is_delivery_enabled?: boolean; delivery_start_time?: string; delivery_end_time?: string }) => void;
+  isUpdating: boolean;
+}) {
+  const [startTime, setStartTime] = useState(location.delivery_start_time || "10:00");
+  const [endTime, setEndTime] = useState(location.delivery_end_time || "22:00");
+  const [hasHoursChanged, setHasHoursChanged] = useState(false);
+
+  const handleToggleDelivery = () => {
+    haptic("medium");
+    onUpdate({ is_delivery_enabled: !location.is_delivery_enabled });
+  };
+
+  const handleSaveHours = (e: React.FormEvent) => {
+    e.preventDefault();
+    haptic("light");
+    onUpdate({ delivery_start_time: startTime, delivery_end_time: endTime });
+    setHasHoursChanged(false);
+  };
+
+  return (
+    <div className="app-card rounded-2xl p-4 space-y-4">
+      <div className="flex items-start justify-between gap-2 border-b pb-3" style={{ borderColor: "var(--app-border)" }}>
+        <div>
+          <h3 className="font-bold text-base flex items-center gap-1.5">
+            <span>📍</span>
+            <span>{location.name}</span>
+          </h3>
+          <p className="mt-0.5 text-xs opacity-60">{location.address}</p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            location.is_delivery_enabled ? "text-emerald-500 bg-emerald-500/10" : "text-rose-500 bg-rose-500/10"
+          }`}
+        >
+          {location.is_delivery_enabled ? "🟢 Доставка активна" : "🔴 Доставка вимкнена"}
+        </span>
+      </div>
+
+      {/* Аварійний перемикач навантаження */}
+      <div className="space-y-2">
+        <label className="block text-xs font-semibold uppercase tracking-wider opacity-60">
+          Аварійне вимкнення при навантаженні
+        </label>
+        <button
+          type="button"
+          onClick={handleToggleDelivery}
+          disabled={isUpdating}
+          className="app-press w-full rounded-xl py-3 px-4 text-xs font-bold transition flex items-center justify-between shadow-sm"
+          style={{
+            background: location.is_delivery_enabled
+              ? "color-mix(in srgb, #ef4444 12%, transparent)"
+              : "color-mix(in srgb, #22c55e 12%, transparent)",
+            color: location.is_delivery_enabled ? "#ef4444" : "#22c55e",
+            border: `1px solid ${location.is_delivery_enabled ? "color-mix(in srgb, #ef4444 30%, transparent)" : "color-mix(in srgb, #22c55e 30%, transparent)"}`,
+          }}
+        >
+          <span>
+            {location.is_delivery_enabled
+              ? "⛔ Вимкнути доставку (високе навантаження)"
+              : "✅ Увімкнути прийом доставки"}
+          </span>
+          <span className="text-xs">
+            {location.is_delivery_enabled ? "Перевести на самовивіз →" : "Відновити →"}
+          </span>
+        </button>
+        <p className="text-[11px] opacity-60 leading-relaxed">
+          {location.is_delivery_enabled
+            ? "Клієнти можуть обирати і доставку, і самовивіз."
+            : "Доставка вимкнена: у клієнтів блокується кнопка доставки, замовлення приймаються виключно на самовивіз."}
+        </p>
+      </div>
+
+      {/* Години роботи доставки */}
+      <form onSubmit={handleSaveHours} className="space-y-3 pt-2 border-t" style={{ borderColor: "var(--app-border)" }}>
+        <label className="block text-xs font-semibold uppercase tracking-wider opacity-60">
+          Години прийому доставки
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <span className="block text-[11px] opacity-70 mb-1">Початок роботи</span>
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => {
+                setStartTime(e.target.value);
+                setHasHoursChanged(true);
+              }}
+              required
+              className="w-full rounded-xl p-2.5 text-sm font-semibold outline-none transition focus:ring-2 focus:ring-blue-500"
+              style={{ background: "var(--app-surface-2)" }}
+            />
+          </div>
+          <div>
+            <span className="block text-[11px] opacity-70 mb-1">Кінець роботи</span>
+            <input
+              type="time"
+              value={endTime}
+              onChange={(e) => {
+                setEndTime(e.target.value);
+                setHasHoursChanged(true);
+              }}
+              required
+              className="w-full rounded-xl p-2.5 text-sm font-semibold outline-none transition focus:ring-2 focus:ring-blue-500"
+              style={{ background: "var(--app-surface-2)" }}
+            />
+          </div>
+        </div>
+
+        {hasHoursChanged && (
+          <button
+            type="submit"
+            disabled={isUpdating}
+            className="app-press w-full rounded-xl py-2.5 text-xs font-bold shadow transition"
+            style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
+          >
+            {isUpdating ? "Збереження..." : "Зберегти нові години"}
+          </button>
+        )}
+      </form>
     </div>
   );
 }

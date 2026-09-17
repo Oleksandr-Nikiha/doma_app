@@ -5,9 +5,9 @@ import { useCategories, useProducts } from "@/api/queries";
 import {
   EmptyState,
   ErrorBox,
+  ProductListSkeleton,
   ScreenTitle,
   SectionHeading,
-  Spinner,
   Thumb,
   formatPrice,
 } from "@/components/ui";
@@ -20,11 +20,6 @@ const sectionDomId = (categoryId: number) => `cat-${categoryId}`;
 
 /**
  * Розкладає товари по підкатегоріях.
- *
- * Бекенд сортує лише за p.sort_order, а той нумерується всередині кожної
- * підкатегорії — тож у відповіді товари різних секцій перемішані, і порядок
- * появи секцій довільний. Тому беремо порядок із дерева категорій: воно
- * приходить у правильній послідовності (корінь, далі його діти за sort_order).
  */
 function groupBySubcategory(products: ProductListItem[], categories: Category[] | undefined) {
   const order = new Map<number, number>();
@@ -51,63 +46,113 @@ export function ProductsPage() {
   const id = Number(categoryId);
   const { data, isPending, error, refetch } = useProducts(id);
 
-  // Назву беремо з кешу категорій — інакше при прямому переході за URL
-  // (перезавантаження, посилання) заголовок був би порожній
   const { data: categories } = useCategories();
   const title = categories?.find((c) => c.id === id)?.name ?? "Товари";
 
-  // ?section=<id> — перехід із головної одразу до потрібної підкатегорії.
-  // useLayoutEffect, а не useEffect: браузер не встигає намалювати кадр
-  // на початку списку, тож стрибка вниз не видно.
-  // Розміри карток фіксовані (мініатюра має задану висоту), тож підвантаження
-  // фото після скролу нічого не зсуває.
   const targetSection = searchParams.get("section");
   useLayoutEffect(() => {
     if (!targetSection || !data) return;
     document.getElementById(sectionDomId(Number(targetSection)))?.scrollIntoView({ block: "start" });
   }, [targetSection, data]);
 
-  if (isPending) return <Spinner />;
+  if (isPending) return <ProductListSkeleton />;
   if (error) return <ErrorBox message={error.message} onRetry={() => void refetch()} />;
   if (data.length === 0) {
     return <EmptyState icon="🕐" title="Тут поки порожньо" hint="Скоро додамо позиції в цю категорію" />;
   }
 
   const groups = groupBySubcategory(data, categories);
-  // Якщо відкрито саму підкатегорію — секція одна, і її заголовок дублював би
-  // назву екрана. Показуємо просто список.
   const withHeadings = groups.length > 1;
 
+  const scrollToSubcategory = (subId: number) => {
+    haptic("light");
+    const el = document.getElementById(sectionDomId(subId));
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   return (
-    <div className="pb-4">
+    <div className="pb-6">
       <ScreenTitle>{title}</ScreenTitle>
-      {groups.map((group) => (
-        <section key={group.id} id={sectionDomId(group.id)} className="mb-5 last:mb-0">
-          {withHeadings && <SectionHeading>{group.name}</SectionHeading>}
-          {/* Поява — на контейнері: у картки свій перехід на натиск */}
-          <div className="app-rise space-y-3 px-4">
-            {group.items.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => {
-                  haptic("light");
-                  void navigate(`/products/${p.id}`);
-                }}
-                className="app-card app-press flex w-full items-center gap-3 rounded-2xl p-3 text-left"
-              >
-                <Thumb src={p.image_url} className="h-16 w-16 shrink-0 text-2xl" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{p.name}</p>
-                  <p className="mt-1 text-sm opacity-60">від {formatPrice(p.price_from)}</p>
-                </div>
-                <span className="shrink-0 pr-1 text-lg opacity-25" aria-hidden>
-                  ›
+
+      {/* Липка горизонтальна стрічка швидкої навігації по підкатегоріях */}
+      {withHeadings && (
+        <div
+          className="sticky top-0 z-20 app-glass border-b px-4 py-2 flex gap-1.5 overflow-x-auto no-scrollbar"
+          style={{ borderColor: "var(--app-border)" }}
+        >
+          {groups.map((group) => (
+            <button
+              key={group.id}
+              onClick={() => scrollToSubcategory(group.id)}
+              className="app-press shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all"
+              style={{
+                background: "var(--app-surface-2)",
+                color: "var(--tg-theme-text-color)",
+              }}
+            >
+              {group.name}{" "}
+              <span className="opacity-50 text-[11px] font-normal">({group.items.length})</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-3">
+        {groups.map((group) => (
+          <section key={group.id} id={sectionDomId(group.id)} className="mb-6 last:mb-0">
+            {withHeadings && (
+              <SectionHeading sticky={!withHeadings}>
+                <span>{group.name}</span>
+                <span className="text-xs font-normal opacity-50 ml-1">
+                  · {group.items.length} {group.items.length === 1 ? "страва" : "страв"}
                 </span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ))}
+              </SectionHeading>
+            )}
+
+            <div className="app-rise space-y-2.5 px-4">
+              {group.items.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => {
+                    haptic("light");
+                    void navigate(`/products/${p.id}`);
+                  }}
+                  className="app-card app-press flex w-full items-center gap-3.5 rounded-2xl p-3 text-left transition-all"
+                >
+                  <Thumb
+                    src={p.image_url}
+                    rounded="rounded-xl"
+                    className="h-16 w-16 shrink-0 text-2xl shadow-sm"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-[15px] leading-snug">{p.name}</p>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <span
+                        className="rounded-lg px-2 py-0.5 text-xs font-bold"
+                        style={{
+                          background: "var(--app-tint)",
+                          color: "var(--tg-theme-button-color)",
+                        }}
+                      >
+                        від {formatPrice(p.price_from)}
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-sm font-bold opacity-80"
+                    style={{ background: "var(--app-surface-2)" }}
+                    aria-label="Обрати страву"
+                  >
+                    +
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }

@@ -2056,12 +2056,42 @@ FROM new_product, (VALUES
         ('порція', NULL, 0, 1)
     ) AS v(label, weight, price, sort_order);
 
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Васабі', NULL,
+           NULL, 8
+    FROM categories c JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Соуси'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('порція', NULL, 20, 1)
+    ) AS v(label, weight, price, sort_order);
+
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Імбир', NULL,
+           NULL, 9
+    FROM categories c JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Соуси'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('порція', NULL, 20, 1)
+    ) AS v(label, weight, price, sort_order);
+
 -- ========== Групи опцій ==========
 
 INSERT INTO option_groups (name, sort_order) VALUES
     ('Соус до хенд-ролу', 1),
     ('Соус до картоплі', 2),
-    ('Напій 0.5 л', 3);
+    ('Напій 0.5 л', 3),
+    ('Васабі', 4),
+    ('Імбир', 5);
 
 -- Позиції груп. price_delta = 0: сайт віддає ці соуси й напої в комплекті безкоштовно.
 INSERT INTO option_group_items (group_id, variant_id, price_delta, sort_order)
@@ -2103,7 +2133,15 @@ WHERE g.name = 'Напій 0.5 л' AND p.name = 'Fanta' AND v.label = '0.5 л'
 UNION ALL
 SELECT g.id, v.id, 0, 3
 FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id
-WHERE g.name = 'Напій 0.5 л' AND p.name = 'Sprite' AND v.label = '0.5 л';
+WHERE g.name = 'Напій 0.5 л' AND p.name = 'Sprite' AND v.label = '0.5 л'
+UNION ALL
+SELECT g.id, v.id, 20, 1
+FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id
+WHERE g.name = 'Васабі' AND p.name = 'Васабі' AND v.label = 'порція'
+UNION ALL
+SELECT g.id, v.id, 20, 1
+FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id
+WHERE g.name = 'Імбир' AND p.name = 'Імбир' AND v.label = 'порція';
 
 -- ========== Групи опцій → товари ==========
 -- min_select/max_select живуть саме тут: група «Соус до хенд-ролу» та сама,
@@ -2153,6 +2191,22 @@ SELECT p.id, g.id, 1, 5, 1, 1 FROM products p, option_groups g
 WHERE p.name = 'Хані міт роллінг бокс' AND g.name = 'Соус до картоплі'
 UNION ALL
 SELECT p.id, g.id, 1, 1, 0, 2 FROM products p, option_groups g
-WHERE p.name = 'Хані міт роллінг бокс' AND g.name = 'Напій 0.5 л';
+WHERE p.name = 'Хані міт роллінг бокс' AND g.name = 'Напій 0.5 л'
+UNION ALL
+-- Васабі та Імбир до звичайних ролів: 1 безкоштовно, до 5 максимум
+SELECT p.id, g.id, 0, 5, 1, CASE WHEN g.name = 'Васабі' THEN 1 ELSE 2 END
+FROM products p
+JOIN categories c ON c.id = p.category_id
+JOIN categories parent ON parent.id = c.parent_id
+CROSS JOIN option_groups g
+WHERE parent.name = 'Суші та роли' AND c.name <> 'Сети з ролів' AND g.name IN ('Васабі', 'Імбир')
+UNION ALL
+-- Васабі та Імбир до сетів з ролів: 2 безкоштовно, до 5 максимум
+SELECT p.id, g.id, 0, 5, 2, CASE WHEN g.name = 'Васабі' THEN 1 ELSE 2 END
+FROM products p
+JOIN categories c ON c.id = p.category_id
+JOIN categories parent ON parent.id = c.parent_id
+CROSS JOIN option_groups g
+WHERE parent.name = 'Суші та роли' AND c.name = 'Сети з ролів' AND g.name IN ('Васабі', 'Імбир');
 
 COMMIT;

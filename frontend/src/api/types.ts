@@ -128,6 +128,9 @@ export interface Location {
   name: string;
   address: string;
   phones: string[];
+  is_delivery_enabled: boolean;
+  delivery_start_time: string;
+  delivery_end_time: string;
 }
 
 export interface OrderCreatePayload {
@@ -136,7 +139,8 @@ export interface OrderCreatePayload {
   delivery_address?: string | null;
   contact_name: string;
   contact_phone: string;
-  payment_method: "cash" | "card";
+  payment_method: "cash" | "card" | "qr";
+  scheduled_time?: string | null;
   comment?: string | null;
 }
 
@@ -176,7 +180,8 @@ export interface Order {
   delivery_address: string | null;
   contact_name: string;
   contact_phone: string;
-  payment_method: "cash" | "card";
+  payment_method: "cash" | "card" | "qr" | string;
+  scheduled_time?: string | null;
   comment: string | null;
   total_price: number;
   created_at: string;
@@ -386,3 +391,130 @@ export interface VariantSelectorChoice {
   price: number;
   category_name?: string | null;
 }
+
+export interface LocationDeliverySettings {
+  id: number;
+  name: string;
+  address: string;
+  is_delivery_enabled: boolean;
+  delivery_start_time: string;
+  delivery_end_time: string;
+}
+
+export interface LocationDeliveryUpdatePayload {
+  is_delivery_enabled?: boolean;
+  delivery_start_time?: string;
+  delivery_end_time?: string;
+}
+
+// --- Керування користувачами (Адмінка) ---
+
+export interface AdminUser {
+  id: number;
+  telegram_id: number;
+  full_name: string;
+  phone: string;
+  delivery_address: string | null;
+  is_blocked: boolean;
+  admin_note: string | null;
+  orders_count: number;
+  created_at: string;
+}
+
+export interface AdminUserUpdatePayload {
+  is_blocked?: boolean;
+  admin_note?: string | null;
+}
+
+// --- Керування та редагування замовлень (Адмінка) ---
+
+export interface AdminOrderItemOption {
+  id: number;
+  option_group_name: string;
+  option_name: string;
+  price_delta: number;
+  qty: number;
+}
+
+export interface AdminOrderItem {
+  id: number;
+  order_group_id: number;
+  variant_id: number | null;
+  product_name: string;
+  variant_label: string;
+  unit_price: number;
+  qty: number;
+  subtotal: number;
+  options: AdminOrderItemOption[];
+}
+
+export interface AdminOrderGroup {
+  id: number;
+  order_id: number;
+  location_id: number;
+  location_name?: string | null;
+  status: string;
+  subtotal: number;
+  items: AdminOrderItem[];
+}
+
+export interface AdminOrderListItem {
+  id: number;
+  telegram_id: number;
+  status: string;
+  fulfillment_type: string;
+  delivery_address: string | null;
+  contact_name: string;
+  contact_phone: string;
+  payment_method: string;
+  scheduled_time: string | null;
+  comment: string | null;
+  total_price: number;
+  created_at: string;
+  items_summary: string;
+  location_id: number | null;
+  location_name: string | null;
+  user_is_blocked: boolean;
+  user_admin_note: string | null;
+}
+
+export interface AdminOrderDetail {
+  id: number;
+  telegram_id: number;
+  status: string;
+  fulfillment_type: string;
+  delivery_address: string | null;
+  contact_name: string;
+  contact_phone: string;
+  payment_method: string;
+  scheduled_time: string | null;
+  comment: string | null;
+  total_price: number;
+  created_at: string;
+  user_is_blocked: boolean;
+  user_admin_note: string | null;
+  groups: AdminOrderGroup[];
+}
+
+export interface AdminOrderUpdatePayload {
+  scheduled_time?: string | null;
+  status?: string;
+  delivery_address?: string | null;
+  contact_name?: string;
+  contact_phone?: string;
+  comment?: string | null;
+  items?: {
+    variant_id?: number | null;
+    product_name: string;
+    variant_label: string;
+    unit_price: number;
+    qty: number;
+    options: {
+      option_group_name: string;
+      option_name: string;
+      price_delta: number;
+      qty: number;
+    }[];
+  }[];
+}
+

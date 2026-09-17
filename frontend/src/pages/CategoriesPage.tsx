@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 
 import { useCategories } from "@/api/queries";
-import { ErrorBox, ScreenTitle, SectionHeading, Spinner } from "@/components/ui";
+import { CategorySkeleton, ErrorBox, ScreenTitle, SectionHeading } from "@/components/ui";
 import { haptic } from "@/telegram/sdk";
 import type { Category } from "@/api/types";
 
@@ -12,9 +12,7 @@ interface Root {
 
 /**
  * Складає дерево й розкладає корені по закладах.
- *
- * Категорії приходять пласким списком у правильному порядку (корінь, далі його
- * діти) — тут лише перегруповуємо, не сортуємо.
+ * Категорії приходять пласким списком у правильному порядку (корінь, далі його діти).
  */
 function groupByLocation(categories: Category[]) {
   const childrenOf = new Map<number, Category[]>();
@@ -39,59 +37,84 @@ export function CategoriesPage() {
   const navigate = useNavigate();
   const { data, isPending, error, refetch } = useCategories();
 
-  if (isPending) return <Spinner />;
+  if (isPending) return <CategorySkeleton />;
   if (error) return <ErrorBox message={error.message} onRetry={() => void refetch()} />;
 
   return (
-    <div className="pb-4">
+    <div className="pb-6">
       <ScreenTitle>Меню</ScreenTitle>
-      {groupByLocation(data).map((group) => (
-        <section key={group.name} className="mb-5">
-          <SectionHeading>{group.name}</SectionHeading>
-          {/* Поява — на контейнері, а не на кожній картці: у картки свій
-              перехід на натиск, і два transition на одному елементі б'ються. */}
-          <div className="app-rise space-y-3 px-4">
-            {group.roots.map(({ category, children }) => (
-              <div key={category.id} className="app-card overflow-hidden rounded-2xl">
-                <button
-                  onClick={() => {
-                    haptic("light");
-                    void navigate(`/categories/${category.id}`);
-                  }}
-                  className="app-press flex w-full items-center gap-3 p-4 text-left"
-                >
-                  <span className="text-3xl leading-none">{category.icon ?? "🍕"}</span>
-                  <span className="flex-1 font-medium">{category.name}</span>
-                  <span className="text-lg opacity-25" aria-hidden>
-                    ›
-                  </span>
-                </button>
+      {groupByLocation(data).map((group) => {
+        const isCroissant = group.name.toLowerCase().includes("croissant");
+        return (
+          <section key={group.name} className="mb-6 last:mb-0">
+            <SectionHeading>
+              <span className="flex items-center gap-1.5">
+                <span>{isCroissant ? "🥐" : "🍕"}</span>
+                <span>{group.name}</span>
+              </span>
+            </SectionHeading>
 
-                {/* Ярлики підкатегорій ведуть у той самий список товарів, але
-                    одразу до потрібної секції — інакше до «Роли Макі» треба
-                    прогорнути півсотні позицій. */}
-                {children.length > 0 && (
-                  <div className="flex flex-wrap gap-2 px-4 pb-4">
-                    {children.map((sub) => (
-                      <button
-                        key={sub.id}
-                        onClick={() => {
-                          haptic("light");
-                          void navigate(`/categories/${category.id}?section=${sub.id}`);
-                        }}
-                        className="app-press rounded-lg px-3 py-1.5 text-xs"
-                        style={{ background: "var(--app-surface-2)" }}
-                      >
-                        {sub.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
+            <div className="app-rise space-y-3 px-4">
+              {group.roots.map(({ category, children }) => (
+                <div
+                  key={category.id}
+                  className="app-card overflow-hidden rounded-2xl transition-all"
+                >
+                  <button
+                    onClick={() => {
+                      haptic("light");
+                      void navigate(`/categories/${category.id}`);
+                    }}
+                    className="app-press flex w-full items-center gap-3.5 p-3.5 text-left"
+                  >
+                    <div
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl shadow-sm"
+                      style={{ background: "var(--app-surface-2)" }}
+                    >
+                      {category.icon ?? (isCroissant ? "🥐" : "🍕")}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-base leading-tight truncate">
+                        {category.name}
+                      </p>
+                      {children.length > 0 && (
+                        <p className="mt-1 text-xs opacity-50">
+                          {children.length} {children.length === 1 ? "розділ" : children.length < 5 ? "розділи" : "розділів"}
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-xl opacity-35 px-1 font-light" aria-hidden>
+                      ›
+                    </span>
+                  </button>
+
+                  {/* Ярлики підкатегорій для швидкого переходу */}
+                  {children.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 px-3.5 pb-3.5 pt-0.5">
+                      {children.map((sub) => (
+                        <button
+                          key={sub.id}
+                          onClick={() => {
+                            haptic("light");
+                            void navigate(`/categories/${category.id}?section=${sub.id}`);
+                          }}
+                          className="app-press rounded-xl px-2.5 py-1 text-xs font-medium transition-all"
+                          style={{
+                            background: "var(--app-surface-2)",
+                            color: "var(--tg-theme-text-color)",
+                          }}
+                        >
+                          {sub.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

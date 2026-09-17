@@ -75,18 +75,36 @@ async def send_order_to_manager(order_id: int, order_data: dict[str, Any], setti
         if order_data["fulfillment_type"] == "delivery"
         else "🛍️ Самовивіз"
     )
-    payment_label = "💵 Готівка" if order_data["payment_method"] == "cash" else "💳 Картка"
+    scheduled_time = order_data.get("scheduled_time")
+    time_label = f"⏰ <b>Час:</b> На {html.escape(str(scheduled_time))}" if scheduled_time else "⏰ <b>Час:</b> Якнайшвидше"
+
+    if order_data["payment_method"] == "cash":
+        payment_label = "💵 Готівка"
+    elif order_data["payment_method"] == "card":
+        payment_label = "💳 Картка (термінал)"
+    elif order_data["payment_method"] == "qr":
+        payment_label = "📱 QR-код (у чеку, при доставці)"
+    else:
+        payment_label = html.escape(str(order_data["payment_method"]))
+
     comment_line = (
         f"\n💬 <b>Коментар:</b> {html.escape(str(order_data['comment']))}"
         if order_data.get("comment")
+        else ""
+    )
+    user_note = order_data.get("admin_note")
+    user_note_line = (
+        f"\n⚠️ <b>Примітка про клієнта:</b> {html.escape(str(user_note))}"
+        if user_note
         else ""
     )
 
     text = (
         f"📦 <b>Нове замовлення #{order_id}</b>\n"
         f"📍 <b>Заклад:</b> {loc_name}\n"
-        f"👤 <b>Клієнт:</b> {c_name} ({c_phone})\n"
+        f"👤 <b>Клієнт:</b> {c_name} ({c_phone}){user_note_line}\n"
         f"{fulfillment_label}\n"
+        f"{time_label}\n"
         f"💰 <b>Оплата:</b> {payment_label}"
         f"{comment_line}\n\n"
         f"📋 <b>Страви:</b>\n{items_block}\n\n"
@@ -120,7 +138,13 @@ async def send_order_to_manager(order_id: int, order_data: dict[str, Any], setti
 
 async def _fetch_order_by_id(conn, order_id: int, telegram_id: int) -> OrderOut | None:
     order_row = await conn.fetchrow(
-        "SELECT id, telegram_id, status, fulfillment_type, delivery_address, contact_name, contact_phone, payment_method, comment, total_price, created_at FROM orders WHERE id = $1 AND telegram_id = $2",
+        """
+        SELECT id, telegram_id, status, fulfillment_type, delivery_address,
+               contact_name, contact_phone, payment_method, scheduled_time,
+               comment, total_price, created_at
+        FROM orders
+        WHERE id = $1 AND telegram_id = $2
+        """,
         order_id, telegram_id,
     )
     if not order_row:
@@ -136,7 +160,21 @@ async def _fetch_order_by_id(conn, order_id: int, telegram_id: int) -> OrderOut 
     for r in items_rows:
         items_by_group.setdefault(r["order_group_id"], []).append(OrderItemOut(id=r["id"], variant_id=r["variant_id"], product_name=r["product_name"], variant_label=r["variant_label"], unit_price=float(r["unit_price"]), qty=r["qty"], subtotal=float(r["subtotal"]), options=opts_by_item.get(r["id"], [])))
     groups: list[OrderGroupOut] = [OrderGroupOut(id=g["id"], location_id=g["location_id"], location_name=g["location_name"], status=g["status"], subtotal=float(g["subtotal"]), items=items_by_group.get(g["id"], [])) for g in groups_rows]
-    return OrderOut(id=order_row["id"], telegram_id=order_row["telegram_id"], status=order_row["status"], fulfillment_type=order_row["fulfillment_type"], delivery_address=order_row["delivery_address"], contact_name=order_row["contact_name"], contact_phone=order_row["contact_phone"], payment_method=order_row["payment_method"], comment=order_row["comment"], total_price=float(order_row["total_price"]), created_at=order_row["created_at"], groups=groups)
+    return OrderOut(
+        id=order_row["id"],
+        telegram_id=order_row["telegram_id"],
+        status=order_row["status"],
+        fulfillment_type=order_row["fulfillment_type"],
+        delivery_address=order_row["delivery_address"],
+        contact_name=order_row["contact_name"],
+        contact_phone=order_row["contact_phone"],
+        payment_method=order_row["payment_method"],
+        scheduled_time=order_row["scheduled_time"],
+        comment=order_row["comment"],
+        total_price=float(order_row["total_price"]),
+        created_at=order_row["created_at"],
+        groups=groups,
+    )
 
 
 @router.post("", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
@@ -153,13 +191,22 @@ async def create_order(
     settings = get_settings()
     telegram_id = user["telegram_id"]
 
+    if user.get("is_blocked"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ваш акаунт заблоковано адміністрацією. Оформлення замовлень недоступне.",
+        )
+
     async with pool.acquire() as conn, conn.transaction():
         # 1. Отримуємо позиції кошика користувача разом із даними про заклад та наявність
         cart_items_sql = """
             SELECT ci.id, ci.variant_id, ci.qty,
                    p.id AS product_id, p.name AS product_name, p.is_available AS p_avail,
                    pv.label AS variant_label, pv.price, pv.is_available AS pv_avail,
-                   loc.id AS location_id, loc.name AS location_name
+                   loc.id AS location_id, loc.name AS location_name,
+                   loc.is_delivery_enabled,
+                   to_char(loc.delivery_start_time, 'HH24:MI') AS delivery_start_time,
+                   to_char(loc.delivery_end_time, 'HH24:MI') AS delivery_end_time
             FROM cart_items ci
             JOIN product_variants pv ON pv.id = ci.variant_id
             JOIN products p ON p.id = pv.product_id
@@ -202,6 +249,55 @@ async def create_order(
             target_location_id = list(distinct_locations.keys())[0]
             target_location_name = list(distinct_locations.values())[0]
             order_item_rows = item_rows
+
+        target_loc_row = order_item_rows[0]
+        is_delivery_enabled = target_loc_row["is_delivery_enabled"]
+        delivery_start_time = target_loc_row["delivery_start_time"] or "10:30"
+        delivery_end_time = target_loc_row["delivery_end_time"] or "21:30"
+
+        # Перевірка доступності доставки при навантаженні
+        if payload.fulfillment_type == "delivery" and not is_delivery_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Доставка з закладу «{target_location_name}» тимчасово призупинена "
+                    "через високе навантаження. Будь ласка, оберіть самовивіз."
+                ),
+            )
+
+        # Перевірка умов оплати (QR доступний тільки для піцерії при доставці)
+        if payload.payment_method == "qr":
+            if "pizza" not in target_location_name.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Оплата по QR-коду доступна виключно для піцерії.",
+                )
+            if payload.fulfillment_type != "delivery":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Оплата по QR-коду доступна лише при замовленні доставки.",
+                )
+
+        # Валідація часу доставки (якщо вказано)
+        clean_scheduled_time = payload.scheduled_time.strip() if payload.scheduled_time else None
+        if clean_scheduled_time and payload.fulfillment_type == "delivery":
+            try:
+                t_parts = clean_scheduled_time.split(":")
+                if len(t_parts) == 2:
+                    val_hour, val_min = int(t_parts[0]), int(t_parts[1])
+                    val_time_str = f"{val_hour:02d}:{val_min:02d}"
+                    if not (delivery_start_time <= val_time_str <= delivery_end_time):
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=(
+                                f"Час доставки для «{target_location_name}» можливий лише з "
+                                f"{delivery_start_time} до {delivery_end_time}."
+                            ),
+                        )
+            except HTTPException:
+                raise
+            except Exception:
+                pass
 
         target_cart_item_ids = [r["id"] for r in order_item_rows]
 
@@ -315,9 +411,10 @@ async def create_order(
         order_insert_sql = """
             INSERT INTO orders (
                 telegram_id, status, fulfillment_type, delivery_address,
-                contact_name, contact_phone, payment_method, comment, total_price
+                contact_name, contact_phone, payment_method, scheduled_time,
+                comment, total_price
             )
-            VALUES ($1, 'pending_moderation', $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, 'pending_moderation', $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id, created_at
         """
         order_row = await conn.fetchrow(
@@ -328,6 +425,7 @@ async def create_order(
             payload.contact_name.strip(),
             payload.contact_phone.strip(),
             payload.payment_method,
+            clean_scheduled_time,
             payload.comment.strip() if payload.comment else None,
             total_order_price,
         )
@@ -432,9 +530,11 @@ async def create_order(
         "fulfillment_type": payload.fulfillment_type,
         "delivery_address": payload.delivery_address,
         "payment_method": payload.payment_method,
+        "scheduled_time": clean_scheduled_time,
         "comment": payload.comment,
         "total_price": total_order_price,
         "items": calculated_items,
+        "admin_note": user.get("admin_note"),
     }
     background_tasks.add_task(send_order_to_manager, order_id, order_notification_data, settings)
 
@@ -447,6 +547,7 @@ async def create_order(
         contact_name=payload.contact_name,
         contact_phone=payload.contact_phone,
         payment_method=payload.payment_method,
+        scheduled_time=clean_scheduled_time,
         comment=payload.comment,
         total_price=total_order_price,
         created_at=created_at,
@@ -463,6 +564,119 @@ async def create_order(
     )
 
 
+@router.get("", response_model=list[OrderOut])
+async def get_user_orders(
+    user=Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """Отримує історію замовлень поточного користувача."""
+    telegram_id = user["telegram_id"]
+
+    orders_sql = """
+        SELECT id, telegram_id, status, fulfillment_type, delivery_address,
+               contact_name, contact_phone, payment_method, scheduled_time,
+               comment, total_price, created_at
+        FROM orders
+        WHERE telegram_id = $1
+        ORDER BY id DESC
+    """
+    groups_sql = """
+        SELECT og.id, og.order_id, og.location_id, loc.name AS location_name, og.status, og.subtotal
+        FROM order_groups og
+        JOIN locations loc ON loc.id = og.location_id
+        JOIN orders o ON o.id = og.order_id
+        WHERE o.telegram_id = $1
+        ORDER BY og.id
+    """
+    items_sql = """
+        SELECT oi.id, oi.order_group_id, oi.variant_id, oi.product_name,
+               oi.variant_label, oi.unit_price, oi.qty, oi.subtotal
+        FROM order_items oi
+        JOIN order_groups og ON og.id = oi.order_group_id
+        JOIN orders o ON o.id = og.order_id
+        WHERE o.telegram_id = $1
+        ORDER BY oi.id
+    """
+    options_sql = """
+        SELECT oio.id, oio.order_item_id, oio.option_group_name,
+               oio.option_name, oio.price_delta, oio.qty
+        FROM order_item_options oio
+        JOIN order_items oi ON oi.id = oio.order_item_id
+        JOIN order_groups og ON og.id = oi.order_group_id
+        JOIN orders o ON o.id = og.order_id
+        WHERE o.telegram_id = $1
+        ORDER BY oio.id
+    """
+
+    async with pool.acquire() as conn:
+        order_rows = await conn.fetch(orders_sql, telegram_id)
+        if not order_rows:
+            return []
+
+        group_rows = await conn.fetch(groups_sql, telegram_id)
+        item_rows = await conn.fetch(items_sql, telegram_id)
+        option_rows = await conn.fetch(options_sql, telegram_id)
+
+    opts_by_item: dict[int, list[OrderItemOptionOut]] = {}
+    for r in option_rows:
+        opts_by_item.setdefault(r["order_item_id"], []).append(
+            OrderItemOptionOut(
+                id=r["id"],
+                option_group_name=r["option_group_name"],
+                option_name=r["option_name"],
+                price_delta=float(r["price_delta"]),
+                qty=r["qty"],
+            )
+        )
+
+    items_by_group: dict[int, list[OrderItemOut]] = {}
+    for r in item_rows:
+        items_by_group.setdefault(r["order_group_id"], []).append(
+            OrderItemOut(
+                id=r["id"],
+                variant_id=r["variant_id"],
+                product_name=r["product_name"],
+                variant_label=r["variant_label"],
+                unit_price=float(r["unit_price"]),
+                qty=r["qty"],
+                subtotal=float(r["subtotal"]),
+                options=opts_by_item.get(r["id"], []),
+            )
+        )
+
+    groups_by_order: dict[int, list[OrderGroupOut]] = {}
+    for g in group_rows:
+        groups_by_order.setdefault(g["order_id"], []).append(
+            OrderGroupOut(
+                id=g["id"],
+                location_id=g["location_id"],
+                location_name=g["location_name"],
+                status=g["status"],
+                subtotal=float(g["subtotal"]),
+                items=items_by_group.get(g["id"], []),
+            )
+        )
+
+    return [
+        OrderOut(
+            id=row["id"],
+            telegram_id=row["telegram_id"],
+            status=row["status"],
+            fulfillment_type=row["fulfillment_type"],
+            delivery_address=row["delivery_address"],
+            contact_name=row["contact_name"],
+            contact_phone=row["contact_phone"],
+            payment_method=row["payment_method"],
+            scheduled_time=row["scheduled_time"],
+            comment=row["comment"],
+            total_price=float(row["total_price"]),
+            created_at=row["created_at"],
+            groups=groups_by_order.get(row["id"], []),
+        )
+        for row in order_rows
+    ]
+
+
 @router.get("/{order_id}", response_model=OrderOut)
 async def get_order(
     order_id: int,
@@ -474,7 +688,8 @@ async def get_order(
 
     order_sql = """
         SELECT id, telegram_id, status, fulfillment_type, delivery_address,
-               contact_name, contact_phone, payment_method, comment, total_price, created_at
+               contact_name, contact_phone, payment_method, scheduled_time,
+               comment, total_price, created_at
         FROM orders
         WHERE id = $1 AND telegram_id = $2
     """
@@ -561,6 +776,7 @@ async def get_order(
         contact_name=order_row["contact_name"],
         contact_phone=order_row["contact_phone"],
         payment_method=order_row["payment_method"],
+        scheduled_time=order_row["scheduled_time"],
         comment=order_row["comment"],
         total_price=float(order_row["total_price"]),
         created_at=order_row["created_at"],

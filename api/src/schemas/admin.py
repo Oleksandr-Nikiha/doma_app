@@ -216,3 +216,135 @@ class VariantSelectorOut(BaseModel):
     variant_label: str
     price: float
     category_name: str | None = None
+
+
+# --- Налаштування доставки закладів ---
+
+class LocationDeliveryAdminOut(BaseModel):
+    id: int
+    name: str
+    address: str
+    is_delivery_enabled: bool
+    delivery_start_time: str
+    delivery_end_time: str
+
+
+class LocationDeliveryUpdateIn(BaseModel):
+    is_delivery_enabled: bool | None = None
+    delivery_start_time: str | None = Field(None, pattern=r"^\d{2}:\d{2}$")
+    delivery_end_time: str | None = Field(None, pattern=r"^\d{2}:\d{2}$")
+
+
+# --- Керування клієнтами (Users) ---
+
+class AdminUserOut(BaseModel):
+    id: int
+    telegram_id: int
+    full_name: str
+    phone: str
+    delivery_address: str | None = None
+    is_blocked: bool = False
+    admin_note: str | None = None
+    orders_count: int = 0
+    created_at: str
+
+
+class AdminUserUpdateIn(BaseModel):
+    is_blocked: bool | None = None
+    admin_note: str | None = None
+
+
+# --- Керування та редагування замовлень (Orders) ---
+
+class AdminOrderItemOptionIn(BaseModel):
+    option_group_name: str
+    option_name: str
+    price_delta: float = 0.0
+    qty: int = 1
+
+
+class AdminOrderItemIn(BaseModel):
+    variant_id: int | None = None
+    product_name: str
+    variant_label: str
+    unit_price: float
+    qty: int
+    options: list[AdminOrderItemOptionIn] = []
+
+
+class AdminOrderUpdateIn(BaseModel):
+    scheduled_time: str | None = None
+    status: str | None = None
+    delivery_address: str | None = None
+    contact_name: str | None = None
+    contact_phone: str | None = None
+    comment: str | None = None
+    items: list[AdminOrderItemIn] | None = None
+
+
+class AdminOrderItemOptionOut(BaseModel):
+    id: int
+    option_group_name: str
+    option_name: str
+    price_delta: float
+    qty: int
+
+
+class AdminOrderItemOut(BaseModel):
+    id: int
+    order_group_id: int
+    variant_id: int | None = None
+    product_name: str
+    variant_label: str
+    unit_price: float
+    qty: int
+    subtotal: float
+    options: list[AdminOrderItemOptionOut] = []
+
+
+class AdminOrderGroupOut(BaseModel):
+    id: int
+    order_id: int
+    location_id: int
+    location_name: str | None = None
+    status: str
+    subtotal: float
+    items: list[AdminOrderItemOut] = []
+
+
+class AdminOrderListItemOut(BaseModel):
+    id: int
+    telegram_id: int
+    status: str
+    fulfillment_type: str
+    delivery_address: str | None = None
+    contact_name: str
+    contact_phone: str
+    payment_method: str
+    scheduled_time: str | None = None
+    comment: str | None = None
+    total_price: float
+    created_at: str
+    items_summary: str = ""
+    location_id: int | None = None
+    location_name: str | None = None
+    user_is_blocked: bool = False
+    user_admin_note: str | None = None
+
+
+class AdminOrderDetailOut(BaseModel):
+    id: int
+    telegram_id: int
+    status: str
+    fulfillment_type: str
+    delivery_address: str | None = None
+    contact_name: str
+    contact_phone: str
+    payment_method: str
+    scheduled_time: str | None = None
+    comment: str | None = None
+    total_price: float
+    created_at: str
+    user_is_blocked: bool = False
+    user_admin_note: str | None = None
+    groups: list[AdminOrderGroupOut] = []

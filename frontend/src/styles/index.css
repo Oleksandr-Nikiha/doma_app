@@ -45,11 +45,15 @@
 :root {
   --app-surface: color-mix(in srgb, currentColor 8%, transparent);
   --app-surface-2: color-mix(in srgb, currentColor 14%, transparent);
-  --app-border: color-mix(in srgb, currentColor 8%, transparent);
-  --app-skeleton: color-mix(in srgb, currentColor 7%, transparent);
+  --app-surface-3: color-mix(in srgb, currentColor 20%, transparent);
+  --app-border: color-mix(in srgb, currentColor 9%, transparent);
+  --app-border-focus: color-mix(in srgb, var(--tg-theme-button-color) 45%, transparent);
+  --app-skeleton: color-mix(in srgb, currentColor 8%, transparent);
   --app-veil: color-mix(in srgb, var(--tg-theme-bg-color) 82%, transparent);
-  --app-tint: color-mix(in srgb, var(--tg-theme-button-color) 14%, transparent);
-  --app-shadow: 0 1px 2px rgb(0 0 0 / 5%), 0 6px 16px -6px rgb(0 0 0 / 12%);
+  --app-tint: color-mix(in srgb, var(--tg-theme-button-color) 12%, transparent);
+  --app-tint-hover: color-mix(in srgb, var(--tg-theme-button-color) 20%, transparent);
+  --app-shadow: 0 2px 8px -2px rgb(0 0 0 / 8%), 0 8px 24px -6px rgb(0 0 0 / 12%);
+  --app-shadow-sm: 0 1px 3px rgb(0 0 0 / 6%);
 }
 
 /* --- Компонування --- */
@@ -112,6 +116,26 @@ body {
 .app-card {
   background: var(--app-surface);
   box-shadow: var(--app-shadow);
+  border: 1px solid var(--app-border);
+}
+
+/* Ефект матового скла з повною підтримкою WebKit (iOS Telegram) */
+.app-glass {
+  background: var(--app-veil);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+/* Пульсуючий градієнт для плавного скелетон-завантаження */
+@keyframes app-shimmer {
+  0% { opacity: 0.55; }
+  50% { opacity: 1; }
+  100% { opacity: 0.55; }
+}
+
+.app-shimmer {
+  background: var(--app-skeleton);
+  animation: app-shimmer 1.6s ease-in-out infinite;
 }
 
 /* Люди з увімкненим «зменшити рух» не мають отримувати анімацій узагалі —

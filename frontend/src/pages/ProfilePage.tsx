@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { useAdminMe, useMe, useUpdateProfile } from "@/api/queries";
+import { useAdminMe, useMe, useOrders, useUpdateProfile } from "@/api/queries";
 import { ErrorBox, ScreenTitle, Spinner } from "@/components/ui";
 import { haptic, hapticNotify } from "@/telegram/sdk";
 
@@ -9,7 +9,12 @@ export function ProfilePage() {
   const navigate = useNavigate();
   const { data: user, isPending, error, refetch } = useMe();
   const { data: adminMe } = useAdminMe();
+  const { data: orders } = useOrders();
   const updateProfile = useUpdateProfile();
+
+  const ordersCount = orders?.length ?? 0;
+  const activeOrdersCount =
+    orders?.filter((o) => o.status !== "completed" && o.status !== "rejected").length ?? 0;
 
   // Витягуємо ім'я та прізвище: спочатку з окремих полів, якщо порожні — парсимо full_name
   const initialFirstName = user?.first_name || user?.full_name?.split(" ")[0] || "";
@@ -134,6 +139,59 @@ export function ProfilePage() {
           </section>
         )}
 
+        {/* Секція: Мої замовлення */}
+        <section className="app-rise">
+          <div
+            onClick={() => {
+              haptic("light");
+              navigate("/orders");
+            }}
+            className="app-card app-press flex items-center justify-between rounded-2xl p-4 cursor-pointer transition-all"
+            style={{
+              background: "var(--app-surface)",
+              border: "1px solid var(--app-border)",
+            }}
+          >
+            <div className="flex items-center gap-3.5">
+              <span
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl"
+                style={{ background: "var(--app-tint)" }}
+              >
+                📦
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold">Мої замовлення</p>
+                  {activeOrdersCount > 0 ? (
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                      style={{ background: "rgba(234, 179, 8, 0.15)", color: "#eab308" }}
+                    >
+                      {activeOrdersCount} активне
+                    </span>
+                  ) : ordersCount > 0 ? (
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold opacity-60"
+                      style={{ background: "var(--app-tint)" }}
+                    >
+                      {ordersCount}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="text-xs opacity-60">
+                  {ordersCount > 0
+                    ? `Історія та статус ${ordersCount} ${ordersCount === 1 ? "замовлення" : "замовлень"}`
+                    : "Історія та статус замовлень"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 opacity-40">
+              <span className="text-base font-bold">→</span>
+            </div>
+          </div>
+        </section>
+
         {/* Секція 1: Мої дані */}
         <section className="app-rise space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wider opacity-50">Мої дані</p>
@@ -218,46 +276,54 @@ export function ProfilePage() {
           </div>
         </section>
 
-        {/* Секція 3: Картка клієнта (заглушка під майбутню CRM) */}
+        {/* Секція 3: Картка клієнта */}
         <section className="app-rise space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wider opacity-50">Картка клієнта</p>
 
           <div
-            className="app-card relative overflow-hidden rounded-2xl p-4 transition-all"
+            className="app-card relative overflow-hidden rounded-3xl p-5 shadow-lg transition-all"
             style={{
-              background: "linear-gradient(135deg, color-mix(in srgb, var(--tg-theme-button-color) 15%, var(--app-surface)), var(--app-surface))",
-              border: "1px solid var(--app-border)",
+              background:
+                "linear-gradient(145deg, color-mix(in srgb, var(--tg-theme-button-color) 25%, var(--app-surface)), color-mix(in srgb, var(--tg-theme-button-color) 8%, var(--app-surface)))",
+              border: "1px solid color-mix(in srgb, var(--tg-theme-button-color) 35%, transparent)",
             }}
           >
             <div className="flex items-start justify-between">
               <div>
-                <span className="text-xs font-bold uppercase tracking-widest text-[var(--tg-theme-link-color)]">
-                  Doma Club
-                </span>
-                <p className="mt-1 text-base font-bold tracking-tight">{user.full_name}</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-extrabold uppercase tracking-widest text-[var(--tg-theme-button-color)]">
+                    DOMA CLUB
+                  </span>
+                  <span className="text-xs">✨</span>
+                </div>
+                <p className="mt-1 text-lg font-bold tracking-tight">{user.full_name}</p>
               </div>
-              <span className="rounded-lg px-2 py-0.5 text-[11px] font-medium" style={{ background: "var(--app-tint)", color: "var(--tg-theme-link-color)" }}>
-                Active
-              </span>
+              <div
+                className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold"
+                style={{ background: "var(--app-tint)", color: "var(--tg-theme-button-color)" }}
+              >
+                <span>●</span>
+                <span>Active</span>
+              </div>
             </div>
 
-            <div className="mt-6 flex items-end justify-between">
+            <div className="mt-8 flex items-end justify-between">
               <div>
-                <p className="text-[11px] uppercase tracking-wider opacity-50">ID клієнта</p>
-                <p className="font-mono text-sm font-semibold tracking-wider">{clientCode}</p>
+                <p className="text-[10px] uppercase tracking-wider opacity-50">Номер картки</p>
+                <p className="font-mono text-sm font-bold tracking-widest">{clientCode}</p>
               </div>
 
               <div className="text-right">
-                <p className="text-[11px] uppercase tracking-wider opacity-50">Бонуси</p>
-                <p className="text-lg font-extrabold text-[var(--tg-theme-button-color)]">
-                  {bonusBalance} <span className="text-xs font-semibold opacity-70">бонусів</span>
+                <p className="text-[10px] uppercase tracking-wider opacity-50">Бонуси</p>
+                <p className="text-xl font-extrabold text-[var(--tg-theme-button-color)]">
+                  {bonusBalance} <span className="text-xs font-semibold opacity-70">бал.</span>
                 </p>
               </div>
             </div>
 
             <div className="mt-4 border-t pt-2.5" style={{ borderColor: "var(--app-border)" }}>
-              <p className="text-[11px] opacity-40">
-                Заглушка: накопичення та списання бонусів буде інтегровано з клієнтською системою закладів.
+              <p className="text-[11px] opacity-50">
+                Бонусна програма: нарахування та оплата замовлень балами у закладах Doma.
               </p>
             </div>
           </div>

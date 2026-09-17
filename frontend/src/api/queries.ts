@@ -18,6 +18,8 @@ import type {
   CategoryCreatePayload,
   CategoryUpdatePayload,
   Location,
+  LocationDeliverySettings,
+  LocationDeliveryUpdatePayload,
   Manager,
   ManagerCreatePayload,
   ManagerUpdatePayload,
@@ -41,6 +43,11 @@ import type {
   VariantCreatePayload,
   VariantSelectorChoice,
   VariantUpdatePayload,
+  AdminUser,
+  AdminUserUpdatePayload,
+  AdminOrderListItem,
+  AdminOrderDetail,
+  AdminOrderUpdatePayload,
 } from "@/api/types";
 
 /** Ключі кешу зібрані в одному місці — щоб інвалідація не розповзалась по компонентах. */
@@ -51,6 +58,7 @@ export const keys = {
   product: (productId: number) => ["product", productId] as const,
   cart: ["cart"] as const,
   locations: ["locations"] as const,
+  orders: ["orders"] as const,
   order: (orderId: number) => ["order", orderId] as const,
   adminMe: ["admin", "me"] as const,
   adminManagers: ["admin", "managers"] as const,
@@ -60,6 +68,11 @@ export const keys = {
   adminOptionGroups: ["admin", "option-groups"] as const,
   adminOptionGroupItems: (groupId: number) => ["admin", "option-groups", groupId, "items"] as const,
   adminVariantChoices: ["admin", "variant-choices"] as const,
+  adminLocationsDelivery: ["admin", "locations", "delivery"] as const,
+  adminUsers: (query: string) => ["admin", "users", query] as const,
+  adminOrders: (params?: { status?: string | null; locationId?: number | null }) =>
+    ["admin", "orders", params?.status, params?.locationId] as const,
+  adminOrder: (orderId: number) => ["admin", "order", orderId] as const,
 };
 
 // --- Каталог і контакти (публічні) ---
@@ -175,6 +188,13 @@ export function useCreateOrder() {
       // Бекенд видалив оформлені страви з кошика — оновлюємо дані кошика
       void qc.invalidateQueries({ queryKey: keys.cart });
     },
+  });
+}
+
+export function useOrders() {
+  return useQuery({
+    queryKey: keys.orders,
+    queryFn: () => api.get<Order[]>("/orders"),
   });
 }
 
@@ -580,3 +600,110 @@ export function useAdminVariantChoices() {
     queryFn: () => api.get<VariantSelectorChoice[]>("/admin/variant-choices"),
   });
 }
+
+// --- Налаштування доставки закладів (Адмінка) ---
+
+export function useAdminLocationsDelivery() {
+  return useQuery({
+    queryKey: keys.adminLocationsDelivery,
+    queryFn: () => api.get<LocationDeliverySettings[]>("/admin/locations/delivery"),
+  });
+}
+
+export function useUpdateLocationDelivery() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      locationId,
+      payload,
+    }: {
+      locationId: number;
+      payload: LocationDeliveryUpdatePayload;
+    }) => api.patch<LocationDeliverySettings>(`/admin/locations/${locationId}/delivery`, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.adminLocationsDelivery });
+      void qc.invalidateQueries({ queryKey: keys.locations });
+    },
+  });
+}
+
+// --- Керування користувачами (Адмінка) ---
+
+export function useAdminUsers(query: string = "") {
+  return useQuery({
+    queryKey: keys.adminUsers(query),
+    queryFn: () => {
+      const qs = query ? `?query=${encodeURIComponent(query)}` : "";
+      return api.get<AdminUser[]>(`/admin/users${qs}`);
+    },
+  });
+}
+
+export function useUpdateAdminUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, payload }: { userId: number; payload: AdminUserUpdatePayload }) =>
+      api.patch<AdminUser>(`/admin/users/${userId}`, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "users"] });
+      void qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+    },
+  });
+}
+
+export function useDeleteAdminUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: number) =>
+      api.delete<{ status: string; message: string }>(`/admin/users/${userId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "users"] });
+      void qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+    },
+  });
+}
+
+// --- Керування замовленнями (Адмінка) ---
+
+export function useAdminOrders(params?: { status?: string | null; locationId?: number | null }) {
+  return useQuery({
+    queryKey: keys.adminOrders(params),
+    queryFn: () => {
+      const sp = new URLSearchParams();
+      if (params?.status) sp.set("status", params.status);
+      if (params?.locationId) sp.set("location_id", String(params.locationId));
+      const qs = sp.toString() ? `?${sp.toString()}` : "";
+      return api.get<AdminOrderListItem[]>(`/admin/orders${qs}`);
+    },
+    refetchInterval: 15000,
+  });
+}
+
+export function useAdminOrderDetail(orderId: number) {
+  return useQuery({
+    queryKey: keys.adminOrder(orderId),
+    queryFn: () => api.get<AdminOrderDetail>(`/admin/orders/${orderId}`),
+    enabled: orderId > 0,
+  });
+}
+
+export function useUpdateAdminOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, payload }: { orderId: number; payload: AdminOrderUpdatePayload }) =>
+      api.put<AdminOrderDetail>(`/admin/orders/${orderId}`, payload),
+    onSuccess: (_, vars) => {
+      void qc.invalidateQueries({ queryKey: keys.adminOrder(vars.orderId) });
+      void qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+      void qc.invalidateQueries({ queryKey: keys.order(vars.orderId) });
+    },
+  });
+}
+
+export function useNotifyAdminOrder() {
+  return useMutation({
+    mutationFn: (orderId: number) =>
+      api.post<{ status: string; message: string }>(`/admin/orders/${orderId}/notify`),
+  });
+}
+
