@@ -10,22 +10,21 @@ CREATE TABLE IF NOT EXISTS orders (
         status IN (
             'pending_moderation',
             'confirmed',
-            'cooking',
-            'on_the_way',
-            'ready_for_pickup',
+            'in_progress',
+            'ready',
             'completed',
             'rejected',
             'cancelled'
         )
     ),
-    delivery_type      TEXT NOT NULL CHECK (delivery_type IN ('delivery', 'pickup')),
-    payment_method     TEXT NOT NULL CHECK (payment_method IN ('cash', 'card', 'qr')),
+    fulfillment_type   TEXT NOT NULL CHECK (fulfillment_type IN ('delivery', 'pickup')),
     delivery_address   TEXT,
+    contact_name       TEXT NOT NULL,
     contact_phone      TEXT NOT NULL,
-    comment            TEXT,
+    payment_method     TEXT NOT NULL CHECK (payment_method IN ('cash', 'card', 'qr')),
     scheduled_time     TEXT,
-    total_amount       NUMERIC(10, 2) NOT NULL CHECK (total_amount >= 0),
-    rejection_reason   TEXT,
+    comment            TEXT,
+    total_price        NUMERIC(10, 2) NOT NULL CHECK (total_price >= 0),
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -35,6 +34,9 @@ CREATE TABLE IF NOT EXISTS order_groups (
     id             SERIAL PRIMARY KEY,
     order_id       INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     location_id    INTEGER NOT NULL REFERENCES locations(id) ON DELETE RESTRICT,
+    status         TEXT NOT NULL DEFAULT 'pending' CHECK (
+        status IN ('pending', 'accepted', 'cooking', 'ready', 'cancelled')
+    ),
     subtotal       NUMERIC(10, 2) NOT NULL CHECK (subtotal >= 0),
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -68,4 +70,3 @@ CREATE INDEX IF NOT EXISTS idx_order_groups_order ON order_groups(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_groups_location ON order_groups(location_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_group ON order_items(order_group_id);
 CREATE INDEX IF NOT EXISTS idx_order_item_options_item ON order_item_options(order_item_id);
-
