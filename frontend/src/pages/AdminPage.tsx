@@ -17,6 +17,8 @@ import {
   useAdminUsers,
   useAdminVariantChoices,
   useAttachProductOptionGroup,
+  useBulkProductAvailability,
+  useBulkProductOptionGroups,
   useCreateCategory,
   useCreateManager,
   useCreateOptionGroup,
@@ -37,6 +39,10 @@ import {
   useUpdateAdminOrder,
   useUpdateAdminUser,
   useUpdateCategory,
+  useAdminDeliveryAddresses,
+  useCreateAdminDeliveryAddress,
+  useUpdateAdminDeliveryAddress,
+  useDeleteAdminDeliveryAddress,
   useUpdateLocationDelivery,
   useUpdateManager,
   useUpdateOptionGroup,
@@ -47,6 +53,7 @@ import {
 } from "@/api/queries";
 import type {
   AdminCategory,
+  AdminDeliveryAddress,
   AdminOptionGroup,
   AdminProduct,
   AdminUser,
@@ -550,7 +557,7 @@ export function AdminPage() {
             isSuperAdmin={adminMe.role === "admin"}
           />
         )}
-        {activeTab === "users" && <UsersTab />}
+        {activeTab === "users" && <UsersTab locations={locations} />}
         {activeTab === "managers" && <ManagersTab locations={locations} />}
       </div>
       </main>
@@ -626,6 +633,7 @@ function OrdersTab({
     { key: "ready", label: "🛵 Готові" },
     { key: "completed", label: "🏁 Виконані" },
     { key: "rejected", label: "❌ Відхилені" },
+    { key: "cancelled", label: "🚫 Скасовані" },
   ];
 
   return (
@@ -1528,10 +1536,11 @@ function OrderEditModal({
 // 0.1. ВКЛАДКА КЛІЄНТІВ (UsersTab + UserCard)
 // ============================================================================
 
-function UsersTab() {
+function UsersTab({ locations = [] }: { locations?: Location[] }) {
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const { data: users = [], isPending, error } = useAdminUsers(query);
+  const [staffModalUser, setStaffModalUser] = useState<AdminUser | null>(null);
 
   const updateUser = useUpdateAdminUser();
   const deleteUser = useDeleteAdminUser();
@@ -1546,7 +1555,7 @@ function UsersTab() {
       <div>
         <h2 className="text-base font-bold">База клієнтів ({users.length})</h2>
         <p className="text-xs opacity-60">
-          Пошук за номером телефону, блокування та примітки до профілю
+          Пошук за номером телефону, ім'ям або Telegram ID, блокування та керування доступом
         </p>
       </div>
 
@@ -1555,7 +1564,7 @@ function UsersTab() {
         <div className="relative flex-1">
           <input
             type="text"
-            placeholder="Номер телефону (+380...) або ім'я"
+            placeholder="Номер телефону (+380...), ім'я або Telegram ID"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="w-full rounded-xl p-3 pr-8 text-xs font-medium outline-none transition focus:ring-2 focus:ring-blue-500"
@@ -1624,11 +1633,21 @@ function UsersTab() {
                   deleteUser.mutate(u.id);
                 }
               }}
+              onPromoteToStaff={() => setStaffModalUser(u)}
               isUpdating={updateUser.isPending}
               isDeleting={deleteUser.isPending}
             />
           ))}
         </div>
+      )}
+
+      {staffModalUser && (
+        <ManagerModal
+          manager={null}
+          initialUser={staffModalUser}
+          locations={locations}
+          onClose={() => setStaffModalUser(null)}
+        />
       )}
     </div>
   );
@@ -1639,6 +1658,7 @@ function UserCard({
   onToggleBlock,
   onSaveNote,
   onDelete,
+  onPromoteToStaff,
   isUpdating,
   isDeleting,
 }: {
@@ -1646,11 +1666,34 @@ function UserCard({
   onToggleBlock: () => void;
   onSaveNote: (note: string) => void;
   onDelete: () => void;
+  onPromoteToStaff: () => void;
   isUpdating: boolean;
   isDeleting: boolean;
 }) {
   const [note, setNote] = useState(user.admin_note || "");
   const [isNoteDirty, setIsNoteDirty] = useState(false);
+  const [copiedTid, setCopiedTid] = useState(false);
+
+  const handleCopyTid = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    haptic("light");
+    const tidStr = String(user.telegram_id);
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(tidStr).then(() => {
+        setCopiedTid(true);
+        setTimeout(() => setCopiedTid(false), 2000);
+      });
+    } else {
+      const el = document.createElement("textarea");
+      el.value = tidStr;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      setCopiedTid(true);
+      setTimeout(() => setCopiedTid(false), 2000);
+    }
+  };
 
   return (
     <div
@@ -1679,11 +1722,28 @@ function UserCard({
               {user.is_blocked ? "Заблоковано" : "Активний"}
             </span>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs opacity-70">
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs opacity-80">
             <a href={`tel:${user.phone}`} className="font-semibold text-blue-500 hover:underline">
               📞 {user.phone}
             </a>
-            <span>🆔 {user.telegram_id}</span>
+            <button
+              type="button"
+              onClick={handleCopyTid}
+              title="Натисніть, щоб скопіювати Telegram ID"
+              className="app-press inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-mono font-semibold transition border cursor-pointer"
+              style={{
+                background: copiedTid
+                  ? "color-mix(in srgb, #10b981 20%, var(--app-surface-2))"
+                  : "var(--app-surface-2)",
+                color: copiedTid ? "#10b981" : "inherit",
+                borderColor: copiedTid ? "#10b981" : "var(--app-border)",
+              }}
+            >
+              <span>🆔 {user.telegram_id}</span>
+              <span className="text-[10px] font-sans font-medium">
+                {copiedTid ? "✓ Скопійовано" : "📋"}
+              </span>
+            </button>
             <span>🛍️ Замовлень: {user.orders_count}</span>
             <span>📅 {user.created_at}</span>
           </div>
@@ -1693,6 +1753,22 @@ function UserCard({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              onPromoteToStaff();
+            }}
+            title="Призначити співробітником"
+            className="app-press flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition"
+            style={{
+              background: "color-mix(in srgb, #3b82f6 15%, transparent)",
+              color: "#3b82f6",
+            }}
+          >
+            <span>👔</span>
+            <span className="hidden sm:inline">У персонал</span>
+          </button>
           <button
             onClick={() => {
               haptic("light");
@@ -1813,6 +1889,32 @@ function CatalogTab({
   const [optionsModalOpen, setOptionsModalOpen] = useState(false);
   const [targetProductForOptions, setTargetProductForOptions] = useState<AdminProduct | null>(null);
 
+  // Масові операції (Bulk)
+  const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
+  const [bulkOptionsModalOpen, setBulkOptionsModalOpen] = useState(false);
+  const bulkAvailability = useBulkProductAvailability();
+
+  const toggleSelectProduct = (id: number) => {
+    setSelectedProductIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const allFilteredSelected =
+    filteredProducts.length > 0 &&
+    filteredProducts.every((p) => selectedProductIds.includes(p.id));
+
+  const toggleSelectAll = () => {
+    haptic("light");
+    if (allFilteredSelected) {
+      const filteredIdSet = new Set(filteredProducts.map((p) => p.id));
+      setSelectedProductIds((prev) => prev.filter((id) => !filteredIdSet.has(id)));
+    } else {
+      const newSet = new Set([...selectedProductIds, ...filteredProducts.map((p) => p.id)]);
+      setSelectedProductIds(Array.from(newSet));
+    }
+  };
+
   const deleteCategory = useDeleteCategory();
   const deleteProduct = useDeleteProduct();
   const deleteVariant = useDeleteVariant();
@@ -1903,17 +2005,33 @@ function CatalogTab({
               {search.trim() ? ` з ${products.length}` : ""})
             </span>
           </h2>
-          <button
-            onClick={() => {
-              haptic("light");
-              setEditingProduct(null);
-              setProdModalOpen(true);
-            }}
-            className="app-press flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold"
-            style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
-          >
-            <span>+</span> Страва
-          </button>
+          <div className="flex items-center gap-2">
+            {filteredProducts.length > 0 && (
+              <button
+                type="button"
+                onClick={toggleSelectAll}
+                className="app-press rounded-xl px-2.5 py-1.5 text-xs font-medium border transition-colors"
+                style={{
+                  borderColor: allFilteredSelected ? "var(--tg-theme-button-color)" : "var(--app-border)",
+                  background: allFilteredSelected ? "var(--app-tint)" : "var(--app-surface)",
+                  color: allFilteredSelected ? "var(--tg-theme-button-color)" : "var(--tg-theme-text-color)",
+                }}
+              >
+                {allFilteredSelected ? "✓ Вибрано всі" : "Вибрати всі"}
+              </button>
+            )}
+            <button
+              onClick={() => {
+                haptic("light");
+                setEditingProduct(null);
+                setProdModalOpen(true);
+              }}
+              className="app-press flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold"
+              style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
+            >
+              <span>+</span> Страва
+            </button>
+          </div>
         </div>
 
         {/* Швидкий пошук страв у меню */}
@@ -1965,19 +2083,37 @@ function CatalogTab({
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredProducts.map((p) => (
-              <div
-                key={p.id}
-                className="app-card rounded-2xl p-3.5 transition-shadow"
-                style={{
-                  border: "1px solid var(--app-border)",
-                  opacity: p.is_available ? 1 : 0.65,
-                }}
-              >
-                <div className="flex gap-3">
-                  <Thumb src={p.image_url} className="h-16 w-16 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-1">
+            {filteredProducts.map((p) => {
+              const isSelected = selectedProductIds.includes(p.id);
+              return (
+                <div
+                  key={p.id}
+                  className="app-card rounded-2xl p-3.5 transition-all"
+                  style={{
+                    border: isSelected
+                      ? "2px solid var(--tg-theme-button-color)"
+                      : "1px solid var(--app-border)",
+                    background: isSelected
+                      ? "color-mix(in srgb, var(--tg-theme-button-color) 7%, var(--app-surface))"
+                      : "var(--app-surface)",
+                    opacity: p.is_available ? 1 : 0.65,
+                  }}
+                >
+                  <div className="flex gap-3 items-start">
+                    <div className="pt-1 shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {
+                          haptic("light");
+                          toggleSelectProduct(p.id);
+                        }}
+                        className="h-4 w-4 rounded cursor-pointer accent-[var(--tg-theme-button-color)]"
+                      />
+                    </div>
+                    <Thumb src={p.image_url} className="h-16 w-16 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-1">
                       <p className="truncate text-sm font-bold">{p.name}</p>
                       <div className="flex items-center gap-1 shrink-0">
                         <button
@@ -2120,10 +2256,102 @@ function CatalogTab({
                   )}
                 </div>
               </div>
-            ))}
+            );})}
           </div>
         )}
       </section>
+
+      {/* Плаваюча панель масових дій */}
+      {selectedProductIds.length > 0 && (
+        <div className="fixed bottom-4 left-4 right-4 z-40 mx-auto max-w-lg">
+          <div
+            className="app-card rounded-2xl p-3 shadow-2xl border flex flex-col gap-2.5 backdrop-blur-md"
+            style={{
+              background: "color-mix(in srgb, var(--tg-theme-bg-color) 94%, black)",
+              borderColor: "var(--tg-theme-button-color)",
+            }}
+          >
+            <div className="flex items-center justify-between text-xs px-1">
+              <span className="font-bold">
+                Обрано страв: <span className="text-[var(--tg-theme-button-color)] font-extrabold">{selectedProductIds.length}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedProductIds([])}
+                className="opacity-60 hover:opacity-100 font-medium"
+              >
+                ✕ Зняти вибір
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                disabled={bulkAvailability.isPending}
+                onClick={() => {
+                  haptic("medium");
+                  bulkAvailability.mutate(
+                    { product_ids: selectedProductIds, is_available: false },
+                    {
+                      onSuccess: () => {
+                        hapticNotify("success");
+                      },
+                    },
+                  );
+                }}
+                className="app-press rounded-xl py-2 px-2 text-xs font-bold text-center border border-red-500/30 bg-red-500/10 text-red-500 disabled:opacity-50"
+              >
+                ⛔ На стоп
+              </button>
+
+              <button
+                type="button"
+                disabled={bulkAvailability.isPending}
+                onClick={() => {
+                  haptic("medium");
+                  bulkAvailability.mutate(
+                    { product_ids: selectedProductIds, is_available: true },
+                    {
+                      onSuccess: () => {
+                        hapticNotify("success");
+                      },
+                    },
+                  );
+                }}
+                className="app-press rounded-xl py-2 px-2 text-xs font-bold text-center border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 disabled:opacity-50"
+              >
+                ✓ Доступно
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("light");
+                  setBulkOptionsModalOpen(true);
+                }}
+                className="app-press rounded-xl py-2 px-2 text-xs font-bold text-center"
+                style={{
+                  background: "var(--tg-theme-button-color)",
+                  color: "var(--tg-theme-button-text-color)",
+                }}
+              >
+                🧩 Додатки
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модальне вікно масового налаштування додатків */}
+      {bulkOptionsModalOpen && selectedProductIds.length > 0 && (
+        <BulkProductOptionsModal
+          productIds={selectedProductIds}
+          onClose={() => setBulkOptionsModalOpen(false)}
+          onSuccess={() => {
+            setSelectedProductIds([]);
+          }}
+        />
+      )}
 
       {/* Модальне вікно Категорії */}
       {catModalOpen && (
@@ -2407,9 +2635,17 @@ function StopListTab({ locationId }: { locationId?: number | null }) {
   const { data: products = [], isPending, error } = useAdminProducts({ locationId });
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
+  const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
 
   const toggleProduct = useToggleProductAvailability();
   const toggleVariant = useToggleVariantAvailability();
+  const bulkAvailability = useBulkProductAvailability();
+
+  const toggleSelectProduct = (id: number) => {
+    setSelectedProductIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
 
   if (isPending) return <Spinner />;
   if (error) return <ErrorBox message={error.message} />;
@@ -2424,6 +2660,20 @@ function StopListTab({ locationId }: { locationId?: number | null }) {
     const matchCat = filterCategory === null || p.category_name === filterCategory;
     return matchSearch && matchCat;
   });
+
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((p) => selectedProductIds.includes(p.id));
+
+  const toggleSelectAll = () => {
+    haptic("light");
+    if (allFilteredSelected) {
+      const filteredIdSet = new Set(filtered.map((p) => p.id));
+      setSelectedProductIds((prev) => prev.filter((id) => !filteredIdSet.has(id)));
+    } else {
+      const newSet = new Set([...selectedProductIds, ...filtered.map((p) => p.id)]);
+      setSelectedProductIds(Array.from(newSet));
+    }
+  };
 
   const stoppedCount = products.filter(
     (p) => !p.is_available || p.variants.some((v) => !v.is_available),
@@ -2440,6 +2690,20 @@ function StopListTab({ locationId }: { locationId?: number | null }) {
               : "Всі страви в наявності"}
           </p>
         </div>
+        {filtered.length > 0 && (
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            className="app-press rounded-xl px-3 py-1.5 text-xs font-medium border transition-colors"
+            style={{
+              borderColor: allFilteredSelected ? "var(--tg-theme-button-color)" : "var(--app-border)",
+              background: allFilteredSelected ? "var(--app-tint)" : "var(--app-surface)",
+              color: allFilteredSelected ? "var(--tg-theme-button-color)" : "var(--tg-theme-text-color)",
+            }}
+          >
+            {allFilteredSelected ? "✓ Вибрано всі" : "Вибрати всі"}
+          </button>
+        )}
       </div>
 
       <input
@@ -2489,19 +2753,33 @@ function StopListTab({ locationId }: { locationId?: number | null }) {
 
       <div className="space-y-3">
         {filtered.map((p) => {
+          const isSelected = selectedProductIds.includes(p.id);
           return (
             <div
               key={p.id}
               className="app-card rounded-2xl p-3.5 transition-all"
               style={{
-                border: "1px solid var(--app-border)",
-                background: !p.is_available
+                border: isSelected
+                  ? "2px solid var(--tg-theme-button-color)"
+                  : "1px solid var(--app-border)",
+                background: isSelected
+                  ? "color-mix(in srgb, var(--tg-theme-button-color) 8%, var(--app-surface))"
+                  : !p.is_available
                   ? "color-mix(in srgb, #ef4444 8%, var(--app-surface))"
                   : "var(--app-surface)",
               }}
             >
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => {
+                      haptic("light");
+                      toggleSelectProduct(p.id);
+                    }}
+                    className="h-4 w-4 rounded cursor-pointer accent-[var(--tg-theme-button-color)] shrink-0"
+                  />
                   <Thumb src={p.image_url} className="h-12 w-12 shrink-0 rounded-xl" />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold">{p.name}</p>
@@ -2564,6 +2842,72 @@ function StopListTab({ locationId }: { locationId?: number | null }) {
           );
         })}
       </div>
+
+      {/* Плаваюча панель масових дій у стоп-листі */}
+      {selectedProductIds.length > 0 && (
+        <div className="fixed bottom-4 left-4 right-4 z-40 mx-auto max-w-lg">
+          <div
+            className="app-card rounded-2xl p-3 shadow-2xl border flex flex-col gap-2.5 backdrop-blur-md"
+            style={{
+              background: "color-mix(in srgb, var(--tg-theme-bg-color) 94%, black)",
+              borderColor: "var(--tg-theme-button-color)",
+            }}
+          >
+            <div className="flex items-center justify-between text-xs px-1">
+              <span className="font-bold">
+                Обрано страв: <span className="text-[var(--tg-theme-button-color)] font-extrabold">{selectedProductIds.length}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedProductIds([])}
+                className="opacity-60 hover:opacity-100 font-medium"
+              >
+                ✕ Зняти вибір
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={bulkAvailability.isPending}
+                onClick={() => {
+                  haptic("medium");
+                  bulkAvailability.mutate(
+                    { product_ids: selectedProductIds, is_available: false },
+                    {
+                      onSuccess: () => {
+                        hapticNotify("success");
+                      },
+                    },
+                  );
+                }}
+                className="app-press rounded-xl py-2 px-2 text-xs font-bold text-center border border-red-500/30 bg-red-500/10 text-red-500 disabled:opacity-50"
+              >
+                ⛔ Поставити на стоп
+              </button>
+
+              <button
+                type="button"
+                disabled={bulkAvailability.isPending}
+                onClick={() => {
+                  haptic("medium");
+                  bulkAvailability.mutate(
+                    { product_ids: selectedProductIds, is_available: true },
+                    {
+                      onSuccess: () => {
+                        hapticNotify("success");
+                      },
+                    },
+                  );
+                }}
+                className="app-press rounded-xl py-2 px-2 text-xs font-bold text-center border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 disabled:opacity-50"
+              >
+                ✓ Зняти зі стопу
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2966,6 +3310,277 @@ function AttachedGroupRow({
           Зберегти ліміти
         </button>
       )}
+    </div>
+  );
+}
+
+function BulkProductOptionsModal({
+  productIds,
+  onClose,
+  onSuccess,
+}: {
+  productIds: number[];
+  onClose: () => void;
+  onSuccess?: () => void;
+}) {
+  const { data: allGroups = [] } = useAdminOptionGroups();
+  const [action, setAction] = useState<"attach" | "detach" | "clear">("attach");
+  const [selectedGroupId, setSelectedGroupId] = useState<string>("");
+  const [minSelect, setMinSelect] = useState("0");
+  const [maxSelect, setMaxSelect] = useState("3");
+  const [freeCount, setFreeCount] = useState("0");
+
+  const bulkOptions = useBulkProductOptionGroups();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (action === "attach") {
+      const gId = parseInt(selectedGroupId, 10);
+      if (!gId) return;
+      bulkOptions.mutate(
+        {
+          action: "attach",
+          product_ids: productIds,
+          group_id: gId,
+          min_select: parseInt(minSelect, 10) || 0,
+          max_select: parseInt(maxSelect, 10) || 1,
+          free_count: parseInt(freeCount, 10) || 0,
+        },
+        {
+          onSuccess: () => {
+            hapticNotify("success");
+            onSuccess?.();
+            onClose();
+          },
+        },
+      );
+    } else if (action === "detach") {
+      const gId = parseInt(selectedGroupId, 10);
+      if (!gId) return;
+      bulkOptions.mutate(
+        {
+          action: "detach",
+          product_ids: productIds,
+          group_id: gId,
+        },
+        {
+          onSuccess: () => {
+            hapticNotify("success");
+            onSuccess?.();
+            onClose();
+          },
+        },
+      );
+    } else if (action === "clear") {
+      if (!window.confirm(`Видалити ВСІ додатки з ${productIds.length} вибраних страв?`)) return;
+      bulkOptions.mutate(
+        {
+          action: "clear",
+          product_ids: productIds,
+        },
+        {
+          onSuccess: () => {
+            hapticNotify("success");
+            onSuccess?.();
+            onClose();
+          },
+        },
+      );
+    }
+  };
+
+  const inputStyle = { background: "var(--app-surface)", color: "var(--tg-theme-text-color)" };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div
+        className="app-card w-full max-w-md rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+        style={{ background: "var(--tg-theme-bg-color)", border: "1px solid var(--app-border)" }}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-base">Масова зміна додатків</h3>
+            <p className="text-xs opacity-60">Обрано страв: {productIds.length}</p>
+          </div>
+          <button onClick={onClose} className="opacity-50 text-lg">
+            ✕
+          </button>
+        </div>
+
+        {/* Перемикач типу дії */}
+        <div
+          className="grid grid-cols-3 gap-1 rounded-xl p-1 text-xs font-semibold"
+          style={{ background: "var(--app-surface-2)" }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              setAction("attach");
+            }}
+            className="rounded-lg py-1.5 transition-all text-center"
+            style={
+              action === "attach"
+                ? { background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }
+                : { opacity: 0.6 }
+            }
+          >
+            ➕ Додати
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              setAction("detach");
+            }}
+            className="rounded-lg py-1.5 transition-all text-center"
+            style={
+              action === "detach"
+                ? { background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }
+                : { opacity: 0.6 }
+            }
+          >
+            🗑️ Відкріпити
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              setAction("clear");
+            }}
+            className="rounded-lg py-1.5 transition-all text-center"
+            style={
+              action === "clear"
+                ? { background: "#ef4444", color: "#ffffff" }
+                : { opacity: 0.6 }
+            }
+          >
+            ❌ Очистити
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {action === "attach" && (
+            <div className="space-y-3">
+              <label className="block text-xs">
+                <span className="opacity-60">Виберіть групу додатків</span>
+                <select
+                  value={selectedGroupId}
+                  onChange={(e) => setSelectedGroupId(e.target.value)}
+                  required
+                  className="mt-1 w-full rounded-xl px-3 py-2 text-sm outline-none"
+                  style={inputStyle}
+                >
+                  <option value="">-- Виберіть групу --</option>
+                  {allGroups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} ({g.items_count} поз.)
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <label className="block">
+                  <span className="opacity-60 text-[10px]">Мін. вибір</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={minSelect}
+                    onChange={(e) => setMinSelect(e.target.value)}
+                    className="mt-0.5 w-full rounded-lg px-2 py-1.5 text-xs outline-none"
+                    style={inputStyle}
+                  />
+                </label>
+                <label className="block">
+                  <span className="opacity-60 text-[10px]">Макс. вибір</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={maxSelect}
+                    onChange={(e) => setMaxSelect(e.target.value)}
+                    className="mt-0.5 w-full rounded-lg px-2 py-1.5 text-xs outline-none"
+                    style={inputStyle}
+                  />
+                </label>
+                <label className="block">
+                  <span className="opacity-60 text-[10px]">Безкоштовно</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={freeCount}
+                    onChange={(e) => setFreeCount(e.target.value)}
+                    className="mt-0.5 w-full rounded-lg px-2 py-1.5 text-xs outline-none"
+                    style={inputStyle}
+                  />
+                </label>
+              </div>
+              <p className="text-[11px] opacity-50">
+                Цю групу буде прикріплено до всіх {productIds.length} вибраних страв із зазначеними правилами вибору. Якщо група вже була прикріплена, правила оновляться.
+              </p>
+            </div>
+          )}
+
+          {action === "detach" && (
+            <div className="space-y-3">
+              <label className="block text-xs">
+                <span className="opacity-60">Яку групу додатків відкріпити?</span>
+                <select
+                  value={selectedGroupId}
+                  onChange={(e) => setSelectedGroupId(e.target.value)}
+                  required
+                  className="mt-1 w-full rounded-xl px-3 py-2 text-sm outline-none"
+                  style={inputStyle}
+                >
+                  <option value="">-- Виберіть групу для відкріплення --</option>
+                  {allGroups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="text-[11px] opacity-50">
+                Вказану групу додатків буде відкріплено від усіх {productIds.length} вибраних страв.
+              </p>
+            </div>
+          )}
+
+          {action === "clear" && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 space-y-2 text-xs">
+              <p className="font-bold text-red-500">⚠️ Увага!</p>
+              <p className="opacity-80">
+                З усіх {productIds.length} вибраних страв буде безповоротно видалено будь-які прикріплені групи додатків.
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="app-press flex-1 rounded-xl py-2.5 text-xs font-semibold"
+              style={{ background: "var(--app-surface-2)" }}
+            >
+              Скасувати
+            </button>
+            <button
+              type="submit"
+              disabled={
+                bulkOptions.isPending ||
+                (action !== "clear" && !selectedGroupId)
+              }
+              className="app-press flex-1 rounded-xl py-2.5 text-xs font-bold disabled:opacity-40"
+              style={{
+                background: action === "clear" ? "#ef4444" : "var(--tg-theme-button-color)",
+                color: "#ffffff",
+              }}
+            >
+              {bulkOptions.isPending ? "Застосування..." : "Застосувати"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -3742,17 +4357,33 @@ function VariantModal({
 function ManagerModal({
   manager,
   locations,
+  initialUser = null,
   onClose,
 }: {
   manager: Manager | null;
   locations: Location[];
+  initialUser?: AdminUser | null;
   onClose: () => void;
 }) {
-  const [telegramId, setTelegramId] = useState(manager ? String(manager.telegram_id) : "");
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(initialUser);
+  const [telegramId, setTelegramId] = useState(
+    manager
+      ? String(manager.telegram_id)
+      : initialUser
+      ? String(initialUser.telegram_id)
+      : "",
+  );
+  const [selectionMode, setSelectionMode] = useState<"client" | "manual">(
+    manager ? "manual" : "client",
+  );
+  const [clientSearch, setClientSearch] = useState("");
   const [role, setRole] = useState<"admin" | "manager">(manager?.role || "manager");
   const [locationId, setLocationId] = useState<string>(
     manager?.location_id ? String(manager.location_id) : "",
   );
+
+  const { data: users = [], isPending: isUsersPending } = useAdminUsers(clientSearch);
+  const { data: managers = [] } = useAdminManagers();
 
   const createManager = useCreateManager();
   const updateManager = useUpdateManager();
@@ -3780,7 +4411,7 @@ function ManagerModal({
     } else {
       const tid = parseInt(telegramId.trim(), 10);
       if (isNaN(tid)) {
-        alert("Введіть коректний числовий Telegram ID");
+        alert("Оберіть клієнта зі списку або введіть числовий Telegram ID");
         return;
       }
       createManager.mutate(
@@ -3804,47 +4435,213 @@ function ManagerModal({
 
   const inputStyle = { background: "var(--app-surface)", color: "var(--tg-theme-text-color)" };
 
+  const filteredUsers = useMemo(() => {
+    if (!users) return [];
+    if (!clientSearch.trim()) return users.slice(0, 10);
+    const q = clientSearch.toLowerCase().trim();
+    return users.filter(
+      (u) =>
+        u.full_name.toLowerCase().includes(q) ||
+        u.phone.includes(q) ||
+        String(u.telegram_id).includes(q),
+    ).slice(0, 15);
+  }, [users, clientSearch]);
+
+  const existingManager = useMemo(() => {
+    if (!telegramId) return null;
+    const tid = parseInt(telegramId, 10);
+    return managers.find((m) => m.telegram_id === tid);
+  }, [managers, telegramId]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 backdrop-blur-sm">
       <div
-        className="app-card w-full max-w-sm rounded-2xl p-5 space-y-4"
-        style={{ background: "var(--tg-theme-bg-color)", border: "1px solid var(--app-border)" }}
+        className="app-card w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto bg-white dark:bg-[#1c1c1e] shadow-2xl"
+        style={{ border: "1px solid var(--app-border)" }}
       >
-        <div className="flex items-center justify-between">
-          <h3 className="font-bold text-base">
-            {manager ? "Редагування співробітника" : "Призначити співробітника"}
+        <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: "var(--app-border)" }}>
+          <h3 className="font-bold text-base flex items-center gap-2">
+            <span>{manager ? "✏️" : "👔"}</span>
+            <span>{manager ? "Редагування співробітника" : "Призначити співробітника"}</span>
           </h3>
-          <button onClick={onClose} className="opacity-50 text-lg">
+          <button onClick={onClose} className="p-1 rounded-full opacity-60 hover:opacity-100 text-lg">
             ✕
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3 text-xs">
-          <label className="block">
-            <span className="opacity-60">Telegram ID</span>
-            <input
-              type="number"
-              value={telegramId}
-              disabled={!!manager}
-              onChange={(e) => setTelegramId(e.target.value)}
-              placeholder="123456789"
-              required
-              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-50"
-              style={inputStyle}
-            />
-            {!manager && (
-              <span className="mt-1 block text-[10px] opacity-50">
-                Користувач вже повинен відкрити бот або додаток, щоб бути в базі.
-              </span>
-            )}
-          </label>
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          {/* Якщо створюємо нового співробітника: вибір клієнта або ручне введення */}
+          {!manager && (
+            <div className="space-y-2">
+              <div className="flex rounded-xl p-1 gap-1" style={{ background: "var(--app-surface-2)" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("light");
+                    setSelectionMode("client");
+                  }}
+                  className={`flex-1 py-2 text-center rounded-lg font-semibold transition ${
+                    selectionMode === "client"
+                      ? "shadow-sm bg-white dark:bg-[#2c2c2e] text-[var(--tg-theme-text-color)]"
+                      : "opacity-60"
+                  }`}
+                >
+                  👥 З бази клієнтів
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("light");
+                    setSelectionMode("manual");
+                  }}
+                  className={`flex-1 py-2 text-center rounded-lg font-semibold transition ${
+                    selectionMode === "manual"
+                      ? "shadow-sm bg-white dark:bg-[#2c2c2e] text-[var(--tg-theme-text-color)]"
+                      : "opacity-60"
+                  }`}
+                >
+                  ✏️ Ввести ID вручну
+                </button>
+              </div>
+
+              {selectionMode === "client" ? (
+                <div className="space-y-2">
+                  {selectedUser ? (
+                    <div
+                      className="rounded-2xl p-3 border flex items-center justify-between"
+                      style={{
+                        background: "color-mix(in srgb, #10b981 10%, var(--app-surface))",
+                        borderColor: "color-mix(in srgb, #10b981 40%, transparent)",
+                      }}
+                    >
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm">👤</span>
+                          <span className="font-bold text-xs">{selectedUser.full_name}</span>
+                          {existingManager && (
+                            <span className="text-[10px] rounded px-1.5 py-0.2 font-semibold bg-amber-500/20 text-amber-500">
+                              Вже в штаті
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-[11px] opacity-70">
+                          📞 {selectedUser.phone} • 🆔 <span className="font-mono font-semibold">{selectedUser.telegram_id}</span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedUser(null);
+                          setTelegramId("");
+                        }}
+                        className="text-xs font-semibold text-blue-500 hover:underline px-2 py-1"
+                      >
+                        Змінити
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={clientSearch}
+                          onChange={(e) => setClientSearch(e.target.value)}
+                          placeholder="Пошук за ім'ям, телефоном або Telegram ID..."
+                          className="w-full rounded-xl p-2.5 pr-8 text-xs outline-none focus:ring-2 focus:ring-blue-500 border border-[var(--app-border)]"
+                          style={inputStyle}
+                        />
+                        {clientSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setClientSearch("")}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs opacity-40 hover:opacity-100"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+
+                      <div
+                        className="max-h-44 overflow-y-auto rounded-xl border border-[var(--app-border)] p-1 divide-y divide-[var(--app-border)] text-xs"
+                        style={{ background: "var(--app-surface-2)" }}
+                      >
+                        {isUsersPending ? (
+                          <div className="p-3 text-center opacity-60">Завантаження клієнтів...</div>
+                        ) : filteredUsers.length === 0 ? (
+                          <div className="p-3 text-center opacity-50">
+                            Клієнтів не знайдено
+                          </div>
+                        ) : (
+                          filteredUsers.map((u) => {
+                            const isMgr = managers.find((m) => m.telegram_id === u.telegram_id);
+                            return (
+                              <button
+                                key={u.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedUser(u);
+                                  setTelegramId(String(u.telegram_id));
+                                }}
+                                className="w-full text-left p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center justify-between gap-2"
+                              >
+                                <div className="truncate">
+                                  <p className="font-semibold text-xs flex items-center gap-1.5 truncate">
+                                    <span>{isMgr ? "👔" : "👤"}</span>
+                                    <span className="truncate">{u.full_name}</span>
+                                    {isMgr && (
+                                      <span className="text-[9px] shrink-0 px-1 py-0.2 rounded bg-amber-500/15 text-amber-500 font-bold">
+                                        В штаті
+                                      </span>
+                                    )}
+                                  </p>
+                                  <p className="text-[11px] opacity-60 font-mono">
+                                    📞 {u.phone} • 🆔 {u.telegram_id}
+                                  </p>
+                                </div>
+                                <span className="text-xs text-blue-500 font-bold shrink-0">
+                                  Обрати →
+                                </span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <label className="block">
+                  <span className="opacity-60">Telegram ID</span>
+                  <input
+                    type="number"
+                    value={telegramId}
+                    onChange={(e) => setTelegramId(e.target.value)}
+                    placeholder="123456789"
+                    required
+                    className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none border border-[var(--app-border)]"
+                    style={inputStyle}
+                  />
+                  <span className="mt-1 block text-[10px] opacity-50">
+                    Користувач вже повинен відкрити бот або додаток, щоб бути в базі.
+                  </span>
+                </label>
+              )}
+            </div>
+          )}
+
+          {manager && (
+            <div className="rounded-xl p-3 border border-[var(--app-border)] bg-[var(--app-surface-2)]">
+              <p className="font-bold text-xs">👤 {manager.full_name}</p>
+              <p className="text-[11px] opacity-70 mt-0.5">📞 {manager.phone} • 🆔 {manager.telegram_id}</p>
+            </div>
+          )}
 
           <label className="block">
-            <span className="opacity-60">Роль</span>
+            <span className="opacity-60 font-medium">Роль співробітника</span>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as "admin" | "manager")}
-              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none border border-[var(--app-border)]"
               style={inputStyle}
             >
               <option value="manager">Менеджер закладу</option>
@@ -3853,11 +4650,11 @@ function ManagerModal({
           </label>
 
           <label className="block">
-            <span className="opacity-60">Заклад (прив'язка)</span>
+            <span className="opacity-60 font-medium">Заклад (прив'язка)</span>
             <select
               value={locationId}
               onChange={(e) => setLocationId(e.target.value)}
-              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none border border-[var(--app-border)]"
               style={inputStyle}
             >
               <option value="">Без прив'язки (всі заклади)</option>
@@ -3869,20 +4666,21 @@ function ManagerModal({
             </select>
           </label>
 
-          <div className="flex gap-2 pt-3">
+          <div className="flex gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="app-press rounded-xl px-4 py-2.5 font-semibold opacity-70"
+              className="app-press rounded-xl px-4 py-2.5 font-semibold opacity-70 border border-[var(--app-border)]"
             >
               Скасувати
             </button>
             <button
               type="submit"
+              disabled={createManager.isPending || updateManager.isPending}
               className="app-press flex-1 rounded-xl py-2.5 font-bold"
               style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
             >
-              Зберегти
+              {createManager.isPending || updateManager.isPending ? "Збереження..." : "Зберегти"}
             </button>
           </div>
         </form>
@@ -3901,6 +4699,7 @@ interface DeliverySettingsTabProps {
 }
 
 function DeliverySettingsTab({ locationId }: DeliverySettingsTabProps) {
+  const [subTab, setSubTab] = useState<"locations" | "addresses">("locations");
   const { data: deliverySettings = [], isPending, error, refetch } = useAdminLocationsDelivery();
   const updateDelivery = useUpdateLocationDelivery();
 
@@ -3912,47 +4711,88 @@ function DeliverySettingsTab({ locationId }: DeliverySettingsTabProps) {
   if (isPending) return <Spinner />;
   if (error) return <ErrorBox message={error.message} onRetry={() => void refetch()} />;
 
-  if (filtered.length === 0) {
-    return <EmptyState icon="🛵" title="Закладів не знайдено" hint="Не вдалося знайти налаштування для обраного закладу" />;
-  }
-
   return (
     <div className="space-y-4">
+      {/* Підвкладки: Заклади / Адреси */}
       <div
-        className="rounded-2xl p-4 text-xs leading-relaxed border"
-        style={{
-          background: "var(--app-tint)",
-          color: "var(--tg-theme-link-color)",
-          borderColor: "color-mix(in srgb, var(--tg-theme-link-color) 30%, transparent)",
-        }}
+        className="flex rounded-xl p-1 text-xs font-semibold"
+        style={{ background: "var(--app-surface-2)" }}
       >
-        <p className="font-semibold text-[13px] flex items-center gap-1.5">
-          <span>🛵</span>
-          <span>Керування доставкою та навантаженням</span>
-        </p>
-        <p className="mt-1 opacity-90">
-          У разі перевантаження кухні або браку кур'єрів ви можете <b>вимкнути доставку</b> для закладу в один клік. Клієнти зможуть оформлювати замовлення виключно на самовивіз. Також тут налаштовуються години роботи доставки.
-        </p>
+        <button
+          type="button"
+          onClick={() => {
+            haptic("light");
+            setSubTab("locations");
+          }}
+          className={`app-press flex-1 rounded-lg py-2 transition-all ${
+            subTab === "locations"
+              ? "bg-[var(--app-surface)] shadow-sm font-bold text-[var(--tg-theme-text-color)]"
+              : "opacity-60 hover:opacity-100"
+          }`}
+        >
+          🛵 Заклади та години
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            haptic("light");
+            setSubTab("addresses");
+          }}
+          className={`app-press flex-1 rounded-lg py-2 transition-all ${
+            subTab === "addresses"
+              ? "bg-[var(--app-surface)] shadow-sm font-bold text-[var(--tg-theme-text-color)]"
+              : "opacity-60 hover:opacity-100"
+          }`}
+        >
+          📍 Довідник адрес (Стоплист)
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        {filtered.map((loc: LocationDeliverySettings) => (
-          <LocationDeliveryCard
-            key={loc.id}
-            location={loc}
-            onUpdate={(payload) => {
-              updateDelivery.mutate(
-                { locationId: loc.id, payload },
-                {
-                  onSuccess: () => hapticNotify("success"),
-                  onError: () => hapticNotify("error"),
-                },
-              );
+      {subTab === "locations" ? (
+        <div className="space-y-4">
+          <div
+            className="rounded-2xl p-4 text-xs leading-relaxed border"
+            style={{
+              background: "var(--app-tint)",
+              color: "var(--tg-theme-link-color)",
+              borderColor: "color-mix(in srgb, var(--tg-theme-link-color) 30%, transparent)",
             }}
-            isUpdating={updateDelivery.isPending}
-          />
-        ))}
-      </div>
+          >
+            <p className="font-semibold text-[13px] flex items-center gap-1.5">
+              <span>🛵</span>
+              <span>Керування доставкою та навантаженням</span>
+            </p>
+            <p className="mt-1 opacity-90">
+              У разі перевантаження кухні або браку кур'єрів ви можете <b>вимкнути доставку</b> для закладу в один клік. Клієнти зможуть оформлювати замовлення виключно на самовивіз. Також тут налаштовуються години роботи доставки.
+            </p>
+          </div>
+
+          {filtered.length === 0 ? (
+            <EmptyState icon="🛵" title="Закладів не знайдено" hint="Не вдалося знайти налаштування для обраного закладу" />
+          ) : (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {filtered.map((loc: LocationDeliverySettings) => (
+                <LocationDeliveryCard
+                  key={loc.id}
+                  location={loc}
+                  onUpdate={(payload) => {
+                    updateDelivery.mutate(
+                      { locationId: loc.id, payload },
+                      {
+                        onSuccess: () => hapticNotify("success"),
+                        onError: () => hapticNotify("error"),
+                      },
+                    );
+                  }}
+                  isUpdating={updateDelivery.isPending}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <DeliveryAddressesAdminSection />
+      )}
     </div>
   );
 }
@@ -4091,3 +4931,455 @@ function LocationDeliveryCard({
     </div>
   );
 }
+
+// ============================================================================
+// 5.1. РОЗДІЛ КЕРУВАННЯ АДРЕСАМИ ДОСТАВКИ (СТОПЛИСТ)
+// ============================================================================
+
+function DeliveryAddressesAdminSection() {
+  const { data: addresses = [], isPending, error, refetch } = useAdminDeliveryAddresses();
+  const createAddress = useCreateAdminDeliveryAddress();
+  const updateAddress = useUpdateAdminDeliveryAddress();
+  const deleteAddress = useDeleteAdminDeliveryAddress();
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "stoplist">("all");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<AdminDeliveryAddress | null>(null);
+
+  const totalCount = addresses.length;
+  const activeCount = addresses.filter((a) => a.is_active).length;
+  const stoplistCount = totalCount - activeCount;
+
+  const filteredAddresses = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return addresses.filter((a) => {
+      const matchSearch =
+        !q ||
+        a.street.toLowerCase().includes(q) ||
+        a.city.toLowerCase().includes(q) ||
+        (a.notes && a.notes.toLowerCase().includes(q));
+
+      if (!matchSearch) return false;
+
+      if (statusFilter === "active") return a.is_active;
+      if (statusFilter === "stoplist") return !a.is_active;
+      return true;
+    });
+  }, [addresses, search, statusFilter]);
+
+  const handleToggleActive = (addr: AdminDeliveryAddress) => {
+    haptic("medium");
+    updateAddress.mutate(
+      {
+        addressId: addr.id,
+        payload: { is_active: !addr.is_active },
+      },
+      {
+        onSuccess: () => hapticNotify("success"),
+        onError: () => hapticNotify("error"),
+      },
+    );
+  };
+
+  const handleDelete = (addr: AdminDeliveryAddress) => {
+    if (!window.confirm(`Видалити адресу "${addr.street}" з довідника?`)) {
+      return;
+    }
+    hapticNotify("warning");
+    deleteAddress.mutate(addr.id, {
+      onSuccess: () => hapticNotify("success"),
+      onError: () => hapticNotify("error"),
+    });
+  };
+
+  if (isPending) return <Spinner />;
+  if (error) return <ErrorBox message={error.message} onRetry={() => void refetch()} />;
+
+  return (
+    <div className="space-y-4">
+      {/* Інформаційна плашка */}
+      <div
+        className="rounded-2xl p-4 text-xs leading-relaxed border"
+        style={{
+          background: "var(--app-tint)",
+          color: "var(--tg-theme-link-color)",
+          borderColor: "color-mix(in srgb, var(--tg-theme-link-color) 30%, transparent)",
+        }}
+      >
+        <p className="font-semibold text-[13px] flex items-center gap-1.5">
+          <span>📍</span>
+          <span>Керування довідником адрес та стоплистом</span>
+        </p>
+        <p className="mt-1 opacity-90">
+          Клієнти обирають вулиці виключно з цього довідника. Якщо на певну вулицю тимчасово перекрито рух чи неможлива доставка — вимкніть її (переведіть у <b>стоплист</b>), і клієнти не зможуть обрати її для замовлення.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-black/10">
+          <span className="rounded-full bg-white/40 px-2.5 py-0.5 text-[11px] font-semibold">
+            Всього адрес: <b>{totalCount}</b>
+          </span>
+          <span className="rounded-full bg-emerald-500/20 text-emerald-700 px-2.5 py-0.5 text-[11px] font-semibold">
+            🟢 Доставляємо: <b>{activeCount}</b>
+          </span>
+          <span className="rounded-full bg-rose-500/20 text-rose-700 px-2.5 py-0.5 text-[11px] font-semibold">
+            🔴 Стоплист: <b>{stoplistCount}</b>
+          </span>
+        </div>
+      </div>
+
+      {/* Панель керування: пошук, фільтри, кнопка додавання */}
+      <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Пошук вулиці..."
+            className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-2)] p-2.5 pr-8 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+            style={{ color: "var(--tg-theme-text-color)" }}
+          />
+          {search ? (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs opacity-50 hover:opacity-100"
+            >
+              ✕
+            </button>
+          ) : (
+            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs opacity-40">
+              🔍
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Фільтр статусу */}
+          <div
+            className="flex rounded-xl p-0.5 text-xs font-semibold"
+            style={{ background: "var(--app-surface-2)" }}
+          >
+            <button
+              onClick={() => setStatusFilter("all")}
+              className={`rounded-lg px-2.5 py-1.5 text-[11px] transition ${
+                statusFilter === "all"
+                  ? "bg-[var(--app-surface)] shadow-sm font-bold text-[var(--tg-theme-text-color)]"
+                  : "opacity-60 hover:opacity-100"
+              }`}
+            >
+              Всі ({totalCount})
+            </button>
+            <button
+              onClick={() => setStatusFilter("active")}
+              className={`rounded-lg px-2.5 py-1.5 text-[11px] transition ${
+                statusFilter === "active"
+                  ? "bg-[var(--app-surface)] shadow-sm font-bold text-emerald-600"
+                  : "opacity-60 hover:opacity-100"
+              }`}
+            >
+              🟢 Активні ({activeCount})
+            </button>
+            <button
+              onClick={() => setStatusFilter("stoplist")}
+              className={`rounded-lg px-2.5 py-1.5 text-[11px] transition ${
+                statusFilter === "stoplist"
+                  ? "bg-[var(--app-surface)] shadow-sm font-bold text-rose-600"
+                  : "opacity-60 hover:opacity-100"
+              }`}
+            >
+              🔴 Стоп ({stoplistCount})
+            </button>
+          </div>
+
+          <button
+            onClick={() => {
+              haptic("light");
+              setEditingAddress(null);
+              setIsModalOpen(true);
+            }}
+            className="app-press shrink-0 rounded-xl px-3.5 py-2 text-xs font-bold text-white shadow-sm flex items-center gap-1.5"
+            style={{ background: "var(--tg-theme-button-color)" }}
+          >
+            <span>+</span>
+            <span>Додати адресу</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Список адрес */}
+      {filteredAddresses.length === 0 ? (
+        <EmptyState
+          icon="📍"
+          title="Адрес не знайдено"
+          hint={search ? `За запитом "${search}" нічого не знайдено` : "Додайте першу адресу до довідника"}
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {filteredAddresses.map((addr) => {
+            const isUpdating =
+              updateAddress.isPending && updateAddress.variables?.addressId === addr.id;
+            return (
+              <div
+                key={addr.id}
+                className="app-card rounded-2xl p-3.5 flex flex-col justify-between gap-3 border transition-all"
+                style={{
+                  background: addr.is_active ? "var(--app-surface)" : "color-mix(in srgb, #ef4444 4%, var(--app-surface))",
+                  borderColor: addr.is_active ? "var(--app-border)" : "color-mix(in srgb, #ef4444 30%, transparent)",
+                }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-bold text-sm tracking-tight truncate">
+                        {addr.street}
+                      </h4>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          addr.is_active
+                            ? "bg-emerald-500/15 text-emerald-600"
+                            : "bg-rose-500/15 text-rose-600"
+                        }`}
+                      >
+                        {addr.is_active ? "🟢 Доставляємо" : "🔴 Стоплист"}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs opacity-60">📍 м. {addr.city}</p>
+                    {addr.notes && (
+                      <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400 opacity-90 italic">
+                        💬 {addr.notes}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Нижня панель дій */}
+                <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-[var(--app-border)]">
+                  <button
+                    type="button"
+                    disabled={isUpdating}
+                    onClick={() => handleToggleActive(addr)}
+                    className="app-press flex-1 rounded-xl py-1.5 px-3 text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-xs"
+                    style={{
+                      background: addr.is_active
+                        ? "color-mix(in srgb, #ef4444 12%, transparent)"
+                        : "color-mix(in srgb, #22c55e 12%, transparent)",
+                      color: addr.is_active ? "#ef4444" : "#22c55e",
+                      border: `1px solid ${addr.is_active ? "color-mix(in srgb, #ef4444 25%, transparent)" : "color-mix(in srgb, #22c55e 25%, transparent)"}`,
+                    }}
+                  >
+                    <span>{addr.is_active ? "⛔" : "✅"}</span>
+                    <span>{addr.is_active ? "У стоплист" : "Відновити доставку"}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic("light");
+                      setEditingAddress(addr);
+                      setIsModalOpen(true);
+                    }}
+                    className="app-press rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-2)] p-2 text-xs opacity-75 hover:opacity-100"
+                    title="Редагувати"
+                  >
+                    ✏️
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(addr)}
+                    className="app-press rounded-xl border border-rose-500/20 bg-rose-500/10 p-2 text-xs text-rose-500 opacity-75 hover:opacity-100"
+                    title="Видалити адресу"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Модальне вікно створення / редагування */}
+      {isModalOpen && (
+        <DeliveryAddressModal
+          initialData={editingAddress}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingAddress(null);
+          }}
+          onSave={(payload) => {
+            if (editingAddress) {
+              updateAddress.mutate(
+                { addressId: editingAddress.id, payload },
+                {
+                  onSuccess: () => {
+                    hapticNotify("success");
+                    setIsModalOpen(false);
+                    setEditingAddress(null);
+                  },
+                  onError: () => hapticNotify("error"),
+                },
+              );
+            } else {
+              createAddress.mutate(
+                {
+                  city: payload.city || "Вишгород",
+                  street: payload.street || "",
+                  is_active: payload.is_active ?? true,
+                  notes: payload.notes,
+                },
+                {
+                  onSuccess: () => {
+                    hapticNotify("success");
+                    setIsModalOpen(false);
+                  },
+                  onError: () => hapticNotify("error"),
+                },
+              );
+            }
+          }}
+          isSaving={createAddress.isPending || updateAddress.isPending}
+        />
+      )}
+    </div>
+  );
+}
+
+function DeliveryAddressModal({
+  initialData,
+  onClose,
+  onSave,
+  isSaving,
+}: {
+  initialData: AdminDeliveryAddress | null;
+  onClose: () => void;
+  onSave: (payload: { city?: string; street?: string; is_active?: boolean; notes?: string | null }) => void;
+  isSaving: boolean;
+}) {
+  const [city, setCity] = useState(initialData?.city || "Вишгород");
+  const [street, setStreet] = useState(initialData?.street || "");
+  const [notes, setNotes] = useState(initialData?.notes || "");
+  const [isActive, setIsActive] = useState(initialData ? initialData.is_active : true);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanStreet = street.trim();
+    if (!cleanStreet) {
+      setError("Вкажіть назву вулиці");
+      return;
+    }
+    setError(null);
+    onSave({
+      city: city.trim() || "Вишгород",
+      street: cleanStreet,
+      notes: notes.trim() || null,
+      is_active: isActive,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 sm:p-4 overscroll-contain">
+      <div
+        className="app-rise w-full max-h-[85vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-[var(--app-border)] p-5 pb-8 sm:pb-5 shadow-2xl space-y-4 max-w-md bg-white dark:bg-[#1c1c1e]"
+        style={{ background: "var(--tg-theme-bg-color, #ffffff)", color: "var(--tg-theme-text-color, #000000)" }}
+      >
+        <div className="flex items-center justify-between border-b pb-3 border-[var(--app-border)]">
+          <h3 className="font-bold text-base flex items-center gap-2">
+            <span>📍</span>
+            <span>{initialData ? "Редагування адреси" : "Нова адреса доставки"}</span>
+          </h3>
+          <button
+            onClick={onClose}
+            type="button"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-black/5 text-sm opacity-60 hover:opacity-100"
+          >
+            ✕
+          </button>
+        </div>
+
+        {error && (
+          <div className="rounded-xl bg-rose-500/15 p-3 text-xs text-rose-600 font-semibold">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-3.5">
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider opacity-60">
+              Населений пункт
+            </label>
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              required
+              className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-2)] p-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500"
+              style={{ color: "var(--tg-theme-text-color)" }}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider opacity-60">
+              Вулиця / провулок / проспект *
+            </label>
+            <input
+              type="text"
+              value={street}
+              onChange={(e) => setStreet(e.target.value)}
+              placeholder="наприклад: вул. Набережна або просп. Шевченка"
+              required
+              autoFocus
+              className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-2)] p-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500"
+              style={{ color: "var(--tg-theme-text-color)" }}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider opacity-60">
+              Примітка / причина стоплиста (необов'язково)
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="наприклад: Ремонт мосту, тимчасово без заїзду кур'єра"
+              rows={2}
+              className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-2)] p-3 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+              style={{ color: "var(--tg-theme-text-color)" }}
+            />
+          </div>
+
+          <label className="flex items-center gap-2.5 cursor-pointer pt-1">
+            <input
+              type="checkbox"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+              className="h-4 w-4 rounded accent-[var(--tg-theme-button-color)]"
+            />
+            <span className="text-xs font-medium">
+              Доставка дозволена (не в стоплисті)
+            </span>
+          </label>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--app-border)]">
+            <button
+              type="button"
+              onClick={onClose}
+              className="app-press rounded-xl px-4 py-2.5 text-xs font-semibold opacity-70 hover:opacity-100"
+            >
+              Скасувати
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="app-press rounded-xl px-5 py-2.5 text-xs font-bold text-white shadow transition"
+              style={{ background: "var(--tg-theme-button-color)" }}
+            >
+              {isSaving ? "Збереження..." : "Зберегти"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+

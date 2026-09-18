@@ -11,14 +11,17 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
 from src.auth.deps import get_current_user
 from src.config import get_settings
+from src.db.cart_repo import get_or_create_cart_id
 from src.db.connection import get_pool
-from src.routers.cart import options_cost
+from src.routers.cart import _fetch_cart, options_cost
 from src.schemas.order import (
     OrderCreateIn,
     OrderGroupOut,
     OrderItemOptionOut,
     OrderItemOut,
     OrderOut,
+    RepeatOrderIn,
+    RepeatOrderOut,
 )
 
 logger = logging.getLogger(__name__)
@@ -849,4 +852,267 @@ async def get_order(
         total_price=float(order_row["total_price"]),
         created_at=order_row["created_at"],
         groups=groups,
+    )
+
+
+@router.post("/{order_id}/cancel", response_model=OrderOut)
+async def cancel_order(
+    order_id: int,
+    background_tasks: BackgroundTasks,
+    user=Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """Скасування замовлення клієнтом (доступно, поки замовлення очікує підтвердження)."""
+    telegram_id = user["telegram_id"]
+    settings = get_settings()
+
+    async with pool.acquire() as conn, conn.transaction():
+        order_row = await conn.fetchrow(
+            """
+            SELECT id, telegram_id, status, contact_name, contact_phone, total_price
+            FROM orders
+            WHERE id = $1 AND telegram_id = $2
+            FOR UPDATE
+            """,
+            order_id,
+            telegram_id,
+        )
+        if not order_row:
+            raise HTTPException(status_code=404, detail="Замовлення не знайдено")
+
+        if order_row["status"] != "pending_moderation":
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Неможливо скасувати замовлення, оскільки воно вже обробляється або завершено. "
+                    "Для скасування зателефонуйте, будь ласка, до закладу."
+                ),
+            )
+
+        await conn.execute(
+            "UPDATE orders SET status = 'cancelled', updated_at = now() WHERE id = $1",
+            order_id,
+        )
+        await conn.execute(
+            "UPDATE order_groups SET status = 'cancelled' WHERE order_id = $1",
+            order_id,
+        )
+
+    # Сповіщаємо менеджера у чат про скасування замовлення клієнтом
+    if settings.manager_chat_id and settings.bot_token:
+        c_name = html.escape(str(order_row["contact_name"]))
+        c_phone = html.escape(str(order_row["contact_phone"]))
+        manager_msg = (
+            f"🚫 <b>Клієнт скасував замовлення #{order_id}</b>\n\n"
+            f"👤 Клієнт: <b>{c_name}</b> ({c_phone})\n"
+            f"💵 Сума: {float(order_row['total_price']):.2f} ₴\n"
+            f"<i>Замовлення автоматично позначено як скасоване.</i>"
+        )
+        background_tasks.add_task(
+            _send_telegram_notification_sync,
+            settings.bot_token,
+            {
+                "chat_id": settings.manager_chat_id,
+                "text": manager_msg,
+                "parse_mode": "HTML",
+            },
+        )
+
+    async with pool.acquire() as conn:
+        updated = await _fetch_order_by_id(conn, order_id, telegram_id)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Замовлення не знайдено")
+        return updated
+
+
+@router.post("/{order_id}/repeat", response_model=RepeatOrderOut)
+async def repeat_order(
+    order_id: int,
+    payload: RepeatOrderIn | None = None,
+    user=Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Повторює раніше оформлене замовлення, додаючи його позиції до кошика за АКТУАЛЬНИМИ цінами.
+    Перевіряє доступність страв та опцій у меню на поточний момент.
+    """
+    telegram_id = user["telegram_id"]
+    replace_cart = payload.replace_cart if payload is not None else True
+
+    async with pool.acquire() as conn, conn.transaction():
+        # 1. Отримуємо замовлення
+        order_row = await conn.fetchrow(
+            """
+            SELECT id, telegram_id, total_price
+            FROM orders
+            WHERE id = $1 AND telegram_id = $2
+            """,
+            order_id,
+            telegram_id,
+        )
+        if not order_row:
+            raise HTTPException(status_code=404, detail="Замовлення не знайдено")
+
+        old_order_total = float(order_row["total_price"])
+
+        # 2. Отримуємо групи замовлення
+        group_rows = await conn.fetch(
+            "SELECT id FROM order_groups WHERE order_id = $1",
+            order_id,
+        )
+        if not group_rows:
+            raise HTTPException(status_code=400, detail="У замовленні немає страв")
+
+        group_ids = [g["id"] for g in group_rows]
+
+        # 3. Отримуємо позиції замовлення разом із поточною доступністю та актуальними цінами
+        order_items_sql = """
+            SELECT oi.id, oi.variant_id, oi.product_name, oi.variant_label, oi.qty,
+                   pv.id as current_variant_id, pv.price as current_variant_price,
+                   pv.is_available as pv_avail,
+                   p.id as current_product_id, p.name as current_product_name,
+                   p.is_available as p_avail
+            FROM order_items oi
+            LEFT JOIN product_variants pv ON pv.id = oi.variant_id
+            LEFT JOIN products p ON p.id = pv.product_id
+            WHERE oi.order_group_id = ANY($1::int[])
+            ORDER BY oi.id
+        """
+        order_item_rows = await conn.fetch(order_items_sql, group_ids)
+
+        # 4. Отримуємо збережені опції до кожної позиції
+        order_item_ids = [r["id"] for r in order_item_rows]
+        options_sql = """
+            SELECT oio.order_item_id, oio.option_group_name, oio.option_name, oio.qty
+            FROM order_item_options oio
+            WHERE oio.order_item_id = ANY($1::int[])
+            ORDER BY oio.id
+        """
+        order_opt_rows = (
+            await conn.fetch(options_sql, order_item_ids) if order_item_ids else []
+        )
+
+        opts_by_order_item: dict[int, list[asyncpg.Record]] = {}
+        for opt in order_opt_rows:
+            opts_by_order_item.setdefault(opt["order_item_id"], []).append(opt)
+
+        # 5. Підготовка кошика
+        cart_id = await get_or_create_cart_id(conn, telegram_id)
+        if replace_cart:
+            await conn.execute("DELETE FROM cart_items WHERE cart_id = $1", cart_id)
+
+        unavailable_items: list[str] = []
+        added_count = 0
+
+        # 6. Додавання доступних страв з актуальними цінами
+        for item in order_item_rows:
+            p_name = item["product_name"]
+            v_id = item["current_variant_id"]
+
+            # Перевірка доступності страви
+            if not v_id or not item["pv_avail"] or not item["p_avail"]:
+                unavailable_items.append(f"{p_name} ({item['variant_label']})")
+                continue
+
+            # Знаходимо опції для цієї страви в поточному каталозі
+            saved_opts = opts_by_order_item.get(item["id"], [])
+            resolved_options: list[dict[str, Any]] = []
+            options_unavailable = False
+
+            if saved_opts:
+                for s_opt in saved_opts:
+                    opt_match = await conn.fetchrow(
+                        """
+                        SELECT ogi.group_id, ogi.variant_id,
+                               ogi.is_available as ogi_avail,
+                               op.is_available as op_avail,
+                               opv.is_available as opv_avail
+                        FROM product_variants pv
+                        JOIN products p ON p.id = pv.product_id
+                        JOIN product_option_groups pog ON pog.product_id = p.id
+                        JOIN option_groups og ON og.id = pog.group_id
+                        JOIN option_group_items ogi ON ogi.group_id = og.id
+                        JOIN product_variants opv ON opv.id = ogi.variant_id
+                        JOIN products op ON op.id = opv.product_id
+                        WHERE pv.id = $1 AND og.name = $2 AND op.name = $3
+                        LIMIT 1
+                        """,
+                        v_id,
+                        s_opt["option_group_name"],
+                        s_opt["option_name"],
+                    )
+                    if (
+                        not opt_match
+                        or not opt_match["ogi_avail"]
+                        or not opt_match["op_avail"]
+                        or not opt_match["opv_avail"]
+                    ):
+                        options_unavailable = True
+                        break
+                    resolved_options.append(
+                        {
+                            "group_id": opt_match["group_id"],
+                            "variant_id": opt_match["variant_id"],
+                            "qty": s_opt["qty"],
+                        }
+                    )
+
+            if options_unavailable:
+                unavailable_items.append(f"{p_name} (опції більше недоступні)")
+                continue
+
+            ordered_opts = sorted(
+                resolved_options,
+                key=lambda o: (o["group_id"], o["variant_id"]),
+            )
+            options_key = "|".join(
+                f"{o['group_id']}:{o['variant_id']}:{o['qty']}" for o in ordered_opts
+            )
+
+            cart_item_id = await conn.fetchval(
+                """
+                INSERT INTO cart_items (cart_id, variant_id, qty, options_key)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (cart_id, variant_id, options_key)
+                DO UPDATE SET qty = cart_items.qty + EXCLUDED.qty
+                RETURNING id
+                """,
+                cart_id,
+                v_id,
+                item["qty"],
+                options_key,
+            )
+
+            for opt in resolved_options:
+                await conn.execute(
+                    """
+                    INSERT INTO cart_item_options (cart_item_id, group_id, variant_id, qty)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (cart_item_id, group_id, variant_id)
+                    DO UPDATE SET qty = EXCLUDED.qty
+                    """,
+                    cart_item_id,
+                    opt["group_id"],
+                    opt["variant_id"],
+                    opt["qty"],
+                )
+
+            added_count += 1
+
+        if added_count == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="На жаль, жодна зі страв цього замовлення зараз недоступна в меню.",
+            )
+
+    # Отримуємо актуальний кошик із перерахованими АКТУАЛЬНИМИ цінами
+    current_cart = await _fetch_cart(pool, telegram_id)
+    price_diff = abs(current_cart.total - old_order_total) > 0.01
+
+    return RepeatOrderOut(
+        added_count=added_count,
+        unavailable_items=unavailable_items,
+        price_changed=price_diff,
+        old_total=old_order_total,
+        new_total=current_cart.total,
     )

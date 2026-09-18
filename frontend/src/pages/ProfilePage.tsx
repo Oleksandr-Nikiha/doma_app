@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useAdminMe, useMe, useOrders, useUpdateProfile } from "@/api/queries";
+import { AddressSelector } from "@/components/delivery/AddressSelector";
 import { ErrorBox, ScreenTitle, Spinner } from "@/components/ui";
 import { haptic, hapticNotify } from "@/telegram/sdk";
 
@@ -14,7 +15,22 @@ export function ProfilePage() {
 
   const ordersCount = orders?.length ?? 0;
   const activeOrdersCount =
-    orders?.filter((o) => o.status !== "completed" && o.status !== "rejected").length ?? 0;
+    orders?.filter(
+      (o) =>
+        o.status !== "completed" &&
+        o.status !== "rejected" &&
+        o.status !== "cancelled",
+    ).length ?? 0;
+
+  const formatActiveBadge = (count: number) => {
+    if (count % 10 === 1 && count % 100 !== 11) {
+      return `${count} активне`;
+    }
+    if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) {
+      return `${count} активні`;
+    }
+    return `${count} активних`;
+  };
 
   // Витягуємо ім'я та прізвище: спочатку з окремих полів, якщо порожні — парсимо full_name
   const initialFirstName = user?.first_name || user?.full_name?.split(" ")[0] || "";
@@ -25,6 +41,8 @@ export function ProfilePage() {
   const [lastName, setLastName] = useState(initialLastName);
   const [deliveryAddress, setDeliveryAddress] = useState(user?.delivery_address || "");
   const [additionalAddress, setAdditionalAddress] = useState(user?.additional_address || "");
+  const [isEditingMainAddress, setIsEditingMainAddress] = useState(false);
+  const [isEditingAdditionalAddress, setIsEditingAdditionalAddress] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   // Оновлюємо внутрішній стан, якщо дані користувача змінилися з сервера
@@ -102,6 +120,8 @@ export function ProfilePage() {
         onSuccess: () => {
           hapticNotify("success");
           setSavedSuccess(true);
+          setIsEditingMainAddress(false);
+          setIsEditingAdditionalAddress(false);
           setTimeout(() => setSavedSuccess(false), 3000);
         },
         onError: () => {
@@ -204,7 +224,7 @@ export function ProfilePage() {
                       className="rounded-full px-2 py-0.5 text-[10px] font-bold"
                       style={{ background: "rgba(234, 179, 8, 0.15)", color: "#eab308" }}
                     >
-                      {activeOrdersCount} активне
+                      {formatActiveBadge(activeOrdersCount)}
                     </span>
                   ) : ordersCount > 0 ? (
                     <span
@@ -280,36 +300,162 @@ export function ProfilePage() {
 
         {/* Секція 2: Моя адреса */}
         <section className="app-rise space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider opacity-50">Моя адреса</p>
+          <p className="text-xs font-semibold uppercase tracking-wider opacity-50">Мої адреси доставки</p>
 
           <div className="space-y-3">
-            <label className="block">
-              <span className="text-xs font-medium opacity-60">Основна адреса</span>
-              <input
-                value={deliveryAddress}
-                onChange={(e) => {
-                  setDeliveryAddress(e.target.value);
-                  setSavedSuccess(false);
-                }}
-                placeholder="Вишгород, вул. Шевченка 1, кв. 2"
-                className="mt-1 w-full rounded-xl px-4 py-3 text-sm outline-none transition-shadow focus:ring-1 focus:ring-[var(--tg-theme-button-color)]"
-                style={inputStyle}
-              />
-            </label>
+            {/* 1. Основна адреса */}
+            {isEditingMainAddress ? (
+              <div
+                className="app-card rounded-2xl border border-[var(--app-border)] p-4 space-y-3.5 shadow-sm"
+                style={{ background: "var(--app-surface)" }}
+              >
+                <div className="flex items-center justify-between border-b pb-2 border-[var(--app-border)]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm">📍</span>
+                    <span className="text-xs font-bold uppercase tracking-wider">
+                      Основна адреса доставки
+                    </span>
+                  </div>
+                  {deliveryAddress && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptic("light");
+                        setIsEditingMainAddress(false);
+                      }}
+                      className="text-xs font-semibold text-[var(--tg-theme-button-color)] hover:opacity-80"
+                    >
+                      Згорнути ✕
+                    </button>
+                  )}
+                </div>
+                <AddressSelector
+                  value={deliveryAddress}
+                  required={false}
+                  onChange={(full) => {
+                    setDeliveryAddress(full);
+                    setSavedSuccess(false);
+                  }}
+                />
+              </div>
+            ) : (
+              <div
+                className="app-card flex items-center justify-between rounded-2xl p-3.5 border transition-all"
+                style={{ background: "var(--app-surface)", borderColor: "var(--app-border)" }}
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-lg text-blue-600">
+                    📍
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider opacity-60">
+                        Основна адреса
+                      </span>
+                      {deliveryAddress ? (
+                        <span className="rounded-full bg-emerald-500/15 px-2 py-0.2 text-[10px] font-bold text-emerald-600">
+                          Збережено
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-amber-500/15 px-2 py-0.2 text-[10px] font-semibold text-amber-600">
+                          Не вказано
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-sm font-medium truncate" title={deliveryAddress || "Вкажіть адресу для швидкого замовлення"}>
+                      {deliveryAddress || "Вкажіть адресу для швидкого замовлення"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("light");
+                    setIsEditingMainAddress(true);
+                  }}
+                  className="app-press shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold border border-[var(--app-border)] bg-[var(--app-surface-2)] text-[var(--tg-theme-button-color)] hover:opacity-100"
+                >
+                  {deliveryAddress ? "Змінити" : "+ Додати"}
+                </button>
+              </div>
+            )}
 
-            <label className="block">
-              <span className="text-xs font-medium opacity-60">Додаткова адреса</span>
-              <input
-                value={additionalAddress}
-                onChange={(e) => {
-                  setAdditionalAddress(e.target.value);
-                  setSavedSuccess(false);
-                }}
-                placeholder="Офіс, робота або адреса рідних"
-                className="mt-1 w-full rounded-xl px-4 py-3 text-sm outline-none transition-shadow focus:ring-1 focus:ring-[var(--tg-theme-button-color)]"
-                style={inputStyle}
-              />
-            </label>
+            {/* 2. Додаткова адреса */}
+            {isEditingAdditionalAddress ? (
+              <div
+                className="app-card rounded-2xl border border-[var(--app-border)] p-4 space-y-3.5 shadow-sm"
+                style={{ background: "var(--app-surface)" }}
+              >
+                <div className="flex items-center justify-between border-b pb-2 border-[var(--app-border)]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm">🏢</span>
+                    <span className="text-xs font-bold uppercase tracking-wider">
+                      Додаткова адреса (робота, рідні)
+                    </span>
+                  </div>
+                  {additionalAddress && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptic("light");
+                        setIsEditingAdditionalAddress(false);
+                      }}
+                      className="text-xs font-semibold text-[var(--tg-theme-button-color)] hover:opacity-80"
+                    >
+                      Згорнути ✕
+                    </button>
+                  )}
+                </div>
+                <AddressSelector
+                  value={additionalAddress}
+                  required={false}
+                  onChange={(full) => {
+                    setAdditionalAddress(full);
+                    setSavedSuccess(false);
+                  }}
+                />
+              </div>
+            ) : (
+              <div
+                className="app-card flex items-center justify-between rounded-2xl p-3.5 border transition-all"
+                style={{ background: "var(--app-surface)", borderColor: "var(--app-border)" }}
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-500/10 text-lg text-purple-600">
+                    🏢
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider opacity-60">
+                        Додаткова адреса
+                      </span>
+                      {additionalAddress ? (
+                        <span className="rounded-full bg-emerald-500/15 px-2 py-0.2 text-[10px] font-bold text-emerald-600">
+                          Збережено
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-slate-500/15 px-2 py-0.2 text-[10px] font-semibold opacity-60">
+                          Не вказано
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-sm font-medium truncate" title={additionalAddress || "Офіс, робота або адреса рідних"}>
+                      {additionalAddress || "Офіс, робота або адреса рідних"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("light");
+                    setIsEditingAdditionalAddress(true);
+                  }}
+                  className="app-press shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold border border-[var(--app-border)] bg-[var(--app-surface-2)] text-[var(--tg-theme-button-color)] hover:opacity-100"
+                >
+                  {additionalAddress ? "Змінити" : "+ Додати"}
+                </button>
+              </div>
+            )}
           </div>
         </section>
 

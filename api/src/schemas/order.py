@@ -75,3 +75,15 @@ class OrderOut(BaseModel):
     total_price: float
     created_at: datetime
     groups: list[OrderGroupOut] = []
+
+
+class RepeatOrderIn(BaseModel):
+    replace_cart: bool = True
+
+
+class RepeatOrderOut(BaseModel):
+    added_count: int
+    unavailable_items: list[str] = []
+    price_changed: bool = False
+    old_total: float
+    new_total: float

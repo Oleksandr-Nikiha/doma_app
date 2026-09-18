@@ -20,6 +20,8 @@ import type {
   AdminOptionGroupItem,
   AdminProduct,
   AdminVariant,
+  BulkAvailabilityPayload,
+  BulkOptionGroupPayload,
   Cart,
   CartItemOption,
   Category,
@@ -38,6 +40,7 @@ import type {
   OptionSelection,
   Order,
   OrderCreatePayload,
+  RepeatOrderResponse,
   ProductCreatePayload,
   ProductDetail,
   ProductListItem,
@@ -56,6 +59,10 @@ import type {
   AdminOrderListItem,
   AdminOrderDetail,
   AdminOrderUpdatePayload,
+  DeliveryAddress,
+  AdminDeliveryAddress,
+  DeliveryAddressCreatePayload,
+  DeliveryAddressUpdatePayload,
 } from "@/api/types";
 
 /** Ключі кешу зібрані в одному місці — щоб інвалідація не розповзалась по компонентах. */
@@ -77,6 +84,10 @@ export const keys = {
   adminOptionGroupItems: (groupId: number) => ["admin", "option-groups", groupId, "items"] as const,
   adminVariantChoices: ["admin", "variant-choices"] as const,
   adminLocationsDelivery: ["admin", "locations", "delivery"] as const,
+  adminDeliveryAddresses: (params?: { city?: string; search?: string; isActive?: boolean }) =>
+    ["admin", "delivery", "addresses", params] as const,
+  deliveryCities: ["delivery", "cities"] as const,
+  deliveryAddresses: (city?: string) => ["delivery", "addresses", city] as const,
   adminUsers: (query: string) => ["admin", "users", query] as const,
   adminOrders: (params?: { status?: string | null; locationId?: number | null }) =>
     ["admin", "orders", params?.status, params?.locationId] as const,
@@ -288,8 +299,41 @@ export function useOrder(orderId: number) {
     enabled: orderId > 0,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      // Опитуємо кожні 3.5 секунди, поки статус очікує модерації
-      return status === "pending_moderation" ? 3500 : false;
+      if (!status) return 3500;
+      // Опитуємо кожні 3.5 секунди, поки замовлення активне
+      const terminalStatuses = ["completed", "rejected", "cancelled"];
+      return !terminalStatuses.includes(status) ? 3500 : false;
+    },
+  });
+}
+
+export function useCancelOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orderId: number) =>
+      api.post<Order>(`/orders/${orderId}/cancel`),
+    onSuccess: (updatedOrder) => {
+      qc.invalidateQueries({ queryKey: keys.orders });
+      qc.setQueryData(keys.order(updatedOrder.id), updatedOrder);
+    },
+  });
+}
+
+export function useRepeatOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orderId,
+      replaceCart = true,
+    }: {
+      orderId: number;
+      replaceCart?: boolean;
+    }) =>
+      api.post<RepeatOrderResponse>(`/orders/${orderId}/repeat`, {
+        replace_cart: replaceCart,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.cart });
     },
   });
 }
@@ -520,6 +564,39 @@ export function useToggleVariantAvailability() {
   });
 }
 
+// --- Масові (Bulk) операції над стравами ---
+
+export function useBulkProductAvailability() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: BulkAvailabilityPayload) =>
+      api.patch<{ updated_count: number; product_ids: number[]; is_available: boolean }>(
+        "/admin/products/bulk/availability",
+        payload,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+      void qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+export function useBulkProductOptionGroups() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: BulkOptionGroupPayload) =>
+      api.post<{ updated_count: number; product_ids: number[]; action: string }>(
+        "/admin/products/bulk/option-groups",
+        payload,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "products"] });
+      void qc.invalidateQueries({ queryKey: ["products"] });
+      void qc.invalidateQueries({ queryKey: keys.adminOptionGroups });
+    },
+  });
+}
+
 // --- Адмін-панель: Додатки (Option Groups) ---
 
 export function useAdminOptionGroups() {
@@ -706,6 +783,86 @@ export function useUpdateLocationDelivery() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.adminLocationsDelivery });
       void qc.invalidateQueries({ queryKey: keys.locations });
+    },
+  });
+}
+
+// --- Довідник адрес доставки (Клієнтські та Адмінські) ---
+
+export function useDeliveryCities() {
+  return useQuery({
+    queryKey: keys.deliveryCities,
+    queryFn: () => api.get<string[]>("/delivery/cities"),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useDeliveryAddresses(city: string = "Вишгород") {
+  return useQuery({
+    queryKey: keys.deliveryAddresses(city),
+    queryFn: () =>
+      api.get<DeliveryAddress[]>(`/delivery/addresses?city=${encodeURIComponent(city)}`),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useAdminDeliveryAddresses(params?: {
+  city?: string;
+  search?: string;
+  isActive?: boolean;
+}) {
+  return useQuery({
+    queryKey: keys.adminDeliveryAddresses(params),
+    queryFn: () => {
+      const searchParams = new URLSearchParams();
+      if (params?.city) searchParams.append("city", params.city);
+      if (params?.search) searchParams.append("search", params.search);
+      if (params?.isActive !== undefined) searchParams.append("is_active", String(params.isActive));
+      const qs = searchParams.toString() ? `?${searchParams.toString()}` : "";
+      return api.get<AdminDeliveryAddress[]>(`/admin/delivery/addresses${qs}`);
+    },
+  });
+}
+
+export function useCreateAdminDeliveryAddress() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: DeliveryAddressCreatePayload) =>
+      api.post<AdminDeliveryAddress>("/admin/delivery/addresses", payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "delivery", "addresses"] });
+      void qc.invalidateQueries({ queryKey: ["delivery", "addresses"] });
+      void qc.invalidateQueries({ queryKey: keys.deliveryCities });
+    },
+  });
+}
+
+export function useUpdateAdminDeliveryAddress() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      addressId,
+      payload,
+    }: {
+      addressId: number;
+      payload: DeliveryAddressUpdatePayload;
+    }) => api.patch<AdminDeliveryAddress>(`/admin/delivery/addresses/${addressId}`, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "delivery", "addresses"] });
+      void qc.invalidateQueries({ queryKey: ["delivery", "addresses"] });
+    },
+  });
+}
+
+export function useDeleteAdminDeliveryAddress() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (addressId: number) =>
+      api.delete<{ status: string; deleted_id: number }>(`/admin/delivery/addresses/${addressId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "delivery", "addresses"] });
+      void qc.invalidateQueries({ queryKey: ["delivery", "addresses"] });
+      void qc.invalidateQueries({ queryKey: keys.deliveryCities });
     },
   });
 }

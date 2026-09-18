@@ -148,6 +148,22 @@ class ProductOptionGroupUpdateIn(BaseModel):
     sort_order: int | None = None
 
 
+class BulkAvailabilityIn(BaseModel):
+    product_ids: list[int]
+    is_available: bool
+
+
+class BulkOptionGroupActionIn(BaseModel):
+    action: Literal["attach", "detach", "replace", "clear"]
+    product_ids: list[int]
+    group_id: int | None = None
+    min_select: int = 0
+    max_select: int = 1
+    free_count: int = 0
+    groups: list[ProductOptionGroupAttachIn] | None = None
+
+
+
 # --- Моделі відповідей для адмінки ---
 
 

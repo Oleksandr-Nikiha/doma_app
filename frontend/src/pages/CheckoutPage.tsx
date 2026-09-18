@@ -5,6 +5,7 @@ import { ApiError } from "@/api/client";
 import { useCart, useCreateOrder, useLocations, useMe } from "@/api/queries";
 import { ErrorBox, ScreenTitle, SegmentedControl, Spinner, formatPrice } from "@/components/ui";
 import { WebHeader } from "@/components/WebHeader";
+import { AddressSelector } from "@/components/delivery/AddressSelector";
 import { useBackButton } from "@/hooks/useBackButton";
 import { isTelegramWebApp } from "@/telegram/env";
 import { haptic, hapticNotify } from "@/telegram/sdk";
@@ -56,8 +57,29 @@ export function CheckoutPage() {
   const [fulfillmentType, setFulfillmentType] = useState<"delivery" | "pickup">("delivery");
   const [timeMode, setTimeMode] = useState<"asap" | "scheduled">("asap");
   const [scheduledTime, setScheduledTime] = useState<string>("");
-  const [streetAddress, setStreetAddress] = useState(user?.delivery_address ?? "");
-  const [additionalAddress, setAdditionalAddress] = useState(user?.additional_address ?? "");
+  type AddressSource = "main" | "additional" | "custom";
+  const [addressSource, setAddressSource] = useState<AddressSource>(() => {
+    if (user?.delivery_address) return "main";
+    if (user?.additional_address) return "additional";
+    return "custom";
+  });
+  const [customAddressStr, setCustomAddressStr] = useState("");
+  const [isCustomAddressValid, setIsCustomAddressValid] = useState(false);
+  const [courierNote, setCourierNote] = useState("");
+
+  const [userAddressesLoaded, setUserAddressesLoaded] = useState(false);
+  useEffect(() => {
+    if (user && !userAddressesLoaded) {
+      setUserAddressesLoaded(true);
+      if (user.delivery_address) {
+        setAddressSource("main");
+      } else if (user.additional_address) {
+        setAddressSource("additional");
+      } else {
+        setAddressSource("custom");
+      }
+    }
+  }, [user, userAddressesLoaded]);
   const [contactName, setContactName] = useState(user?.full_name ?? "");
   const [contactPhone, setContactPhone] = useState(user?.phone ?? "");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "qr">("cash");
@@ -149,14 +171,33 @@ export function CheckoutPage() {
         hapticNotify("error");
         return;
       }
-      const street = streetAddress.trim();
-      const extra = additionalAddress.trim();
-      if (!street) {
-        setSubmitError("Вкажіть вулицю та номер будинку");
-        hapticNotify("error");
-        return;
+
+      let baseAddress = "";
+      if (addressSource === "main") {
+        if (!user?.delivery_address?.trim()) {
+          setSubmitError("У вашому профілі не вказано основну адресу. Оберіть 'Інша' або збережіть адресу в профілі.");
+          hapticNotify("error");
+          return;
+        }
+        baseAddress = user.delivery_address.trim();
+      } else if (addressSource === "additional") {
+        if (!user?.additional_address?.trim()) {
+          setSubmitError("У вашому профілі не вказано додаткову адресу. Оберіть 'Інша' або збережіть адресу в профілі.");
+          hapticNotify("error");
+          return;
+        }
+        baseAddress = user.additional_address.trim();
+      } else {
+        if (!isCustomAddressValid || !customAddressStr.trim()) {
+          setSubmitError("Оберіть вулицю з довідника та обов'язково вкажіть номер будинку");
+          hapticNotify("error");
+          return;
+        }
+        baseAddress = customAddressStr.trim();
       }
-      fullDeliveryAddress = extra ? `${street}, ${extra}` : street;
+
+      const extra = courierNote.trim();
+      fullDeliveryAddress = extra ? `${baseAddress}, ${extra}` : baseAddress;
     }
 
     if (timeMode === "scheduled") {
@@ -303,27 +344,131 @@ export function CheckoutPage() {
         {fulfillmentType === "delivery" ? (
           <div className="space-y-3">
             <div>
-              <label className="mb-1 block text-xs font-medium opacity-70">Вулиця, будинок *</label>
-              <input
-                type="text"
-                value={streetAddress}
-                onChange={(e) => setStreetAddress(e.target.value)}
-                placeholder="наприклад: вул. Набережна, 4, під'їзд 2"
-                required
-                className="w-full rounded-xl p-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
-                style={{ background: "var(--app-surface-2)" }}
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wider opacity-60">
+                Адреса доставки
+              </label>
+              <SegmentedControl
+                value={addressSource}
+                onChange={(val) => {
+                  haptic("light");
+                  setAddressSource(val);
+                }}
+                options={[
+                  { value: "main", label: "Основна", icon: "📍" },
+                  { value: "additional", label: "Додаткова", icon: "🏢" },
+                  { value: "custom", label: "Інша", icon: "✏️" },
+                ]}
               />
             </div>
+
+            {/* Вміст обраного типу адреси */}
+            {addressSource === "main" && (
+              <div
+                className="rounded-2xl border border-[var(--app-border)] p-3.5 transition"
+                style={{ background: "var(--app-surface-2)" }}
+              >
+                {user?.delivery_address ? (
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium opacity-60">📍 Основна адреса</span>
+                      <button
+                        type="button"
+                        onClick={() => navigate("/profile")}
+                        className="text-xs font-semibold text-[var(--tg-theme-button-color)] hover:underline"
+                      >
+                        Змінити в профілі
+                      </button>
+                    </div>
+                    <p className="mt-1 text-sm font-semibold">{user.delivery_address}</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-2">
+                    <p className="text-xs opacity-70">Основна адреса не вказана у вашому профілі</p>
+                    <div className="mt-2.5 flex justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => navigate("/profile")}
+                        className="rounded-xl px-3 py-1.5 text-xs font-medium bg-[var(--app-surface)] border border-[var(--app-border)]"
+                      >
+                        Вказати в профілі
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAddressSource("custom")}
+                        className="rounded-xl px-3 py-1.5 text-xs font-semibold"
+                        style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
+                      >
+                        Вказати іншу адресу
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {addressSource === "additional" && (
+              <div
+                className="rounded-2xl border border-[var(--app-border)] p-3.5 transition"
+                style={{ background: "var(--app-surface-2)" }}
+              >
+                {user?.additional_address ? (
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium opacity-60">🏢 Додаткова адреса</span>
+                      <button
+                        type="button"
+                        onClick={() => navigate("/profile")}
+                        className="text-xs font-semibold text-[var(--tg-theme-button-color)] hover:underline"
+                      >
+                        Змінити в профілі
+                      </button>
+                    </div>
+                    <p className="mt-1 text-sm font-semibold">{user.additional_address}</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-2">
+                    <p className="text-xs opacity-70">Додаткова адреса не вказана у вашому профілі</p>
+                    <div className="mt-2.5 flex justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => navigate("/profile")}
+                        className="rounded-xl px-3 py-1.5 text-xs font-medium bg-[var(--app-surface)] border border-[var(--app-border)]"
+                      >
+                        Вказати в профілі
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAddressSource("custom")}
+                        className="rounded-xl px-3 py-1.5 text-xs font-semibold"
+                        style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
+                      >
+                        Вказати іншу адресу
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {addressSource === "custom" && (
+              <AddressSelector
+                onChange={(full, valid) => {
+                  setCustomAddressStr(full);
+                  setIsCustomAddressValid(valid);
+                }}
+              />
+            )}
+
             <div>
-              <label className="mb-1 block text-xs font-medium opacity-70">
-                Квартира, поверх, домофон (необов'язково)
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider opacity-60">
+                Під'їзд, код домофону або примітка кур'єру (необов'язково)
               </label>
               <input
                 type="text"
-                value={additionalAddress}
-                onChange={(e) => setAdditionalAddress(e.target.value)}
-                placeholder="кв. 42, поверх 5, код 1234"
-                className="w-full rounded-xl p-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                value={courierNote}
+                onChange={(e) => setCourierNote(e.target.value)}
+                placeholder="під'їзд 2, поверх 4, код 1234, заїзд з боку двору"
+                className="w-full rounded-xl border border-[var(--app-border)] p-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
                 style={{ background: "var(--app-surface-2)" }}
               />
             </div>

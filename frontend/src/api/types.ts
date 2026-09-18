@@ -188,6 +188,14 @@ export interface Order {
   groups: OrderGroup[];
 }
 
+export interface RepeatOrderResponse {
+  added_count: number;
+  unavailable_items: string[];
+  price_changed: boolean;
+  old_total: number;
+  new_total: number;
+}
+
 // --- Адмін-панель ---
 
 export interface AdminMe {
@@ -383,6 +391,22 @@ export interface ProductOptionGroupUpdatePayload {
   sort_order?: number;
 }
 
+export interface BulkAvailabilityPayload {
+  product_ids: number[];
+  is_available: boolean;
+}
+
+export interface BulkOptionGroupPayload {
+  action: "attach" | "detach" | "replace" | "clear";
+  product_ids: number[];
+  group_id?: number | null;
+  min_select?: number;
+  max_select?: number;
+  free_count?: number;
+  groups?: ProductOptionGroupAttachPayload[] | null;
+}
+
+
 export interface VariantSelectorChoice {
   variant_id: number;
   product_id: number;
@@ -405,6 +429,41 @@ export interface LocationDeliveryUpdatePayload {
   is_delivery_enabled?: boolean;
   delivery_start_time?: string;
   delivery_end_time?: string;
+}
+
+// --- Довідник адрес доставки та адресний стоплист ---
+
+export interface DeliveryAddress {
+  id: number;
+  city: string;
+  street: string;
+}
+
+export interface AdminDeliveryAddress {
+  id: number;
+  city: string;
+  street: string;
+  is_active: boolean;
+  notes: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeliveryAddressCreatePayload {
+  city?: string;
+  street: string;
+  is_active?: boolean;
+  notes?: string | null;
+  sort_order?: number;
+}
+
+export interface DeliveryAddressUpdatePayload {
+  city?: string;
+  street?: string;
+  is_active?: boolean;
+  notes?: string | null;
+  sort_order?: number;
 }
 
 // --- Керування користувачами (Адмінка) ---

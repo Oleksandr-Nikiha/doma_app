@@ -20,6 +20,8 @@ from src.schemas.admin import (
     AdminUserOut,
     AdminUserUpdateIn,
     AvailabilityUpdateIn,
+    BulkAvailabilityIn,
+    BulkOptionGroupActionIn,
     CategoryAdminOut,
     CategoryCreateIn,
     CategoryUpdateIn,
@@ -44,6 +46,11 @@ from src.schemas.admin import (
     VariantCreateIn,
     VariantSelectorOut,
     VariantUpdateIn,
+)
+from src.schemas.delivery_address import (
+    AdminDeliveryAddressOut,
+    DeliveryAddressCreateIn,
+    DeliveryAddressUpdateIn,
 )
 
 logger = logging.getLogger(__name__)
@@ -555,6 +562,182 @@ async def create_product(
     res["location_name"] = cat["location_name"]
     res["variants"] = variants_out
     return ProductAdminOut(**res)
+
+
+@router.patch("/products/bulk/availability")
+async def bulk_toggle_products_availability(
+    data: BulkAvailabilityIn,
+    pool: asyncpg.Pool = Depends(get_pool),
+    staff: asyncpg.Record = Depends(get_current_staff),
+):
+    """Масова зміна доступності страв (включення / виключення зі стоп-листа)."""
+    if not data.product_ids:
+        return {"updated_count": 0, "product_ids": [], "is_available": data.is_available}
+
+    async with pool.acquire() as conn:
+        if staff["role"] == "manager" and staff["location_id"]:
+            allowed = await conn.fetch(
+                """
+                SELECT p.id
+                FROM products p
+                JOIN categories c ON c.id = p.category_id
+                WHERE p.id = ANY($1::int[]) AND c.location_id = $2
+                """,
+                data.product_ids,
+                staff["location_id"],
+            )
+            product_ids = [r["id"] for r in allowed]
+        else:
+            allowed = await conn.fetch(
+                "SELECT id FROM products WHERE id = ANY($1::int[])",
+                data.product_ids,
+            )
+            product_ids = [r["id"] for r in allowed]
+
+        if not product_ids:
+            return {"updated_count": 0, "product_ids": [], "is_available": data.is_available}
+
+        await conn.execute(
+            "UPDATE products SET is_available = $1 WHERE id = ANY($2::int[])",
+            data.is_available,
+            product_ids,
+        )
+        await conn.execute(
+            "UPDATE product_variants SET is_available = $1 WHERE product_id = ANY($2::int[])",
+            data.is_available,
+            product_ids,
+        )
+
+    return {
+        "updated_count": len(product_ids),
+        "product_ids": product_ids,
+        "is_available": data.is_available,
+    }
+
+
+@router.post("/products/bulk/option-groups")
+async def bulk_manage_product_option_groups(
+    data: BulkOptionGroupActionIn,
+    pool: asyncpg.Pool = Depends(get_pool),
+    staff: asyncpg.Record = Depends(get_current_staff),
+):
+    """Масове керування додатками до страв: attach, detach, replace, clear."""
+    if not data.product_ids:
+        return {"updated_count": 0, "product_ids": [], "action": data.action}
+
+    async with pool.acquire() as conn:
+        if staff["role"] == "manager" and staff["location_id"]:
+            allowed = await conn.fetch(
+                """
+                SELECT p.id
+                FROM products p
+                JOIN categories c ON c.id = p.category_id
+                WHERE p.id = ANY($1::int[]) AND c.location_id = $2
+                """,
+                data.product_ids,
+                staff["location_id"],
+            )
+            product_ids = [r["id"] for r in allowed]
+        else:
+            allowed = await conn.fetch(
+                "SELECT id FROM products WHERE id = ANY($1::int[])",
+                data.product_ids,
+            )
+            product_ids = [r["id"] for r in allowed]
+
+        if not product_ids:
+            return {"updated_count": 0, "product_ids": [], "action": data.action}
+
+        if data.action == "attach":
+            if not data.group_id:
+                raise HTTPException(status_code=400, detail="group_id є обов'язковим для attach")
+            group = await conn.fetchrow("SELECT id FROM option_groups WHERE id = $1", data.group_id)
+            if not group:
+                raise HTTPException(status_code=404, detail="Групу додатків не знайдено")
+            if data.min_select < 0 or data.max_select < data.min_select:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Некоректні ліміти: max_select повинен бути >= min_select >= 0",
+                )
+            await conn.execute(
+                """
+                INSERT INTO product_option_groups (
+                    product_id, group_id, min_select, max_select, free_count, sort_order
+                )
+                SELECT pid, $2, $3, $4, $5, 0
+                FROM unnest($1::int[]) AS pid
+                ON CONFLICT (product_id, group_id) DO UPDATE
+                    SET min_select = EXCLUDED.min_select,
+                        max_select = EXCLUDED.max_select,
+                        free_count = EXCLUDED.free_count
+                """,
+                product_ids,
+                data.group_id,
+                data.min_select,
+                data.max_select,
+                data.free_count,
+            )
+
+        elif data.action == "detach":
+            if not data.group_id:
+                raise HTTPException(status_code=400, detail="group_id є обов'язковим для detach")
+            await conn.execute(
+                """
+                DELETE FROM product_option_groups
+                WHERE product_id = ANY($1::int[]) AND group_id = $2
+                """,
+                product_ids,
+                data.group_id,
+            )
+
+        elif data.action == "replace":
+            async with conn.transaction():
+                await conn.execute(
+                    "DELETE FROM product_option_groups WHERE product_id = ANY($1::int[])",
+                    product_ids,
+                )
+                if data.groups:
+                    for g in data.groups:
+                        if g.min_select < 0 or g.max_select < g.min_select:
+                            raise HTTPException(
+                                status_code=400,
+                                detail=(
+                                    f"Некоректні ліміти для групи {g.group_id}: "
+                                    "max_select >= min_select >= 0"
+                                ),
+                            )
+                        await conn.execute(
+                            """
+                            INSERT INTO product_option_groups (
+                                product_id, group_id, min_select, max_select, free_count, sort_order
+                            )
+                            SELECT pid, $2, $3, $4, $5, $6
+                            FROM unnest($1::int[]) AS pid
+                            ON CONFLICT (product_id, group_id) DO UPDATE
+                                SET min_select = EXCLUDED.min_select,
+                                    max_select = EXCLUDED.max_select,
+                                    free_count = EXCLUDED.free_count,
+                                    sort_order = EXCLUDED.sort_order
+                            """,
+                            product_ids,
+                            g.group_id,
+                            g.min_select,
+                            g.max_select,
+                            g.free_count,
+                            g.sort_order,
+                        )
+
+        elif data.action == "clear":
+            await conn.execute(
+                "DELETE FROM product_option_groups WHERE product_id = ANY($1::int[])",
+                product_ids,
+            )
+
+    return {
+        "updated_count": len(product_ids),
+        "product_ids": product_ids,
+        "action": data.action,
+    }
 
 
 @router.patch("/products/{product_id}", response_model=ProductAdminOut)
@@ -1461,7 +1644,7 @@ async def list_admin_users(
                COUNT(o.id)::int AS orders_count
         FROM users u
         LEFT JOIN orders o ON o.telegram_id = u.telegram_id
-        WHERE ($1 = '' OR u.phone ILIKE '%' || $1 || '%' OR u.full_name ILIKE '%' || $1 || '%')
+        WHERE ($1 = '' OR u.phone ILIKE '%' || $1 || '%' OR u.full_name ILIKE '%' || $1 || '%' OR u.telegram_id::text ILIKE '%' || $1 || '%')
         GROUP BY u.id
         ORDER BY u.id DESC
         LIMIT $2
@@ -1698,14 +1881,38 @@ async def get_admin_order(
 async def update_admin_order(
     order_id: int,
     data: AdminOrderUpdateIn,
+    background_tasks: BackgroundTasks,
     pool: asyncpg.Pool = Depends(get_pool),
     staff: asyncpg.Record = Depends(get_current_staff),
 ):
     """Редагування замовлення: час доставки, позиції, додатки, контакти, статус."""
+    status_changed = False
+    new_status = None
+    existing_tg_id = None
+    existing_fulfillment = None
+    existing_scheduled = None
+    existing_addr = None
+    existing_total = 0.0
+
     async with pool.acquire() as conn, conn.transaction():
-        existing = await conn.fetchrow("SELECT id FROM orders WHERE id = $1 FOR UPDATE", order_id)
+        existing = await conn.fetchrow(
+            """
+            SELECT id, status, telegram_id, fulfillment_type, scheduled_time,
+                   delivery_address, total_price
+            FROM orders
+            WHERE id = $1
+            FOR UPDATE
+            """,
+            order_id,
+        )
         if not existing:
             raise HTTPException(status_code=404, detail="Замовлення не знайдено")
+
+        existing_tg_id = existing["telegram_id"]
+        existing_fulfillment = existing["fulfillment_type"]
+        existing_scheduled = existing["scheduled_time"]
+        existing_addr = existing["delivery_address"]
+        existing_total = float(existing["total_price"])
 
         group_rows = await conn.fetch(
             "SELECT id, location_id FROM order_groups WHERE order_id = $1", order_id
@@ -1728,24 +1935,39 @@ async def update_admin_order(
             clean_time = data.scheduled_time.strip() or None
             order_params.append(clean_time)
             order_updates.append(f"scheduled_time = ${len(order_params)}")
+            existing_scheduled = clean_time
 
         if data.status is not None:
-            order_params.append(data.status)
+            clean_status = data.status.strip()
+            GROUP_STATUS_MAP = {
+                "pending_moderation": "pending",
+                "confirmed": "accepted",
+                "in_progress": "cooking",
+                "ready": "ready",
+                "completed": "ready",
+                "rejected": "cancelled",
+                "cancelled": "cancelled",
+            }
+            if clean_status not in GROUP_STATUS_MAP:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Неприпустимий статус замовлення: {clean_status}",
+                )
+            order_params.append(clean_status)
             order_updates.append(f"status = ${len(order_params)}")
-            group_status = (
-                "cancelled"
-                if data.status in ("rejected", "cancelled")
-                else "accepted"
-                if data.status == "confirmed"
-                else "pending"
-            )
+            group_status = GROUP_STATUS_MAP[clean_status]
             await conn.execute(
                 "UPDATE order_groups SET status = $1 WHERE order_id = $2", group_status, order_id
             )
+            if clean_status != existing["status"]:
+                status_changed = True
+                new_status = clean_status
 
         if data.delivery_address is not None:
-            order_params.append(data.delivery_address.strip())
+            clean_addr = data.delivery_address.strip()
+            order_params.append(clean_addr)
             order_updates.append(f"delivery_address = ${len(order_params)}")
+            existing_addr = clean_addr
 
         if data.contact_name is not None:
             order_params.append(data.contact_name.strip())
@@ -1828,6 +2050,70 @@ async def update_admin_order(
                 order_id,
             )
 
+    if status_changed and new_status and existing_tg_id:
+        settings = get_settings()
+        if settings.bot_token:
+            final_total = total_calculated_price if data.items is not None else existing_total
+            time_part = f" на {existing_scheduled}" if existing_scheduled else ""
+            esc_addr = html.escape(existing_addr or "")
+            if new_status == "confirmed":
+                client_fulfillment = (
+                    f"🛵 Очікуйте кур'єра{time_part} за адресою: <code>{esc_addr}</code>"
+                    if existing_fulfillment == "delivery"
+                    else f"🛍️ Замовлення буде чекати на вас у закладі{time_part}!"
+                )
+                client_text = (
+                    f"🎉 <b>Ваше замовлення #{order_id} підтверджено!</b>\n\n"
+                    f"Ми вже розпочали приготування. 🍕✨\n"
+                    f"{client_fulfillment}\n"
+                    f"💵 Сума: {final_total:.2f} ₴"
+                )
+            elif new_status == "in_progress":
+                client_text = (
+                    f"👨‍🍳 <b>Замовлення #{order_id} готується!</b>\n\n"
+                    f"Наші кухарі вже готують ваші улюблені страви на кухні."
+                )
+            elif new_status == "ready":
+                if existing_fulfillment == "delivery":
+                    client_text = (
+                        f"🛵 <b>Замовлення #{order_id} готове та передано кур'єру!</b>\n\n"
+                        f"Кур'єр уже прямує за адресою: <code>{esc_addr}</code> 💨"
+                    )
+                else:
+                    client_text = (
+                        f"🛍️ <b>Замовлення #{order_id} готове до видачі!</b>\n\n"
+                        f"Ваше замовлення чекає на вас у закладі. Завітайте забрати!"
+                    )
+            elif new_status == "completed":
+                client_text = (
+                    f"🏁 <b>Замовлення #{order_id} виконано!</b>\n\n"
+                    f"Смачного! Дякуємо, що обираєте Doma. Будемо раді бачити вас знову! ❤️"
+                )
+            elif new_status == "rejected":
+                client_text = (
+                    f"😔 <b>Замовлення #{order_id} відхилено</b>\n\n"
+                    f"На жаль, наразі ми не можемо виконати це замовлення. "
+                    f"Менеджер закладу зателефонує вам для уточнення деталей."
+                )
+            elif new_status == "cancelled":
+                client_text = (
+                    f"🚫 <b>Замовлення #{order_id} скасовано</b>\n\n"
+                    f"Ваше замовлення було скасовано менеджером закладу."
+                )
+            else:
+                client_text = None
+
+            if client_text:
+                background_tasks.add_task(
+                    _send_tg_order_notification,
+                    settings.bot_token,
+                    {
+                        "chat_id": existing_tg_id,
+                        "text": client_text,
+                        "parse_mode": "HTML",
+                    },
+                )
+
     return await get_admin_order(order_id, pool, staff)
 
 
@@ -1884,3 +2170,147 @@ async def notify_order_updated(
         payload,
     )
     return {"status": "ok", "message": "Сповіщення надіслано клієнту"}
+
+
+# ============================================================================
+# 8. Керування довідником адрес доставки та стоплистом
+# ============================================================================
+
+
+@router.get("/delivery/addresses", response_model=list[AdminDeliveryAddressOut])
+async def admin_list_delivery_addresses(
+    city: str | None = Query(None, description="Фільтр за містом"),
+    search: str | None = Query(None, description="Пошук за назвою вулиці"),
+    is_active: bool | None = Query(None, description="Фільтр за активністю"),
+    pool: asyncpg.Pool = Depends(get_pool),
+    staff: asyncpg.Record = Depends(get_current_staff),
+):
+    """
+    Отримання повного списку адрес (включаючи стоплист) для адмін-панелі.
+    Доступно для адміністратора та менеджера.
+    """
+    query = """
+        SELECT id, city, street, is_active, notes, sort_order, created_at, updated_at
+        FROM delivery_addresses
+        WHERE 1=1
+    """
+    params = []
+    if city:
+        params.append(city.strip())
+        query += f" AND lower(city) = lower(${len(params)})"
+    if search:
+        params.append(f"%{search.strip()}%")
+        query += f" AND street ILIKE ${len(params)}"
+    if is_active is not None:
+        params.append(is_active)
+        query += f" AND is_active = ${len(params)}"
+
+    query += " ORDER BY city ASC, sort_order ASC, street ASC"
+
+    rows = await pool.fetch(query, *params)
+    return [AdminDeliveryAddressOut(**dict(r)) for r in rows]
+
+
+@router.post(
+    "/delivery/addresses",
+    response_model=AdminDeliveryAddressOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def admin_create_delivery_address(
+    data: DeliveryAddressCreateIn,
+    pool: asyncpg.Pool = Depends(get_pool),
+    staff: asyncpg.Record = Depends(get_current_staff),
+):
+    """Створення нової адреси/вулиці в довіднику."""
+    clean_city = data.city.strip()
+    clean_street = data.street.strip()
+    clean_notes = data.notes.strip() if data.notes else None
+
+    try:
+        row = await pool.fetchrow(
+            """
+            INSERT INTO delivery_addresses (city, street, is_active, notes, sort_order)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, city, street, is_active, notes, sort_order, created_at, updated_at
+            """,
+            clean_city,
+            clean_street,
+            data.is_active,
+            clean_notes,
+            data.sort_order,
+        )
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Адреса '{clean_street}' для міста '{clean_city}' вже існує",
+        )
+    return AdminDeliveryAddressOut(**dict(row))
+
+
+@router.patch("/delivery/addresses/{address_id}", response_model=AdminDeliveryAddressOut)
+async def admin_update_delivery_address(
+    address_id: int,
+    data: DeliveryAddressUpdateIn,
+    pool: asyncpg.Pool = Depends(get_pool),
+    staff: asyncpg.Record = Depends(get_current_staff),
+):
+    """Оновлення адреси або перемикання стоплиста."""
+    updates = []
+    params = [address_id]
+
+    if data.city is not None:
+        params.append(data.city.strip())
+        updates.append(f"city = ${len(params)}")
+    if data.street is not None:
+        params.append(data.street.strip())
+        updates.append(f"street = ${len(params)}")
+    if data.is_active is not None:
+        params.append(data.is_active)
+        updates.append(f"is_active = ${len(params)}")
+    if data.notes is not None:
+        clean_notes = data.notes.strip() if data.notes else None
+        params.append(clean_notes)
+        updates.append(f"notes = ${len(params)}")
+    if data.sort_order is not None:
+        params.append(data.sort_order)
+        updates.append(f"sort_order = ${len(params)}")
+
+    if not updates:
+        row = await pool.fetchrow("SELECT * FROM delivery_addresses WHERE id = $1", address_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Адресу не знайдено")
+        return AdminDeliveryAddressOut(**dict(row))
+
+    updates.append("updated_at = NOW()")
+    sql = f"""
+        UPDATE delivery_addresses
+        SET {', '.join(updates)}
+        WHERE id = $1
+        RETURNING id, city, street, is_active, notes, sort_order, created_at, updated_at
+    """
+    try:
+        row = await pool.fetchrow(sql, *params)
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(
+            status_code=400,
+            detail="Адреса з такою назвою для цього міста вже існує",
+        )
+    if not row:
+        raise HTTPException(status_code=404, detail="Адресу не знайдено")
+    return AdminDeliveryAddressOut(**dict(row))
+
+
+@router.delete("/delivery/addresses/{address_id}")
+async def admin_delete_delivery_address(
+    address_id: int,
+    pool: asyncpg.Pool = Depends(get_pool),
+    staff: asyncpg.Record = Depends(get_current_staff),
+):
+    """Видалення адреси з довідника."""
+    row = await pool.fetchrow(
+        "DELETE FROM delivery_addresses WHERE id = $1 RETURNING id", address_id
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Адресу не знайдено")
+    return {"status": "ok", "deleted_id": address_id}
+

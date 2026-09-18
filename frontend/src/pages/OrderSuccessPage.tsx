@@ -1,30 +1,38 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { useCart, useOrder } from "@/api/queries";
+import { useCancelOrder, useCart, useOrder, useRepeatOrder } from "@/api/queries";
 import { ErrorBox, ScreenTitle, Spinner, formatPrice } from "@/components/ui";
 import { WebHeader } from "@/components/WebHeader";
 import { useBackButton } from "@/hooks/useBackButton";
 import { isTelegramWebApp } from "@/telegram/env";
 import { haptic, hapticNotify } from "@/telegram/sdk";
 
-const STEPS = [
-  { key: "pending", label: "Прийнято", icon: "📝" },
+const getSteps = (fulfillmentType?: string) => [
+  { key: "pending_moderation", label: "Прийнято", icon: "📝" },
   { key: "confirmed", label: "Підтверджено", icon: "👍" },
   { key: "in_progress", label: "Готується", icon: "👨‍🍳" },
+  {
+    key: "ready",
+    label: fulfillmentType === "delivery" ? "В дорозі" : "Готово",
+    icon: fulfillmentType === "delivery" ? "🛵" : "🛍️",
+  },
   { key: "completed", label: "Виконано", icon: "🎉" },
 ];
 
 function getStepIndex(status: string) {
   switch (status) {
+    case "pending_moderation":
     case "pending":
       return 0;
     case "confirmed":
       return 1;
     case "in_progress":
       return 2;
-    case "completed":
+    case "ready":
       return 3;
+    case "completed":
+      return 4;
     default:
       return 0;
   }
@@ -39,14 +47,47 @@ export function OrderSuccessPage() {
 
   const { data: order, isPending, error, refetch } = useOrder(id);
   const { data: cart } = useCart();
+  const cancelOrder = useCancelOrder();
+  const repeatOrder = useRepeatOrder();
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const prevStatusRef = useRef<string | null>(null);
+
+  const handleRepeatOrder = () => {
+    haptic("medium");
+    repeatOrder.mutate(
+      { orderId: id },
+      {
+        onSuccess: (res) => {
+          hapticNotify("success");
+          if (res.unavailable_items && res.unavailable_items.length > 0) {
+            alert(
+              `Товари додано до кошика за актуальними цінами!\n\nЗверніть увагу: деякі позиції наразі недоступні в меню:\n• ${res.unavailable_items.join("\n• ")}`
+            );
+          } else if (res.price_changed) {
+            alert(
+              `Товари додано до кошика за актуальними цінами!\nНова сума: ${formatPrice(res.new_total)} (було: ${formatPrice(res.old_total)})`
+            );
+          }
+          navigate("/cart");
+        },
+        onError: (err) => {
+          hapticNotify("error");
+          alert(err instanceof Error ? err.message : "Не вдалося повторити замовлення");
+        },
+      }
+    );
+  };
 
   useEffect(() => {
     if (!order) return;
     if (prevStatusRef.current && prevStatusRef.current !== order.status) {
-      if (order.status === "confirmed") {
+      if (
+        order.status === "confirmed" ||
+        order.status === "ready" ||
+        order.status === "completed"
+      ) {
         hapticNotify("success");
-      } else if (order.status === "rejected") {
+      } else if (order.status === "rejected" || order.status === "cancelled") {
         hapticNotify("error");
       } else {
         haptic("medium");
@@ -73,19 +114,22 @@ export function OrderSuccessPage() {
           color: "#22c55e",
           bg: "rgba(34, 197, 94, 0.12)",
         };
-      case "rejected":
-        return {
-          text: "Відхилено",
-          subtitle: "На жаль, замовлення відхилено. Менеджер закладу зателефонує для уточнення деталей.",
-          color: "#ef4444",
-          bg: "rgba(239, 68, 68, 0.12)",
-        };
       case "in_progress":
         return {
           text: "Готується на кухні",
           subtitle: "Ваші страви просто зараз готуються кухарями! 👨‍🍳",
           color: "#3b82f6",
           bg: "rgba(59, 130, 246, 0.12)",
+        };
+      case "ready":
+        return {
+          text: order.fulfillment_type === "delivery" ? "Кур'єр у дорозі" : "Готове до видачі",
+          subtitle:
+            order.fulfillment_type === "delivery"
+              ? "Кур'єр уже прямує до вас із вашим гарячим замовленням! 🛵💨"
+              : "Ваше замовлення вже чекає на вас у закладі! 🛍️✨",
+          color: "#8b5cf6",
+          bg: "rgba(139, 92, 246, 0.12)",
         };
       case "completed":
         return {
@@ -94,6 +138,21 @@ export function OrderSuccessPage() {
           color: "#22c55e",
           bg: "rgba(34, 197, 94, 0.12)",
         };
+      case "rejected":
+        return {
+          text: "Відхилено",
+          subtitle: "На жаль, замовлення відхилено. Менеджер закладу зателефонує для уточнення деталей.",
+          color: "#ef4444",
+          bg: "rgba(239, 68, 68, 0.12)",
+        };
+      case "cancelled":
+        return {
+          text: "Скасовано",
+          subtitle: "Замовлення було скасовано. Якщо у вас виникли запитання, зверніться до закладу.",
+          color: "#ef4444",
+          bg: "rgba(239, 68, 68, 0.12)",
+        };
+      case "pending_moderation":
       default:
         return {
           text: "Очікує підтвердження",
@@ -105,8 +164,19 @@ export function OrderSuccessPage() {
   };
 
   const badge = statusBadge();
+  const steps = getSteps(order.fulfillment_type);
   const currentStep = getStepIndex(order.status);
-  const isRejected = order.status === "rejected";
+  const isNegative = order.status === "rejected" || order.status === "cancelled";
+
+  const getStatusEmoji = () => {
+    if (order.status === "rejected") return "😔";
+    if (order.status === "cancelled") return "🚫";
+    if (order.status === "completed") return "🎉";
+    if (order.status === "ready") return order.fulfillment_type === "delivery" ? "🛵" : "🛍️";
+    if (order.status === "in_progress") return "👨‍🍳";
+    if (order.status === "confirmed") return "👍";
+    return "🍕";
+  };
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-lg pb-8 bg-[var(--tg-theme-bg-color)]">
@@ -117,7 +187,7 @@ export function OrderSuccessPage() {
         {/* Головна картка статусу */}
         <div className="app-card rounded-2xl p-5 text-center transition-all">
           <div className="text-5xl">
-            {isRejected ? "😔" : order.status === "completed" ? "🎉" : order.status === "in_progress" ? "👨‍🍳" : "🍕"}
+            {getStatusEmoji()}
           </div>
           <h2 className="mt-3 text-lg font-bold">
             Замовлення #{order.id}
@@ -133,24 +203,25 @@ export function OrderSuccessPage() {
             {badge.text}
           </div>
 
-          {/* Інтерактивний степер кроків (якщо не відхилено) */}
-          {!isRejected && (
+          {/* Інтерактивний степер кроків (якщо не відхилено/скасовано) */}
+          {!isNegative && (
             <div className="mt-6 pt-4 border-t" style={{ borderColor: "var(--app-border)" }}>
               <div className="flex items-center justify-between relative px-2">
                 {/* Лінія зв'язку */}
                 <div
-                  className="absolute left-6 right-6 top-3 h-0.5 -z-0"
+                  className="absolute left-6 right-6 top-3 h-0.5 -z-0 overflow-hidden"
                   style={{ background: "var(--app-surface-2)" }}
-                />
-                <div
-                  className="absolute left-6 top-3 h-0.5 -z-0 transition-all duration-500"
-                  style={{
-                    background: "var(--tg-theme-button-color)",
-                    width: `${(currentStep / (STEPS.length - 1)) * 82}%`,
-                  }}
-                />
+                >
+                  <div
+                    className="h-full transition-all duration-500"
+                    style={{
+                      background: "var(--tg-theme-button-color)",
+                      width: `${(currentStep / (steps.length - 1)) * 100}%`,
+                    }}
+                  />
+                </div>
 
-                {STEPS.map((step, idx) => {
+                {steps.map((step, idx) => {
                   const isDone = idx < currentStep;
                   const isActive = idx === currentStep;
                   return (
@@ -173,7 +244,7 @@ export function OrderSuccessPage() {
                         {isDone ? "✓" : idx + 1}
                       </div>
                       <span
-                        className="text-[10px] font-semibold transition-opacity"
+                        className="text-[10px] font-semibold transition-opacity text-center leading-tight max-w-[56px]"
                         style={{
                           opacity: isActive ? 1 : isDone ? 0.8 : 0.4,
                           color: isActive ? "var(--tg-theme-button-color)" : "inherit",
@@ -185,6 +256,34 @@ export function OrderSuccessPage() {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* Кнопка скасування для клієнта (поки очікує підтвердження) */}
+          {order.status === "pending_moderation" && (
+            <div
+              className="mt-5 pt-3.5 border-t flex flex-col items-center gap-1.5"
+              style={{ borderColor: "var(--app-border)" }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("light");
+                  setShowCancelModal(true);
+                }}
+                disabled={cancelOrder.isPending}
+                className="app-press rounded-xl px-4 py-2 text-xs font-bold transition flex items-center gap-1.5"
+                style={{
+                  color: "#ef4444",
+                  background: "color-mix(in srgb, #ef4444 10%, transparent)",
+                }}
+              >
+                <span>🚫</span>
+                <span>{cancelOrder.isPending ? "Скасування..." : "Скасувати замовлення"}</span>
+              </button>
+              <p className="text-[10px] opacity-50">
+                Ви можете скасувати замовлення, поки заклад його не підтвердив
+              </p>
             </div>
           )}
         </div>
@@ -311,6 +410,22 @@ export function OrderSuccessPage() {
           </p>
         </div>
 
+        {/* Кнопка повторити замовлення */}
+        <button
+          type="button"
+          onClick={handleRepeatOrder}
+          disabled={repeatOrder.isPending}
+          className="app-press w-full rounded-xl py-3.5 font-bold transition flex items-center justify-center gap-2 border"
+          style={{
+            borderColor: "var(--tg-theme-button-color)",
+            color: "var(--tg-theme-button-color)",
+            background: "transparent",
+          }}
+        >
+          <span>🔁</span>
+          <span>{repeatOrder.isPending ? "Додаємо до кошика..." : "Повторити це замовлення"}</span>
+        </button>
+
         {/* Кнопка на головну */}
         <button
           onClick={() => {
@@ -326,6 +441,68 @@ export function OrderSuccessPage() {
           Повернутися до меню
         </button>
       </div>
+
+      {/* Модальне вікно підтвердження скасування */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm app-fade">
+          <div
+            className="w-full max-w-xs rounded-2xl p-5 shadow-2xl text-center space-y-4"
+            style={{
+              background: "var(--tg-theme-bg-color, #ffffff)",
+              color: "var(--tg-theme-text-color, #000000)",
+            }}
+          >
+            <div className="text-4xl">⚠️</div>
+            <div>
+              <h3 className="text-base font-bold">Скасувати замовлення?</h3>
+              <p className="mt-1 text-xs opacity-70 leading-relaxed">
+                Ви дійсно бажаєте скасувати замовлення #{order.id}? Цю дію неможливо відмінити.
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("light");
+                  setShowCancelModal(false);
+                }}
+                disabled={cancelOrder.isPending}
+                className="app-press flex-1 rounded-xl py-2.5 text-xs font-semibold"
+                style={{
+                  background: "var(--app-surface-2, rgba(0,0,0,0.05))",
+                }}
+              >
+                Залишити
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("medium");
+                  cancelOrder.mutate(order.id, {
+                    onSuccess: () => {
+                      hapticNotify("success");
+                      setShowCancelModal(false);
+                    },
+                    onError: (err) => {
+                      hapticNotify("error");
+                      alert(err instanceof Error ? err.message : "Помилка при скасуванні");
+                      setShowCancelModal(false);
+                    },
+                  });
+                }}
+                disabled={cancelOrder.isPending}
+                className="app-press flex-1 rounded-xl py-2.5 text-xs font-bold text-white transition"
+                style={{
+                  background: "#ef4444",
+                }}
+              >
+                {cancelOrder.isPending ? "Скасування..." : "Так, скасувати"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

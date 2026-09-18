@@ -2,6 +2,7 @@ import { useState } from "react";
 import { retrieveLaunchParams } from "@telegram-apps/sdk-react";
 
 import { useRegister } from "@/api/queries";
+import { AddressSelector } from "@/components/delivery/AddressSelector";
 import { hapticNotify } from "@/telegram/sdk";
 
 /** Ім'я з Telegram — як підказка в полі; користувач може змінити. */
@@ -73,19 +74,21 @@ export function RegisterPage() {
           />
         </label>
 
-        <label className="block">
-          <span className="text-sm font-medium opacity-70">Адреса доставки</span>
-          <input
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Вишгород, вул. Шевченка 1, кв. 2"
-            className="mt-1 w-full rounded-xl px-4 py-3 outline-none"
-            style={inputStyle}
-          />
-          <span className="mt-1 block text-xs opacity-50">
-            Необов'язково — можна вказати пізніше або забрати самовивозом
+        <div
+          className="rounded-2xl border border-[var(--app-border)] p-3.5"
+          style={{ background: "var(--app-surface)" }}
+        >
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wider opacity-60">
+            Адреса доставки (необов'язково)
           </span>
-        </label>
+          <AddressSelector
+            required={false}
+            onChange={(full) => setAddress(full)}
+          />
+          <span className="mt-2 block text-xs opacity-50">
+            Можна вказати пізніше або обрати самовивіз при оформленні замовлення
+          </span>
+        </div>
       </div>
 
       {register.isError && (
