@@ -19,7 +19,7 @@ UX замовлення у **Telegram Mini App**, залишивши бота д
 **Готово:**
 
 - Backend — понад 25 ендпоінтів, перевірені наскрізно
-- Схема БД (`0001_init.sql` ... `0011_phone_verification.sql`) застосована:
+- Схема БД (`0001_core_schema.sql` ... `0004_delivery_addresses.sql`):
   `orders`, `order_groups`, `order_items`, `order_item_options`, `managers`,
   `delivery_addresses`, `admin_auth_sessions`, поля верифікації телефонів та запланованого часу
 - Дворівневі категорії з прихованими та стоп-лист (`is_available`)
@@ -82,7 +82,7 @@ MVP включає лише 4 можливості:
 
 ## Модель даних (MVP)
 
-Фактична схема — `db/migrations/0001_init.sql`, 11 таблиць.
+Фактична схема — `db/migrations/0001_core_schema.sql`.
 
 ```text
 locations          id, name, address, phones[]

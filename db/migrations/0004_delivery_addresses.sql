@@ -1,20 +1,22 @@
--- Міграція 0010: Довідник адрес доставки та адресний стоплист
+-- 0004_delivery_addresses.sql
+-- Довідник адрес доставки та адресний стоп-лист для м. Вишгород.
+
 CREATE TABLE IF NOT EXISTS delivery_addresses (
-    id SERIAL PRIMARY KEY,
-    city VARCHAR(100) NOT NULL DEFAULT 'Вишгород',
-    street VARCHAR(255) NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    notes TEXT,
-    sort_order INT NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    id          SERIAL PRIMARY KEY,
+    city        VARCHAR(100) NOT NULL DEFAULT 'Вишгород',
+    street      VARCHAR(255) NOT NULL,
+    is_active   BOOLEAN NOT NULL DEFAULT true,
+    notes       TEXT,
+    sort_order  INT NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uq_delivery_addresses_city_street UNIQUE (city, street)
 );
 
 CREATE INDEX IF NOT EXISTS idx_delivery_addresses_city_active ON delivery_addresses(city, is_active);
 CREATE INDEX IF NOT EXISTS idx_delivery_addresses_street ON delivery_addresses(street);
 
--- Початковий стартовий набір вулиць м. Вишгород (пілот)
+-- Стартовий набір вулиць м. Вишгород (пілот)
 INSERT INTO delivery_addresses (city, street, is_active, sort_order)
 VALUES
     ('Вишгород', 'вул. Абрикосова', true, 10),

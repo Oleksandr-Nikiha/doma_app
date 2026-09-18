@@ -34,7 +34,7 @@ def get_database_url() -> str:
     # 2. Спроба зчитати з .env файлу в корені проєкту
     env_file = Path(__file__).resolve().parent.parent / ".env"
     if env_file.exists():
-        with open(env_file, "r", encoding="utf-8") as f:
+        with open(env_file, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line.startswith("DATABASE_URL=") and not line.startswith("#"):
@@ -78,7 +78,10 @@ async def run_migrations() -> None:
         pending = [f for f in migration_files if f.name not in applied_versions]
 
         if not pending:
-            logger.info("✨ Усі міграції вже застосовані (всього: %d). База даних актуальна!", len(migration_files))
+            logger.info(
+                "✨ Усі міграції вже застосовані (всього: %d). База даних актуальна!",
+                len(migration_files),
+            )
             return
 
         logger.info("Знайдено %d нових міграцій для застосування:", len(pending))

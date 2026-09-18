@@ -9,7 +9,7 @@
 
 ```bash
 cp .env.example .env        # заповнити DATABASE_URL, BOT_TOKEN, MINI_APP_URL
-psql "$DATABASE_URL" -f db/migrations/0001_init.sql
+python3 scripts/migrate.py   # застосувати всі міграції
 psql "$DATABASE_URL" -f db/seed/seed_catalog.sql
 docker compose -f docker-compose.dev.yml up --build
 ```

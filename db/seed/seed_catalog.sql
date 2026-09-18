@@ -1,7 +1,7 @@
 -- seed_catalog.sql
 -- Тестові дані каталогу, зібрані з domapizza.com.ua (станом на 2026-09-05).
 --
--- Розраховано на ЧИСТУ базу після 0001_init.sql і 0002_free_options.sql:
+-- Розраховано на ЧИСТУ базу після виконання міграцій (scripts/migrate.py):
 -- повторний запуск створить дублі, бо унікальних обмежень на назви немає.
 --
 -- Джерело даних:
@@ -63,6 +63,8 @@ UNION ALL
 SELECT id, NULL::INTEGER, 'Десерти', '🍰', true, 5 FROM locations WHERE name = 'Doma Pizza'
 UNION ALL
 SELECT id, NULL::INTEGER, 'Напої', '🥤', true, 6 FROM locations WHERE name = 'Doma Pizza'
+UNION ALL
+SELECT id, NULL::INTEGER, 'Прибори', '🥢', false, 98 FROM locations WHERE name = 'Doma Pizza'
 UNION ALL
 SELECT id, NULL::INTEGER, 'Соуси', '🥫', false, 99 FROM locations WHERE name = 'Doma Pizza'
 UNION ALL
@@ -1027,7 +1029,7 @@ FROM new_product, (VALUES
 
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'Запечений лосось', 'Філе лосося, норі, рис, сир філадельфія, авокадо, икра, сирная шапочка (сир, майонез)',
+    SELECT c.id, 'Запечений лосось', 'Філе лосося, норі, рис, сир філадельфія, авокадо, ікра, сирна шапочка (сир)',
            'https://domapizza.com.ua/wp-content/uploads/2022/01/IMG_7739-400x400.jpg', 1
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
@@ -1043,7 +1045,7 @@ FROM new_product, (VALUES
 
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'Запечений вугорь', 'Вугорь, норі. рис, сир філадельфія, кунжут, авокадо, сирная шапочка (сир, майонез), соус Унагі',
+    SELECT c.id, 'Запечений вугорь', 'Вугорь, норі, рис, сир філадельфія, кунжут, авокадо, сирна шапочка (сир), соус Унагі',
            'https://domapizza.com.ua/wp-content/uploads/2022/01/IMG_7899-400x400.jpg', 2
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
@@ -1059,7 +1061,7 @@ FROM new_product, (VALUES
 
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'Запечена креветка', 'Креветка, норі, рис, сир філадельфія, авокадо, ікра, сирная шапочка (сир, майонез)',
+    SELECT c.id, 'Запечена креветка', 'Креветка, норі, рис, сир філадельфія, авокадо, ікра, сирна шапочка (сир)',
            'https://domapizza.com.ua/wp-content/uploads/2022/01/IMG_7871-400x400.jpg', 3
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
@@ -1075,7 +1077,7 @@ FROM new_product, (VALUES
 
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'Запечений тунець', 'Тунець, норі, рис, сир філадельфія, авокадо, стружка тунця, сирная шапочка (сир, майонез)',
+    SELECT c.id, 'Запечений тунець', 'Тунець, норі, рис, сир філадельфія, авокадо, стружка тунця, сирна шапочка (сир)',
            'https://domapizza.com.ua/wp-content/uploads/2022/05/20220503-DSC_0009-400x400.jpg', 4
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
@@ -2084,6 +2086,37 @@ FROM new_product, (VALUES
         ('порція', NULL, 20, 1)
     ) AS v(label, weight, price, sort_order);
 
+-- ========== Прибори (прихована категорія) ==========
+-- Окремо в меню не показуються: існують лише як позиції груп опцій.
+
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Звичайні палички', NULL,
+           NULL, 1
+    FROM categories c JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Прибори'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('1 шт.', NULL, 0, 1)
+    ) AS v(label, weight, price, sort_order);
+
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Учбові палички', NULL,
+           NULL, 2
+    FROM categories c JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Прибори'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('1 шт.', NULL, 0, 1)
+    ) AS v(label, weight, price, sort_order);
+
 -- ========== Групи опцій ==========
 
 INSERT INTO option_groups (name, sort_order) VALUES
@@ -2091,7 +2124,8 @@ INSERT INTO option_groups (name, sort_order) VALUES
     ('Соус до картоплі', 2),
     ('Напій 0.5 л', 3),
     ('Васабі', 4),
-    ('Імбир', 5);
+    ('Імбир', 5),
+    ('Прибори', 6);
 
 -- Позиції груп. price_delta = 0: сайт віддає ці соуси й напої в комплекті безкоштовно.
 INSERT INTO option_group_items (group_id, variant_id, price_delta, sort_order)
@@ -2141,7 +2175,15 @@ WHERE g.name = 'Васабі' AND p.name = 'Васабі' AND v.label = 'пор�
 UNION ALL
 SELECT g.id, v.id, 20, 1
 FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id
-WHERE g.name = 'Імбир' AND p.name = 'Імбир' AND v.label = 'порція';
+WHERE g.name = 'Імбир' AND p.name = 'Імбир' AND v.label = 'порція'
+UNION ALL
+SELECT g.id, v.id, 0, 1
+FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id
+WHERE g.name = 'Прибори' AND p.name = 'Звичайні палички' AND v.label = '1 шт.'
+UNION ALL
+SELECT g.id, v.id, 0, 2
+FROM option_groups g, product_variants v JOIN products p ON p.id = v.product_id
+WHERE g.name = 'Прибори' AND p.name = 'Учбові палички' AND v.label = '1 шт.';
 
 -- ========== Групи опцій → товари ==========
 -- min_select/max_select живуть саме тут: група «Соус до хенд-ролу» та сама,
@@ -2207,6 +2249,22 @@ FROM products p
 JOIN categories c ON c.id = p.category_id
 JOIN categories parent ON parent.id = c.parent_id
 CROSS JOIN option_groups g
-WHERE parent.name = 'Суші та роли' AND c.name = 'Сети з ролів' AND g.name IN ('Васабі', 'Імбир');
+WHERE parent.name = 'Суші та роли' AND c.name = 'Сети з ролів' AND g.name IN ('Васабі', 'Імбир')
+UNION ALL
+-- Прибори до звичайних ролів: до 5 шт., безкоштовно
+SELECT p.id, g.id, 0, 5, 5, 3
+FROM products p
+JOIN categories c ON c.id = p.category_id
+JOIN categories parent ON parent.id = c.parent_id
+CROSS JOIN option_groups g
+WHERE parent.name = 'Суші та роли' AND c.name <> 'Сети з ролів' AND g.name = 'Прибори'
+UNION ALL
+-- Прибори до сетів з ролів: до 10 шт., безкоштовно
+SELECT p.id, g.id, 0, 10, 10, 3
+FROM products p
+JOIN categories c ON c.id = p.category_id
+JOIN categories parent ON parent.id = c.parent_id
+CROSS JOIN option_groups g
+WHERE parent.name = 'Суші та роли' AND c.name = 'Сети з ролів' AND g.name = 'Прибори';
 
 COMMIT;
