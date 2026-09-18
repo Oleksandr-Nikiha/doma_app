@@ -15,6 +15,18 @@ CREATE TABLE IF NOT EXISTS managers (
 CREATE INDEX IF NOT EXISTS idx_managers_telegram_id ON managers(telegram_id);
 CREATE INDEX IF NOT EXISTS idx_managers_active ON managers(telegram_id) WHERE is_active = true;
 
+-- Гарантуємо наявність зовнішнього ключа на locations, якщо таблиця managers вже існувала
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'managers_location_id_fkey'
+    ) THEN
+        ALTER TABLE managers
+            ADD CONSTRAINT managers_location_id_fkey
+            FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
 -- Перший зареєстрований користувач автоматично стає адміністратором
 INSERT INTO managers (telegram_id, role, location_id, is_active)
 SELECT telegram_id, 'admin', NULL, true
