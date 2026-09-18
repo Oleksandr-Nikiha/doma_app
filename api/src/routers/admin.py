@@ -1639,12 +1639,17 @@ async def list_admin_users(
     clean_q = query.strip()
     sql = """
         SELECT u.id, u.telegram_id, u.full_name, u.phone, u.delivery_address,
-               u.is_blocked, u.admin_note,
+               u.is_blocked, u.is_phone_verified, u.admin_note,
                to_char(u.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
                COUNT(o.id)::int AS orders_count
         FROM users u
         LEFT JOIN orders o ON o.telegram_id = u.telegram_id
-        WHERE ($1 = '' OR u.phone ILIKE '%' || $1 || '%' OR u.full_name ILIKE '%' || $1 || '%' OR u.telegram_id::text ILIKE '%' || $1 || '%')
+        WHERE (
+            $1 = ''
+            OR u.phone ILIKE '%' || $1 || '%'
+            OR u.full_name ILIKE '%' || $1 || '%'
+            OR u.telegram_id::text ILIKE '%' || $1 || '%'
+        )
         GROUP BY u.id
         ORDER BY u.id DESC
         LIMIT $2
@@ -1661,7 +1666,7 @@ async def update_admin_user(
     pool: asyncpg.Pool = Depends(get_pool),
     staff: asyncpg.Record = Depends(get_current_staff),
 ):
-    """Оновлення статусу блокування та примітки про клієнта."""
+    """Оновлення статусу блокування, верифікації телефону та примітки про клієнта."""
     updates = []
     params = [user_id]
 
@@ -1672,6 +1677,10 @@ async def update_admin_user(
     if data.admin_note is not None:
         params.append(data.admin_note.strip() if data.admin_note else None)
         updates.append(f"admin_note = ${len(params)}")
+
+    if data.is_phone_verified is not None:
+        params.append(data.is_phone_verified)
+        updates.append(f"is_phone_verified = ${len(params)}")
 
     if not updates:
         raise HTTPException(status_code=400, detail="Не вказано полів для оновлення")
@@ -1687,7 +1696,7 @@ async def update_admin_user(
         row = await conn.fetchrow(
             """
             SELECT u.id, u.telegram_id, u.full_name, u.phone, u.delivery_address,
-                   u.is_blocked, u.admin_note,
+                   u.is_blocked, u.is_phone_verified, u.admin_note,
                    to_char(u.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
                    COUNT(o.id)::int AS orders_count
             FROM users u
@@ -1707,7 +1716,13 @@ async def delete_admin_user(
     pool: asyncpg.Pool = Depends(get_pool),
     staff: asyncpg.Record = Depends(get_current_staff),
 ):
-    """Видалення користувача."""
+    """Видалення користувача (тільки для ролі admin)."""
+    if staff["role"] != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Видалення клієнтів дозволено лише головному адміністратору",
+        )
+
     async with pool.acquire() as conn:
         existing = await conn.fetchrow("SELECT id, telegram_id FROM users WHERE id = $1", user_id)
         if not existing:
@@ -2239,11 +2254,11 @@ async def admin_create_delivery_address(
             clean_notes,
             data.sort_order,
         )
-    except asyncpg.UniqueViolationError:
+    except asyncpg.UniqueViolationError as err:
         raise HTTPException(
             status_code=400,
             detail=f"Адреса '{clean_street}' для міста '{clean_city}' вже існує",
-        )
+        ) from err
     return AdminDeliveryAddressOut(**dict(row))
 
 
@@ -2290,11 +2305,11 @@ async def admin_update_delivery_address(
     """
     try:
         row = await pool.fetchrow(sql, *params)
-    except asyncpg.UniqueViolationError:
+    except asyncpg.UniqueViolationError as err:
         raise HTTPException(
             status_code=400,
             detail="Адреса з такою назвою для цього міста вже існує",
-        )
+        ) from err
     if not row:
         raise HTTPException(status_code=404, detail="Адресу не знайдено")
     return AdminDeliveryAddressOut(**dict(row))

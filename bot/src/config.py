@@ -7,13 +7,13 @@ class Settings(BaseSettings):
     """
     Ті самі змінні оточення, що і в API (спільний .env / env_file у docker-compose).
     Боту потрібні лише токен, URL Mini App та доступ до БД для нотифікацій.
+    Всі ролі та права менеджерів/адмінів беруться динамічно з таблиці managers у БД.
     """
 
     bot_token: str
     mini_app_url: str
     database_url: str
     manager_chat_id: int | None = None
-    managers_ids: list[int] | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

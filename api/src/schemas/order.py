@@ -13,7 +13,7 @@ class OrderCreateIn(BaseModel):
     contact_name: str = Field(..., min_length=1, max_length=100)
     contact_phone: str = Field(..., min_length=5, max_length=30)
     payment_method: Literal["cash", "card", "qr"]
-    scheduled_time: str | None = Field(None, max_length=20)
+    scheduled_time: str | None = Field(None, max_length=50)
     comment: str | None = Field(None, max_length=500)
 
     @model_validator(mode="after")

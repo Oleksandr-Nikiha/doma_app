@@ -45,9 +45,11 @@ services:
     env_file: .env
     environment:
       PYTHONDONTWRITEBYTECODE: "1"   # див. коментар у сервісі api
+      PYTHONUNBUFFERED: "1"
     # DATABASE_URL береться з .env (зовнішній сервер з postgres/pgadmin)
     volumes:
       - ./bot/src:/app/src
+    command: watchfiles --filter python "python -u -m src.main" src
 
   frontend:
     build:

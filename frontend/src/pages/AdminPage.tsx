@@ -90,6 +90,15 @@ export function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("orders");
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
 
+  const isSuperAdmin = adminMe?.role === "admin";
+
+  useEffect(() => {
+    if (adminMe && !isSuperAdmin && activeTab === "managers") {
+      setActiveTab("orders");
+      setActiveSection("operations");
+    }
+  }, [adminMe, isSuperAdmin, activeTab]);
+
   // Якщо менеджер прив'язаний до закладу — автоматично фіксуємо локацію
   const effectiveLocationId =
     adminMe?.role === "manager" ? adminMe.location_id : selectedLocationId;
@@ -232,7 +241,9 @@ export function AdminPage() {
             {[
               { tab: "orders" as AdminTab, label: "Замовлення", icon: "📦" },
               { tab: "users" as AdminTab, label: "Клієнти", icon: "👥" },
-              { tab: "managers" as AdminTab, label: "Штат і ролі", icon: "👔" },
+              ...(isSuperAdmin
+                ? [{ tab: "managers" as AdminTab, label: "Штат і ролі", icon: "👔" }]
+                : []),
             ].map((item) => (
               <button
                 key={item.tab}
@@ -281,7 +292,7 @@ export function AdminPage() {
               {activeTab === "delivery" && "🛵 Налаштування доставки"}
               {activeTab === "orders" && "📦 Замовлення"}
               {activeTab === "users" && "👥 Клієнти закладу"}
-              {activeTab === "managers" && "👔 Штат та ролі"}
+              {activeTab === "managers" && isSuperAdmin && "👔 Штат та ролі"}
             </h2>
             {locationBadge && (
               <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ background: "var(--app-surface-2)" }}>
@@ -353,7 +364,7 @@ export function AdminPage() {
                 : undefined
             }
           >
-            👥 Керування (Штат / Клієнти)
+            {isSuperAdmin ? "👥 Керування (Штат / Клієнти)" : "👥 Клієнти"}
           </button>
         </div>
 
@@ -447,7 +458,7 @@ export function AdminPage() {
         )}
 
         {/* 2. Підвкладки розділу "Керування" */}
-        {activeSection === "management" && (
+        {activeSection === "management" && isSuperAdmin && (
           <div
             className="mt-2 flex rounded-xl p-1 text-xs font-medium gap-1"
             style={{ background: "var(--app-surface-2)" }}
@@ -557,8 +568,12 @@ export function AdminPage() {
             isSuperAdmin={adminMe.role === "admin"}
           />
         )}
-        {activeTab === "users" && <UsersTab locations={locations} />}
-        {activeTab === "managers" && <ManagersTab locations={locations} />}
+        {activeTab === "users" && (
+          <UsersTab locations={locations} isSuperAdmin={isSuperAdmin} />
+        )}
+        {activeTab === "managers" && isSuperAdmin && (
+          <ManagersTab locations={locations} />
+        )}
       </div>
       </main>
     </div>
@@ -1536,7 +1551,13 @@ function OrderEditModal({
 // 0.1. ВКЛАДКА КЛІЄНТІВ (UsersTab + UserCard)
 // ============================================================================
 
-function UsersTab({ locations = [] }: { locations?: Location[] }) {
+function UsersTab({
+  locations = [],
+  isSuperAdmin = false,
+}: {
+  locations?: Location[];
+  isSuperAdmin?: boolean;
+}) {
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const { data: users = [], isPending, error } = useAdminUsers(query);
@@ -1611,6 +1632,7 @@ function UsersTab({ locations = [] }: { locations?: Location[] }) {
             <UserCard
               key={u.id}
               user={u}
+              isSuperAdmin={isSuperAdmin}
               onToggleBlock={() => {
                 const action = u.is_blocked ? "розблокувати" : "заблокувати";
                 if (
@@ -1621,19 +1643,29 @@ function UsersTab({ locations = [] }: { locations?: Location[] }) {
                   updateUser.mutate({ userId: u.id, payload: { is_blocked: !u.is_blocked } });
                 }
               }}
+              onTogglePhoneVerified={() => {
+                updateUser.mutate({
+                  userId: u.id,
+                  payload: { is_phone_verified: !u.is_phone_verified },
+                });
+              }}
               onSaveNote={(note) => {
                 updateUser.mutate({ userId: u.id, payload: { admin_note: note } });
               }}
-              onDelete={() => {
-                if (
-                  window.confirm(
-                    `Видалити користувача ${u.full_name} (${u.phone})? Будуть видалені всі його дані та замовлення.`,
-                  )
-                ) {
-                  deleteUser.mutate(u.id);
-                }
-              }}
-              onPromoteToStaff={() => setStaffModalUser(u)}
+              onDelete={
+                isSuperAdmin
+                  ? () => {
+                      if (
+                        window.confirm(
+                          `Видалити користувача ${u.full_name} (${u.phone})? Будуть видалені всі його дані та замовлення.`,
+                        )
+                      ) {
+                        deleteUser.mutate(u.id);
+                      }
+                    }
+                  : undefined
+              }
+              onPromoteToStaff={isSuperAdmin ? () => setStaffModalUser(u) : undefined}
               isUpdating={updateUser.isPending}
               isDeleting={deleteUser.isPending}
             />
@@ -1641,7 +1673,7 @@ function UsersTab({ locations = [] }: { locations?: Location[] }) {
         </div>
       )}
 
-      {staffModalUser && (
+      {isSuperAdmin && staffModalUser && (
         <ManagerModal
           manager={null}
           initialUser={staffModalUser}
@@ -1655,7 +1687,9 @@ function UsersTab({ locations = [] }: { locations?: Location[] }) {
 
 function UserCard({
   user,
+  isSuperAdmin,
   onToggleBlock,
+  onTogglePhoneVerified,
   onSaveNote,
   onDelete,
   onPromoteToStaff,
@@ -1663,10 +1697,12 @@ function UserCard({
   isDeleting,
 }: {
   user: AdminUser;
+  isSuperAdmin?: boolean;
   onToggleBlock: () => void;
+  onTogglePhoneVerified: () => void;
   onSaveNote: (note: string) => void;
-  onDelete: () => void;
-  onPromoteToStaff: () => void;
+  onDelete?: () => void;
+  onPromoteToStaff?: () => void;
   isUpdating: boolean;
   isDeleting: boolean;
 }) {
@@ -1705,13 +1741,15 @@ function UserCard({
           : "var(--app-surface)",
       }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-base">{user.is_blocked ? "⛔" : "👤"}</span>
-            <span className="text-sm font-bold">{user.full_name}</span>
+      <div className="flex items-start justify-between gap-2 sm:gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <span className="text-base shrink-0">{user.is_blocked ? "⛔" : "👤"}</span>
+            <span className="text-sm font-bold break-words leading-snug" title={user.full_name}>
+              {user.full_name}
+            </span>
             <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
               style={{
                 background: user.is_blocked
                   ? "color-mix(in srgb, #ef4444 20%, transparent)"
@@ -1720,6 +1758,17 @@ function UserCard({
               }}
             >
               {user.is_blocked ? "Заблоковано" : "Активний"}
+            </span>
+            <span
+              className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              style={{
+                background: user.is_phone_verified
+                  ? "color-mix(in srgb, #10b981 15%, transparent)"
+                  : "color-mix(in srgb, #f59e0b 15%, transparent)",
+                color: user.is_phone_verified ? "#059669" : "#d97706",
+              }}
+            >
+              {user.is_phone_verified ? "✓ Верифіковано" : "⚠️ Не верифіковано"}
             </span>
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs opacity-80">
@@ -1748,54 +1797,103 @@ function UserCard({
             <span>📅 {user.created_at}</span>
           </div>
           {user.delivery_address && (
-            <p className="mt-1 text-xs opacity-60">📍 Адреса: {user.delivery_address}</p>
+            <p className="mt-1 text-xs opacity-60 break-words">📍 Адреса: {user.delivery_address}</p>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-start justify-end">
+          {onPromoteToStaff && (
+            <button
+              type="button"
+              onClick={() => {
+                haptic("light");
+                onPromoteToStaff();
+              }}
+              title="Призначити співробітником"
+              className="app-press flex h-8 items-center justify-center gap-1 rounded-xl px-2 sm:px-2.5 text-xs font-semibold transition"
+              style={{
+                background: "color-mix(in srgb, #3b82f6 15%, transparent)",
+                color: "#3b82f6",
+              }}
+            >
+              <span>👔</span>
+              <span className="hidden sm:inline">У персонал</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
               haptic("light");
-              onPromoteToStaff();
+              const action = user.is_phone_verified
+                ? "зняти верифікацію телефону"
+                : "встановити верифікацію телефону";
+              if (
+                window.confirm(
+                  `Ви впевнені, що хочете ${action} для клієнта ${user.full_name}? ${
+                    user.is_phone_verified
+                      ? "Клієнт зможе самостійно змінити свій номер у профілі."
+                      : ""
+                  }`,
+                )
+              ) {
+                onTogglePhoneVerified();
+              }
             }}
-            title="Призначити співробітником"
-            className="app-press flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition"
+            disabled={isUpdating}
+            title={
+              user.is_phone_verified
+                ? "Зняти верифікацію (дозволити клієнту змінити телефон)"
+                : "Позначити телефон як верифікований"
+            }
+            className="app-press flex h-8 items-center justify-center gap-1 rounded-xl px-2 sm:px-2.5 text-xs font-semibold transition"
             style={{
-              background: "color-mix(in srgb, #3b82f6 15%, transparent)",
-              color: "#3b82f6",
+              background: user.is_phone_verified
+                ? "color-mix(in srgb, #f59e0b 15%, transparent)"
+                : "color-mix(in srgb, #10b981 15%, transparent)",
+              color: user.is_phone_verified ? "#d97706" : "#059669",
             }}
           >
-            <span>👔</span>
-            <span className="hidden sm:inline">У персонал</span>
+            <span>{user.is_phone_verified ? "📱✕" : "📱✓"}</span>
+            <span className="hidden sm:inline">
+              {user.is_phone_verified ? "Зняти верифікацію" : "Верифікувати"}
+            </span>
           </button>
           <button
+            type="button"
             onClick={() => {
               haptic("light");
               onToggleBlock();
             }}
             disabled={isUpdating}
-            className="app-press rounded-xl px-2.5 py-1.5 text-xs font-semibold"
+            title={user.is_blocked ? "Розблокувати клієнта" : "Заблокувати клієнта"}
+            className="app-press flex h-8 w-8 items-center justify-center rounded-xl text-sm transition"
             style={{
               background: user.is_blocked
-                ? "var(--tg-theme-button-color)"
+                ? "color-mix(in srgb, #10b981 15%, transparent)"
                 : "color-mix(in srgb, #ef4444 15%, transparent)",
-              color: user.is_blocked ? "var(--tg-theme-button-text-color)" : "#ef4444",
+              color: user.is_blocked ? "#10b981" : "#ef4444",
             }}
           >
-            {user.is_blocked ? "Розблокувати" : "Заблокувати"}
+            <span>{user.is_blocked ? "🔓" : "🚫"}</span>
           </button>
-          <button
-            onClick={() => {
-              haptic("light");
-              onDelete();
-            }}
-            disabled={isDeleting}
-            title="Видалити"
-            className="app-press rounded-xl p-1.5 text-xs opacity-50 hover:opacity-100 hover:text-red-500"
-          >
-            🗑️
-          </button>
+          {isSuperAdmin && onDelete && (
+            <button
+              type="button"
+              onClick={() => {
+                haptic("light");
+                onDelete();
+              }}
+              disabled={isDeleting}
+              title="Видалити"
+              className="app-press flex h-8 w-8 items-center justify-center rounded-xl text-sm transition opacity-80 hover:opacity-100"
+              style={{
+                background: "color-mix(in srgb, #ef4444 12%, var(--app-surface-2))",
+                border: "1px solid color-mix(in srgb, #ef4444 25%, transparent)",
+              }}
+            >
+              🗑️
+            </button>
+          )}
         </div>
       </div>
 
@@ -2917,6 +3015,13 @@ function StopListTab({ locationId }: { locationId?: number | null }) {
 // ============================================================================
 
 function ManagersTab({ locations }: { locations: Location[] }) {
+  const { data: adminMe } = useAdminMe();
+  if (adminMe && adminMe.role !== "admin") {
+    return (
+      <ErrorBox message="Доступ обмежено. Розділ доступний лише для головного адміністратора." />
+    );
+  }
+
   const { data: managers = [], isPending, error } = useAdminManagers();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingManager, setEditingManager] = useState<Manager | null>(null);

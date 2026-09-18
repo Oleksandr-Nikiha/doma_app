@@ -35,8 +35,16 @@ class RegisterIn(BaseModel):
 class UserUpdateIn(BaseModel):
     first_name: str
     last_name: str | None = None
+    phone: str | None = None
     delivery_address: str | None = None
     additional_address: str | None = None
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return normalize_phone(v)
 
 
 class UserOut(BaseModel):
@@ -46,7 +54,9 @@ class UserOut(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     phone: str
+    is_phone_verified: bool = False
     delivery_address: str | None = None
     additional_address: str | None = None
     client_code: str | None = None
     bonus_balance: int = 0
+    bot_username: str | None = None

@@ -66,15 +66,18 @@ export interface User {
   first_name?: string | null;
   last_name?: string | null;
   phone: string;
+  is_phone_verified?: boolean;
   delivery_address: string | null;
   additional_address?: string | null;
   client_code?: string | null;
   bonus_balance?: number;
+  bot_username?: string | null;
 }
 
 export interface UserUpdatePayload {
   first_name: string;
   last_name?: string | null;
+  phone?: string | null;
   delivery_address?: string | null;
   additional_address?: string | null;
 }
@@ -475,6 +478,7 @@ export interface AdminUser {
   phone: string;
   delivery_address: string | null;
   is_blocked: boolean;
+  is_phone_verified?: boolean;
   admin_note: string | null;
   orders_count: number;
   created_at: string;
@@ -483,6 +487,7 @@ export interface AdminUser {
 export interface AdminUserUpdatePayload {
   is_blocked?: boolean;
   admin_note?: string | null;
+  is_phone_verified?: boolean;
 }
 
 // --- Керування та редагування замовлень (Адмінка) ---

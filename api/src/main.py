@@ -5,7 +5,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import get_settings
 from src.db.connection import connect_db, disconnect_db
-from src.routers import admin, admin_auth, cart, catalog, delivery_addresses, locations, orders, users
+from src.routers import (
+    admin,
+    admin_auth,
+    cart,
+    catalog,
+    delivery_addresses,
+    locations,
+    orders,
+    users,
+)
 
 
 @asynccontextmanager

@@ -39,10 +39,53 @@ async def get_user_by_telegram_id(telegram_id: int) -> asyncpg.Record | None:
     """
     async with get_pool().acquire() as conn:
         return await conn.fetchrow(
-            "SELECT id, telegram_id, full_name, phone, delivery_address "
+            "SELECT id, telegram_id, full_name, phone, delivery_address, is_phone_verified "
             "FROM users WHERE telegram_id = $1",
             telegram_id,
         )
+
+
+async def set_user_phone_verified(
+    telegram_id: int, phone: str, full_name: str | None = None
+) -> bool:
+    """Оновлює або створює запис користувача з верифікованим номером телефону."""
+    async with get_pool().acquire() as conn:
+        existing = await conn.fetchrow(
+            "SELECT id FROM users WHERE telegram_id = $1", telegram_id
+        )
+        if existing:
+            await conn.execute(
+                """
+                UPDATE users
+                SET phone = $1,
+                    is_phone_verified = true,
+                    updated_at = now()
+                WHERE telegram_id = $2
+                """,
+                phone,
+                telegram_id,
+            )
+        else:
+            first_name = full_name.split(" ", 1)[0] if full_name else ""
+            last_name = (
+                full_name.split(" ", 1)[1]
+                if full_name and len(full_name.split(" ", 1)) > 1
+                else None
+            )
+            await conn.execute(
+                """
+                INSERT INTO users (
+                    telegram_id, full_name, first_name, last_name, phone, is_phone_verified
+                )
+                VALUES ($1, $2, $3, $4, $5, true)
+                """,
+                telegram_id,
+                full_name or "Користувач",
+                first_name,
+                last_name,
+                phone,
+            )
+        return True
 
 
 async def get_manager_by_telegram_id(telegram_id: int) -> asyncpg.Record | None:

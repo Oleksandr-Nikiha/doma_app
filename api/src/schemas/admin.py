@@ -270,6 +270,7 @@ class AdminUserOut(BaseModel):
     phone: str
     delivery_address: str | None = None
     is_blocked: bool = False
+    is_phone_verified: bool = False
     admin_note: str | None = None
     orders_count: int = 0
     created_at: str
@@ -278,6 +279,7 @@ class AdminUserOut(BaseModel):
 class AdminUserUpdateIn(BaseModel):
     is_blocked: bool | None = None
     admin_note: str | None = None
+    is_phone_verified: bool | None = None
 
 
 # --- Керування та редагування замовлень (Orders) ---

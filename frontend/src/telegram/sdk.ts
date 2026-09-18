@@ -104,3 +104,19 @@ export function hapticNotify(type: "error" | "success" | "warning"): void {
     try { navigator.vibrate(pattern); } catch { /* ignore */ }
   }
 }
+
+/** Відкриває посилання в Telegram (чат бота, канал тощо) */
+export function openTelegramLink(url: string): void {
+  try {
+    const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (url: string) => void } } })
+      ?.Telegram?.WebApp;
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(url);
+      return;
+    }
+  } catch {
+    /* ignore */
+  }
+  window.open(url, "_blank");
+}
+

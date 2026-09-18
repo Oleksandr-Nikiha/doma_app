@@ -57,6 +57,31 @@ export function CheckoutPage() {
   const [fulfillmentType, setFulfillmentType] = useState<"delivery" | "pickup">("delivery");
   const [timeMode, setTimeMode] = useState<"asap" | "scheduled">("asap");
   const [scheduledTime, setScheduledTime] = useState<string>("");
+
+  // Розрахунок дат та часу для замовлення
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+
+  const [scheduledDate, setScheduledDate] = useState<string>(todayStr);
+
+  const min30Date = new Date(now.getTime() + 30 * 60 * 1000);
+  const min30TimeStr = `${String(min30Date.getHours()).padStart(2, "0")}:${String(min30Date.getMinutes()).padStart(2, "0")}`;
+
+  const locStartTime = targetLocation?.delivery_start_time || "10:30";
+  const locEndTime = targetLocation?.delivery_end_time || "21:30";
+
+  const effectiveMinTime =
+    scheduledDate === todayStr
+      ? min30TimeStr > locStartTime
+        ? min30TimeStr
+        : locStartTime
+      : locStartTime;
+
+  const isTodayClosedForScheduled = scheduledDate === todayStr && effectiveMinTime > locEndTime;
+
   type AddressSource = "main" | "additional" | "custom";
   const [addressSource, setAddressSource] = useState<AddressSource>(() => {
     if (user?.delivery_address) return "main";
@@ -206,10 +231,23 @@ export function CheckoutPage() {
         hapticNotify("error");
         return;
       }
-      const startTime = targetLocation?.delivery_start_time || "10:30";
-      const endTime = targetLocation?.delivery_end_time || "21:30";
-      if (scheduledTime < startTime || scheduledTime > endTime) {
-        setSubmitError(`Час отримання має бути в межах ${startTime} – ${endTime}`);
+      if (scheduledDate < todayStr) {
+        setSubmitError("Дата замовлення не може бути в минулому");
+        hapticNotify("error");
+        return;
+      }
+      if (scheduledDate === todayStr) {
+        if (scheduledTime < min30TimeStr) {
+          setSubmitError(
+            `Час замовлення не може бути меншим ніж поточний час + 30 хв (найраніший доступний час: ${min30TimeStr})`,
+          );
+          hapticNotify("error");
+          return;
+        }
+      }
+      if (scheduledTime < locStartTime || scheduledTime > locEndTime) {
+        const actionLabel = fulfillmentType === "delivery" ? "доставки" : "самовивозу";
+        setSubmitError(`Час ${actionLabel} має бути в межах робочих годин (${locStartTime} – ${locEndTime})`);
         hapticNotify("error");
         return;
       }
@@ -225,7 +263,12 @@ export function CheckoutPage() {
         contact_name: name,
         contact_phone: phone,
         payment_method: paymentMethod,
-        scheduled_time: timeMode === "scheduled" && scheduledTime ? scheduledTime : null,
+        scheduled_time:
+          timeMode === "scheduled" && scheduledTime
+            ? scheduledDate === todayStr
+              ? scheduledTime
+              : `${scheduledDate} ${scheduledTime}`
+            : null,
         comment: comment.trim() || null,
       },
       {
@@ -319,23 +362,101 @@ export function CheckoutPage() {
           />
 
           {timeMode === "scheduled" && (
-            <div className="mt-2.5 space-y-1.5">
-              <label className="block text-[11px] opacity-70">
-                Введіть або оберіть бажаний час (години доставки: {targetLocation?.delivery_start_time || "10:30"} – {targetLocation?.delivery_end_time || "21:30"}):
-              </label>
-              <input
-                type="time"
-                value={scheduledTime}
-                min={targetLocation?.delivery_start_time || "10:30"}
-                max={targetLocation?.delivery_end_time || "21:30"}
-                onChange={(e) => setScheduledTime(e.target.value)}
-                required
-                className="w-full max-w-xs rounded-xl border border-[var(--app-border)] p-3 text-sm font-semibold outline-none transition focus:ring-2 focus:ring-blue-500"
-                style={{ background: "var(--app-surface-2)", color: "var(--tg-theme-text-color)" }}
-              />
-              <p className="text-[11px] opacity-50">
-                Доставка можлива з {targetLocation?.delivery_start_time || "10:30"} до {targetLocation?.delivery_end_time || "21:30"}.
-              </p>
+            <div className="mt-2.5 space-y-3">
+              {/* Вибір дати */}
+              <div>
+                <label className="mb-1.5 block text-[11px] font-semibold opacity-70">
+                  📅 Дата {fulfillmentType === "delivery" ? "доставки" : "самовивозу"}:
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic("light");
+                      setScheduledDate(todayStr);
+                    }}
+                    disabled={isTodayClosedForScheduled}
+                    className={`app-press flex-1 rounded-xl py-2 px-3 text-xs font-semibold border transition ${
+                      scheduledDate === todayStr
+                        ? "border-blue-500 bg-blue-500/15 text-blue-500 font-bold"
+                        : "border-[var(--app-border)] opacity-70 hover:opacity-100"
+                    } ${isTodayClosedForScheduled ? "opacity-30 cursor-not-allowed line-through" : ""}`}
+                  >
+                    Сьогодні
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic("light");
+                      setScheduledDate(tomorrowStr);
+                    }}
+                    className={`app-press flex-1 rounded-xl py-2 px-3 text-xs font-semibold border transition ${
+                      scheduledDate === tomorrowStr
+                        ? "border-blue-500 bg-blue-500/15 text-blue-500 font-bold"
+                        : "border-[var(--app-border)] opacity-70 hover:opacity-100"
+                    }`}
+                  >
+                    Завтра
+                  </button>
+                  <input
+                    type="date"
+                    min={todayStr}
+                    value={scheduledDate}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        haptic("light");
+                        setScheduledDate(e.target.value);
+                      }
+                    }}
+                    className="rounded-xl border border-[var(--app-border)] p-2 text-xs font-semibold outline-none cursor-pointer"
+                    style={{ background: "var(--app-surface-2)" }}
+                    title="Обрати іншу дату"
+                  />
+                </div>
+              </div>
+
+              {isTodayClosedForScheduled && (
+                <div
+                  className="rounded-xl p-3 text-xs leading-relaxed flex items-start gap-2 border"
+                  style={{
+                    background: "color-mix(in srgb, #f59e0b 10%, transparent)",
+                    color: "#d97706",
+                    borderColor: "color-mix(in srgb, #f59e0b 30%, transparent)",
+                  }}
+                >
+                  <span className="text-sm">⚠️</span>
+                  <div>
+                    <p className="font-semibold">Прийом замовлень на сьогодні завершено</p>
+                    <p className="mt-0.5 opacity-90">
+                      З урахуванням часу приготування (30 хв) заклад вже зачиняється о {locEndTime}. Будь ласка, оберіть дату «Завтра» або спосіб «Якнайшвидше».
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Вибір часу */}
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-semibold opacity-70">
+                  ⏰ Час (години роботи: {locStartTime} – {locEndTime}):
+                </label>
+                <input
+                  type="time"
+                  value={scheduledTime}
+                  min={effectiveMinTime}
+                  max={locEndTime}
+                  onChange={(e) => setScheduledTime(e.target.value)}
+                  required
+                  className="w-full max-w-xs rounded-xl border border-[var(--app-border)] p-3 text-sm font-semibold outline-none transition focus:ring-2 focus:ring-blue-500"
+                  style={{ background: "var(--app-surface-2)", color: "var(--tg-theme-text-color)" }}
+                />
+                <p className="text-[11px] opacity-60">
+                  {scheduledDate === todayStr ? (
+                    <span>Найраніший час: <b>{effectiveMinTime}</b> (зараз + 30 хв)</span>
+                  ) : (
+                    <span>Робочі години: з {locStartTime} до {locEndTime}</span>
+                  )}
+                </p>
+              </div>
             </div>
           )}
         </div>

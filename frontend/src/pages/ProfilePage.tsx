@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAdminMe, useMe, useOrders, useUpdateProfile } from "@/api/queries";
 import { AddressSelector } from "@/components/delivery/AddressSelector";
 import { ErrorBox, ScreenTitle, Spinner } from "@/components/ui";
-import { haptic, hapticNotify } from "@/telegram/sdk";
+import { haptic, hapticNotify, openTelegramLink } from "@/telegram/sdk";
 
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -39,6 +39,7 @@ export function ProfilePage() {
 
   const [firstName, setFirstName] = useState(initialFirstName);
   const [lastName, setLastName] = useState(initialLastName);
+  const [phone, setPhone] = useState(user?.phone || "");
   const [deliveryAddress, setDeliveryAddress] = useState(user?.delivery_address || "");
   const [additionalAddress, setAdditionalAddress] = useState(user?.additional_address || "");
   const [isEditingMainAddress, setIsEditingMainAddress] = useState(false);
@@ -51,6 +52,7 @@ export function ProfilePage() {
     setLoadedUserId(user.id);
     setFirstName(user.first_name || user.full_name?.split(" ")[0] || "");
     setLastName(user.last_name || (user.full_name && user.full_name.split(" ").slice(1).join(" ")) || "");
+    setPhone(user.phone || "");
     setDeliveryAddress(user.delivery_address || "");
     setAdditionalAddress(user.additional_address || "");
   }
@@ -99,10 +101,15 @@ export function ProfilePage() {
   const isDirty =
     firstName.trim() !== (initialFirstName || "").trim() ||
     lastName.trim() !== (initialLastName || "").trim() ||
+    (!user.is_phone_verified && phone.trim() !== (user.phone || "").trim()) ||
     deliveryAddress.trim() !== (user.delivery_address || "").trim() ||
     additionalAddress.trim() !== (user.additional_address || "").trim();
 
-  const canSave = firstName.trim().length > 0 && isDirty && !updateProfile.isPending;
+  const canSave =
+    firstName.trim().length > 0 &&
+    (!user.is_phone_verified ? phone.trim().length >= 9 : true) &&
+    isDirty &&
+    !updateProfile.isPending;
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,6 +120,7 @@ export function ProfilePage() {
       {
         first_name: firstName.trim(),
         last_name: lastName.trim() || null,
+        phone: !user.is_phone_verified ? phone.trim() : undefined,
         delivery_address: deliveryAddress.trim() || null,
         additional_address: additionalAddress.trim() || null,
       },
@@ -283,18 +291,67 @@ export function ProfilePage() {
               />
             </label>
 
-            <label className="block">
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium opacity-60">№ Телефону</span>
-                <span className="text-[11px] opacity-40">🔒 закріплено</span>
+                {user.is_phone_verified ? (
+                  <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
+                    ✓ Верифіковано (🔒 закріплено)
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-semibold text-amber-500 flex items-center gap-1">
+                    ⚠️ Не верифіковано
+                  </span>
+                )}
               </div>
               <input
-                value={user.phone}
-                disabled
-                className="mt-1 w-full rounded-xl px-4 py-3 text-sm opacity-60 cursor-not-allowed select-none"
+                type="tel"
+                inputMode="tel"
+                value={user.is_phone_verified ? user.phone : phone}
+                onChange={(e) => {
+                  if (!user.is_phone_verified) {
+                    setPhone(e.target.value);
+                    setSavedSuccess(false);
+                  }
+                }}
+                disabled={Boolean(user.is_phone_verified)}
+                placeholder="+380671234567"
+                className={`mt-1 w-full rounded-xl px-4 py-3 text-sm outline-none transition-shadow ${
+                  user.is_phone_verified
+                    ? "opacity-60 cursor-not-allowed select-none"
+                    : "focus:ring-1 focus:ring-[var(--tg-theme-button-color)]"
+                }`}
                 style={inputStyle}
               />
-            </label>
+
+              {!user.is_phone_verified && (
+                <div
+                  className="rounded-2xl p-3.5 text-xs leading-relaxed border space-y-2 mt-2"
+                  style={{
+                    background: "color-mix(in srgb, #f59e0b 8%, var(--app-surface))",
+                    borderColor: "color-mix(in srgb, #f59e0b 25%, transparent)",
+                  }}
+                >
+                  <p className="opacity-80">
+                    Номер не верифіковано. Ви можете змінити його вище та зберегти профіль, або підтвердити поточний номер через наш Telegram-бот.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic("light");
+                      const botUsername = user.bot_username || "domapizza_bot";
+                      const verifyUrl = `https://t.me/${botUsername}?start=verify_phone`;
+                      openTelegramLink(verifyUrl);
+                    }}
+                    className="app-press flex items-center justify-center gap-1.5 w-full rounded-xl py-2.5 px-3 text-xs font-bold text-white transition shadow-sm"
+                    style={{ background: "var(--tg-theme-button-color)" }}
+                  >
+                    <span>📱</span>
+                    <span>Підтвердити телефон у боті →</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
