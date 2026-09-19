@@ -320,11 +320,12 @@ async def list_admin_categories(
                COUNT(p.id)::int AS products_count
         FROM categories c
         JOIN locations l ON l.id = c.location_id
+        LEFT JOIN categories p_cat ON p_cat.id = c.parent_id
         LEFT JOIN products p ON p.category_id = c.id
         WHERE ($1::int IS NULL OR c.location_id = $1)
-        GROUP BY c.id, l.name
+        GROUP BY c.id, l.name, p_cat.sort_order
         ORDER BY c.location_id,
-                 COALESCE(c.parent_id, c.id),
+                 COALESCE(p_cat.sort_order, c.sort_order),
                  c.parent_id NULLS FIRST,
                  c.sort_order, c.id
     """

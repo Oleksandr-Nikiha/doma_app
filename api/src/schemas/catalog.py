@@ -8,6 +8,7 @@ class CategoryOut(BaseModel):
     location_id: int
     location_name: str
     parent_id: int | None
+    sort_order: int = 0
 
 
 class ProductVariantOut(BaseModel):

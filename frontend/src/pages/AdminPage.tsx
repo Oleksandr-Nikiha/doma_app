@@ -2019,11 +2019,17 @@ function CatalogTab({
   const [search, setSearch] = useState("");
 
   const rootCategories = useMemo(
-    () => categories.filter((c) => c.parent_id === null),
+    () =>
+      categories
+        .filter((c) => c.parent_id === null)
+        .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id),
     [categories]
   );
   const subcategories = useMemo(
-    () => categories.filter((c) => c.parent_id !== null),
+    () =>
+      categories
+        .filter((c) => c.parent_id !== null)
+        .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id),
     [categories]
   );
 

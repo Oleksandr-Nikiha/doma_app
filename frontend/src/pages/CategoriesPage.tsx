@@ -23,6 +23,11 @@ function groupByLocation(categories: Category[]) {
     childrenOf.set(c.parent_id, list);
   }
 
+  // Сортуємо підкатегорії всередині кожного батька за sort_order
+  for (const list of childrenOf.values()) {
+    list.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+  }
+
   const map = new Map<number, { name: string; roots: Root[] }>();
   for (const c of categories) {
     if (c.parent_id !== null) continue;
@@ -30,7 +35,14 @@ function groupByLocation(categories: Category[]) {
     group.roots.push({ category: c, children: childrenOf.get(c.id) ?? [] });
     map.set(c.location_id, group);
   }
-  return [...map.values()];
+
+  // Сортуємо кореневі категорії за sort_order
+  const result = [...map.values()];
+  for (const group of result) {
+    group.roots.sort((a, b) => a.category.sort_order - b.category.sort_order || a.category.id - b.category.id);
+  }
+
+  return result;
 }
 
 export function CategoriesPage() {
@@ -77,11 +89,6 @@ export function CategoriesPage() {
                       <p className="font-semibold text-base leading-tight truncate">
                         {category.name}
                       </p>
-                      {children.length > 0 && (
-                        <p className="mt-1 text-xs opacity-50">
-                          {children.length} {children.length === 1 ? "розділ" : children.length < 5 ? "розділи" : "розділів"}
-                        </p>
-                      )}
                     </div>
                     <span className="text-xl opacity-35 px-1 font-light" aria-hidden>
                       ›

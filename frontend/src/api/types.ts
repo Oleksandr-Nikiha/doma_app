@@ -9,6 +9,7 @@ export interface Category {
   parent_id: number | null;
   location_id: number;
   location_name: string;
+  sort_order: number;
 }
 
 export interface ProductListItem {

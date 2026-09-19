@@ -30,9 +30,11 @@ async def list_categories(
 
     rows = await pool.fetch(
         """
-        SELECT c.id, c.name, c.icon, c.parent_id, c.location_id, l.name AS location_name
+        SELECT c.id, c.name, c.icon, c.parent_id, c.location_id,
+               c.sort_order, l.name AS location_name
         FROM categories c
         JOIN locations l ON l.id = c.location_id
+        LEFT JOIN categories p_cat ON p_cat.id = c.parent_id
         WHERE c.is_visible = true
           AND (
               c.parent_id IS NULL
@@ -46,9 +48,10 @@ async def list_categories(
               )
           )
         ORDER BY c.location_id,
-            COALESCE(c.parent_id, c.id),
+            COALESCE(p_cat.sort_order, c.sort_order),
             c.parent_id NULLS FIRST,
-            c.sort_order
+            c.sort_order,
+            c.id
         """
     )
     result = [CategoryOut(**dict(row)) for row in rows]
