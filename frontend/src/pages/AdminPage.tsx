@@ -73,11 +73,13 @@ import type {
   VariantUpdatePayload,
 } from "@/api/types";
 import { EmptyState, ErrorBox, ScreenTitle, Spinner, Thumb, formatPrice } from "@/components/ui";
+import { AnalyticsTab } from "@/components/admin/AnalyticsTab";
+import { BroadcastsTab } from "@/components/admin/BroadcastsTab";
 import { useBackButton } from "@/hooks/useBackButton";
 import { haptic, hapticNotify } from "@/telegram/sdk";
 
 type AdminSection = "operations" | "management";
-type AdminTab = "orders" | "stoplist" | "delivery" | "catalog" | "options" | "users" | "managers";
+type AdminTab = "orders" | "stoplist" | "delivery" | "catalog" | "options" | "users" | "managers" | "analytics" | "broadcasts";
 
 export function AdminPage() {
   const navigate = useNavigate();
@@ -93,7 +95,11 @@ export function AdminPage() {
   const isSuperAdmin = adminMe?.role === "admin";
 
   useEffect(() => {
-    if (adminMe && !isSuperAdmin && activeTab === "managers") {
+    if (
+      adminMe &&
+      !isSuperAdmin &&
+      (activeTab === "managers" || activeTab === "analytics" || activeTab === "broadcasts")
+    ) {
       setActiveTab("orders");
       setActiveSection("operations");
     }
@@ -236,10 +242,16 @@ export function AdminPage() {
             ))}
 
             <p className="text-[9px] font-bold uppercase tracking-wider opacity-40 px-2 pt-3 mb-1.5">
-              Керування
+              {isSuperAdmin ? "Керування та аналітика" : "Керування"}
             </p>
             {[
               { tab: "orders" as AdminTab, label: "Замовлення", icon: "📦" },
+              ...(isSuperAdmin
+                ? [
+                    { tab: "analytics" as AdminTab, label: "Аналітика", icon: "📊" },
+                    { tab: "broadcasts" as AdminTab, label: "Розсилки", icon: "📢" },
+                  ]
+                : []),
               { tab: "users" as AdminTab, label: "Клієнти", icon: "👥" },
               ...(isSuperAdmin
                 ? [{ tab: "managers" as AdminTab, label: "Штат і ролі", icon: "👔" }]
@@ -291,6 +303,8 @@ export function AdminPage() {
               {activeTab === "stoplist" && "⛔ Стоп-лист страв"}
               {activeTab === "delivery" && "🛵 Налаштування доставки"}
               {activeTab === "orders" && "📦 Замовлення"}
+              {activeTab === "analytics" && "📊 Аналітика та статистика"}
+              {activeTab === "broadcasts" && "📢 Маркетингові розсилки"}
               {activeTab === "users" && "👥 Клієнти закладу"}
               {activeTab === "managers" && isSuperAdmin && "👔 Штат та ролі"}
             </h2>
@@ -351,7 +365,11 @@ export function AdminPage() {
             onClick={() => {
               haptic("light");
               setActiveSection("management");
-              if (activeTab !== "users" && activeTab !== "managers") {
+              if (isSuperAdmin) {
+                if (activeTab !== "users" && activeTab !== "managers" && activeTab !== "analytics" && activeTab !== "broadcasts") {
+                  setActiveTab("analytics");
+                }
+              } else {
                 setActiveTab("users");
               }
             }}
@@ -364,7 +382,7 @@ export function AdminPage() {
                 : undefined
             }
           >
-            {isSuperAdmin ? "👥 Керування (Штат / Клієнти)" : "👥 Клієнти"}
+            {isSuperAdmin ? "📊 Керування та аналітика" : "👥 Клієнти"}
           </button>
         </div>
 
@@ -457,18 +475,54 @@ export function AdminPage() {
           </div>
         )}
 
-        {/* 2. Підвкладки розділу "Керування" */}
-        {activeSection === "management" && isSuperAdmin && (
+        {/* 2. Підвкладки розділу "Керування та аналітика" */}
+        {activeSection === "management" && (
           <div
-            className="mt-2 flex rounded-xl p-1 text-xs font-medium gap-1"
+            className="mt-2 flex rounded-xl p-1 text-xs font-medium gap-1 overflow-x-auto no-scrollbar"
             style={{ background: "var(--app-surface-2)" }}
           >
+            {isSuperAdmin && (
+              <>
+                <button
+                  onClick={() => {
+                    haptic("light");
+                    setActiveTab("analytics");
+                  }}
+                  className={`app-press flex-1 min-w-[75px] rounded-lg py-2 text-center transition-all ${
+                    activeTab === "analytics" ? "shadow-sm font-bold" : "opacity-70"
+                  }`}
+                  style={
+                    activeTab === "analytics"
+                      ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
+                      : undefined
+                  }
+                >
+                  📊 Аналітика
+                </button>
+                <button
+                  onClick={() => {
+                    haptic("light");
+                    setActiveTab("broadcasts");
+                  }}
+                  className={`app-press flex-1 min-w-[75px] rounded-lg py-2 text-center transition-all ${
+                    activeTab === "broadcasts" ? "shadow-sm font-bold" : "opacity-70"
+                  }`}
+                  style={
+                    activeTab === "broadcasts"
+                      ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
+                      : undefined
+                  }
+                >
+                  📢 Розсилки
+                </button>
+              </>
+            )}
             <button
               onClick={() => {
                 haptic("light");
                 setActiveTab("users");
               }}
-              className={`app-press flex-1 rounded-lg py-2 text-center transition-all ${
+              className={`app-press flex-1 min-w-[75px] rounded-lg py-2 text-center transition-all ${
                 activeTab === "users" ? "shadow-sm font-bold" : "opacity-70"
               }`}
               style={
@@ -477,24 +531,26 @@ export function AdminPage() {
                   : undefined
               }
             >
-              👤 Клієнти (Пошук за телефоном)
+              👤 Клієнти
             </button>
-            <button
-              onClick={() => {
-                haptic("light");
-                setActiveTab("managers");
-              }}
-              className={`app-press flex-1 rounded-lg py-2 text-center transition-all ${
-                activeTab === "managers" ? "shadow-sm font-bold" : "opacity-70"
-              }`}
-              style={
-                activeTab === "managers"
-                  ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
-                  : undefined
-              }
-            >
-              👥 Штат
-            </button>
+            {isSuperAdmin && (
+              <button
+                onClick={() => {
+                  haptic("light");
+                  setActiveTab("managers");
+                }}
+                className={`app-press flex-1 min-w-[75px] rounded-lg py-2 text-center transition-all ${
+                  activeTab === "managers" ? "shadow-sm font-bold" : "opacity-70"
+                }`}
+                style={
+                  activeTab === "managers"
+                    ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
+                    : undefined
+                }
+              >
+                👥 Штат
+              </button>
+            )}
           </div>
         )}
 
@@ -503,7 +559,8 @@ export function AdminPage() {
           (activeTab === "orders" ||
             activeTab === "catalog" ||
             activeTab === "stoplist" ||
-            activeTab === "delivery") &&
+            activeTab === "delivery" ||
+            activeTab === "analytics") &&
           locations.length > 1 && (
             <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
               <button
@@ -540,7 +597,7 @@ export function AdminPage() {
                       : { background: "var(--app-surface)", color: "var(--tg-theme-text-color)" }
                   }
                 >
-                  📍 {loc.name}
+                  {loc.name}
                 </button>
               ))}
             </div>
@@ -552,6 +609,10 @@ export function AdminPage() {
         {activeTab === "orders" && (
           <OrdersTab locationId={effectiveLocationId} />
         )}
+        {activeTab === "analytics" && isSuperAdmin && (
+          <AnalyticsTab locationId={effectiveLocationId} />
+        )}
+        {activeTab === "broadcasts" && isSuperAdmin && <BroadcastsTab />}
         {activeTab === "catalog" && (
           <CatalogTab
             locationId={effectiveLocationId}

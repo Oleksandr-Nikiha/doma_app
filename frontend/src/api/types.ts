@@ -582,3 +582,96 @@ export interface AdminOrderUpdatePayload {
   }[];
 }
 
+// --- Аналітика та статистика (Фаза 5.1) ---
+
+export interface AnalyticsKPI {
+  revenue: number;
+  orders_count: number;
+  avg_order_value: number;
+  customers_count: number;
+}
+
+export interface AnalyticsStatusBreakdown {
+  status: string;
+  count: number;
+  total_amount: number;
+}
+
+export interface AnalyticsFulfillmentBreakdown {
+  fulfillment_type: string;
+  count: number;
+  total_amount: number;
+}
+
+export interface AnalyticsPaymentBreakdown {
+  payment_method: string;
+  count: number;
+  total_amount: number;
+}
+
+export interface AnalyticsLocationBreakdown {
+  location_id: number;
+  location_name: string;
+  orders_count: number;
+  revenue: number;
+}
+
+export interface AnalyticsDynamicsPoint {
+  date: string;
+  orders_count: number;
+  revenue: number;
+}
+
+export interface AnalyticsSummary {
+  period: string;
+  kpi: AnalyticsKPI;
+  by_status: AnalyticsStatusBreakdown[];
+  by_fulfillment: AnalyticsFulfillmentBreakdown[];
+  by_payment: AnalyticsPaymentBreakdown[];
+  by_location: AnalyticsLocationBreakdown[];
+  dynamics: AnalyticsDynamicsPoint[];
+}
+
+export interface AnalyticsTopProduct {
+  product_name: string;
+  variant_label: string;
+  total_qty: number;
+  total_revenue: number;
+}
+
+// --- Маркетингові розсилки (Фаза 5.2) ---
+
+export type BroadcastSegment = "all" | "active_30d" | "inactive" | "top_orders";
+
+export interface BroadcastCreatePayload {
+  title: string;
+  text: string;
+  image_url?: string | null;
+  button_text?: string | null;
+  button_url?: string | null;
+  segment: BroadcastSegment;
+}
+
+export interface Broadcast {
+  id: number;
+  author_id: number;
+  author_name?: string | null;
+  title: string;
+  text: string;
+  image_url?: string | null;
+  button_text?: string | null;
+  button_url?: string | null;
+  segment: BroadcastSegment;
+  status: "sending" | "completed" | "failed";
+  total_recipients: number;
+  sent_count: number;
+  failed_count: number;
+  created_at: string;
+  completed_at?: string | null;
+}
+
+export interface BroadcastRecipientsCount {
+  segment: string;
+  count: number;
+}
+

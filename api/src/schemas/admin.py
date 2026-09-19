@@ -377,3 +377,99 @@ class AdminOrderDetailOut(BaseModel):
     user_is_blocked: bool = False
     user_admin_note: str | None = None
     groups: list[AdminOrderGroupOut] = []
+
+
+
+# --- Аналітика та статистика ---
+
+
+class AnalyticsKPI(BaseModel):
+    revenue: float
+    orders_count: int
+    avg_order_value: float
+    customers_count: int
+
+
+class AnalyticsStatusBreakdown(BaseModel):
+    status: str
+    count: int
+    total_amount: float
+
+
+class AnalyticsFulfillmentBreakdown(BaseModel):
+    fulfillment_type: str
+    count: int
+    total_amount: float
+
+
+class AnalyticsPaymentBreakdown(BaseModel):
+    payment_method: str
+    count: int
+    total_amount: float
+
+
+class AnalyticsLocationBreakdown(BaseModel):
+    location_id: int
+    location_name: str
+    orders_count: int
+    revenue: float
+
+
+class AnalyticsDynamicsPoint(BaseModel):
+    date: str
+    orders_count: int
+    revenue: float
+
+
+class AnalyticsSummaryOut(BaseModel):
+    period: str
+    kpi: AnalyticsKPI
+    by_status: list[AnalyticsStatusBreakdown] = []
+    by_fulfillment: list[AnalyticsFulfillmentBreakdown] = []
+    by_payment: list[AnalyticsPaymentBreakdown] = []
+    by_location: list[AnalyticsLocationBreakdown] = []
+    dynamics: list[AnalyticsDynamicsPoint] = []
+
+
+class AnalyticsTopProductOut(BaseModel):
+    product_name: str
+    variant_label: str
+    total_qty: int
+    total_revenue: float
+
+
+# --- Маркетингові розсилки (Фаза 5.2) ---
+
+BroadcastSegment = Literal["all", "active_30d", "inactive", "top_orders"]
+
+
+class BroadcastCreateIn(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    text: str = Field(..., min_length=1, max_length=4000)
+    image_url: str | None = None
+    button_text: str | None = Field(None, max_length=64)
+    button_url: str | None = None
+    segment: BroadcastSegment = "all"
+
+
+class BroadcastOut(BaseModel):
+    id: int
+    author_id: int
+    author_name: str | None = None
+    title: str
+    text: str
+    image_url: str | None = None
+    button_text: str | None = None
+    button_url: str | None = None
+    segment: str
+    status: str
+    total_recipients: int
+    sent_count: int
+    failed_count: int
+    created_at: str
+    completed_at: str | None = None
+
+
+class BroadcastRecipientsCountOut(BaseModel):
+    segment: str
+    count: int

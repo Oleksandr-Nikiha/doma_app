@@ -1,12 +1,14 @@
+import asyncio
 import html
 import json
 import logging
+import urllib.error
 import urllib.request
 
 import asyncpg
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
-from src.auth.deps import get_current_staff, get_current_user
+from src.auth.deps import get_current_admin, get_current_staff, get_current_user
 from src.config import get_settings
 from src.db.connection import get_pool
 from src.schemas.admin import (
@@ -19,7 +21,18 @@ from src.schemas.admin import (
     AdminOrderUpdateIn,
     AdminUserOut,
     AdminUserUpdateIn,
+    AnalyticsDynamicsPoint,
+    AnalyticsFulfillmentBreakdown,
+    AnalyticsKPI,
+    AnalyticsLocationBreakdown,
+    AnalyticsPaymentBreakdown,
+    AnalyticsStatusBreakdown,
+    AnalyticsSummaryOut,
+    AnalyticsTopProductOut,
     AvailabilityUpdateIn,
+    BroadcastCreateIn,
+    BroadcastOut,
+    BroadcastRecipientsCountOut,
     BulkAvailabilityIn,
     BulkOptionGroupActionIn,
     CategoryAdminOut,
@@ -2329,3 +2342,529 @@ async def admin_delete_delivery_address(
         raise HTTPException(status_code=404, detail="Адресу не знайдено")
     return {"status": "ok", "deleted_id": address_id}
 
+
+# ============================================================================
+# 8. Аналітика та статистика замовлень
+# ============================================================================
+
+
+def _get_period_clause(period: str) -> str:
+    clauses = {
+        "today": "created_at >= date_trunc('day', now() AT TIME ZONE 'Europe/Kyiv')",
+        "7d": "created_at >= now() - INTERVAL '7 days'",
+        "30d": "created_at >= now() - INTERVAL '30 days'",
+    }
+    return clauses.get(period, "1=1")
+
+
+@router.get("/analytics/summary", response_model=AnalyticsSummaryOut)
+async def get_analytics_summary(
+    period: str = Query("7d", regex="^(today|7d|30d|all)$"),
+    location_id: int | None = Query(None),
+    admin: asyncpg.Record = Depends(get_current_admin),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Повертає зведені показники (KPI, динаміку по днях та розбивки).
+    """
+    target_location_id = location_id
+    
+    period_sql = _get_period_clause(period)
+
+    # Базова умова для фільтрації orders
+    where_parts = [period_sql]
+    params: list = []
+
+    if target_location_id:
+        params.append(target_location_id)
+        where_parts.append(
+            f"id IN (SELECT order_id FROM order_groups WHERE location_id = ${len(params)})"
+        )
+
+    where_clause = " AND ".join(where_parts)
+
+    async with pool.acquire() as conn:
+        # 1. Загальні KPI (тільки непомилкові замовлення)
+        kpi_row = await conn.fetchrow(
+            f"""
+            SELECT
+                COALESCE(COUNT(*), 0) AS orders_count,
+                COALESCE(SUM(total_price), 0) AS revenue,
+                COALESCE(COUNT(DISTINCT telegram_id), 0) AS customers_count
+            FROM orders
+            WHERE {where_clause} AND status NOT IN ('rejected', 'cancelled')
+            """,
+            *params,
+        )
+
+        orders_count = int(kpi_row["orders_count"])
+        revenue = float(kpi_row["revenue"])
+        customers_count = int(kpi_row["customers_count"])
+        avg_order_value = round(revenue / orders_count, 2) if orders_count > 0 else 0.0
+
+        kpi = AnalyticsKPI(
+            revenue=revenue,
+            orders_count=orders_count,
+            avg_order_value=avg_order_value,
+            customers_count=customers_count,
+        )
+
+        # 2. Розбивка за статусами
+        status_rows = await conn.fetch(
+            f"""
+            SELECT status, COUNT(*) AS count, COALESCE(SUM(total_price), 0) AS total_amount
+            FROM orders
+            WHERE {where_clause}
+            GROUP BY status
+            ORDER BY count DESC
+            """,
+            *params,
+        )
+        by_status = [
+            AnalyticsStatusBreakdown(
+                status=r["status"],
+                count=int(r["count"]),
+                total_amount=float(r["total_amount"]),
+            )
+            for r in status_rows
+        ]
+
+        # 3. Розбивка за способом отримання (fulfillment_type)
+        fulfillment_rows = await conn.fetch(
+            f"""
+            SELECT fulfillment_type, COUNT(*) AS count,
+                   COALESCE(SUM(total_price), 0) AS total_amount
+            FROM orders
+            WHERE {where_clause} AND status NOT IN ('rejected', 'cancelled')
+            GROUP BY fulfillment_type
+            ORDER BY count DESC
+            """,
+            *params,
+        )
+        by_fulfillment = [
+            AnalyticsFulfillmentBreakdown(
+                fulfillment_type=r["fulfillment_type"],
+                count=int(r["count"]),
+                total_amount=float(r["total_amount"]),
+            )
+            for r in fulfillment_rows
+        ]
+
+        # 4. Розбивка за способом оплати (payment_method)
+        payment_rows = await conn.fetch(
+            f"""
+            SELECT payment_method, COUNT(*) AS count, COALESCE(SUM(total_price), 0) AS total_amount
+            FROM orders
+            WHERE {where_clause} AND status NOT IN ('rejected', 'cancelled')
+            GROUP BY payment_method
+            ORDER BY count DESC
+            """,
+            *params,
+        )
+        by_payment = [
+            AnalyticsPaymentBreakdown(
+                payment_method=r["payment_method"],
+                count=int(r["count"]),
+                total_amount=float(r["total_amount"]),
+            )
+            for r in payment_rows
+        ]
+
+        # 5. Розбивка за закладами (локаціями)
+        loc_where = [f"o.{period_sql}", "o.status NOT IN ('rejected', 'cancelled')"]
+        loc_params: list = []
+        if target_location_id:
+            loc_params.append(target_location_id)
+            loc_where.append(f"l.id = ${len(loc_params)}")
+
+        loc_sql = f"""
+            SELECT
+                l.id AS location_id,
+                l.name AS location_name,
+                COUNT(DISTINCT og.order_id) AS orders_count,
+                COALESCE(SUM(og.subtotal), 0) AS revenue
+            FROM locations l
+            LEFT JOIN order_groups og ON og.location_id = l.id
+            LEFT JOIN orders o ON o.id = og.order_id AND {' AND '.join(loc_where)}
+            {'WHERE l.id = $1' if target_location_id else ''}
+            GROUP BY l.id, l.name
+            ORDER BY l.id
+        """
+        location_rows = await conn.fetch(loc_sql, *loc_params)
+        by_location = [
+            AnalyticsLocationBreakdown(
+                location_id=r["location_id"],
+                location_name=r["location_name"],
+                orders_count=int(r["orders_count"]),
+                revenue=float(r["revenue"]),
+            )
+            for r in location_rows
+        ]
+
+        # 6. Динаміка замовлень за днями
+        dynamics_rows = await conn.fetch(
+            f"""
+            SELECT
+                to_char(created_at AT TIME ZONE 'Europe/Kyiv', 'YYYY-MM-DD') AS day,
+                COUNT(*) AS orders_count,
+                COALESCE(SUM(total_price), 0) AS revenue
+            FROM orders
+            WHERE {where_clause} AND status NOT IN ('rejected', 'cancelled')
+            GROUP BY day
+            ORDER BY day ASC
+            """,
+            *params,
+        )
+        dynamics = [
+            AnalyticsDynamicsPoint(
+                date=r["day"],
+                orders_count=int(r["orders_count"]),
+                revenue=float(r["revenue"]),
+            )
+            for r in dynamics_rows
+        ]
+
+    return AnalyticsSummaryOut(
+        period=period,
+        kpi=kpi,
+        by_status=by_status,
+        by_fulfillment=by_fulfillment,
+        by_payment=by_payment,
+        by_location=by_location,
+        dynamics=dynamics,
+    )
+
+
+@router.get("/analytics/top-products", response_model=list[AnalyticsTopProductOut])
+async def get_analytics_top_products(
+    period: str = Query("7d", regex="^(today|7d|30d|all)$"),
+    limit: int = Query(10, ge=1, le=50),
+    location_id: int | None = Query(None),
+    admin: asyncpg.Record = Depends(get_current_admin),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Повертає найпопулярніші страви (топ) за вибраний період.
+    """
+    target_location_id = location_id
+    period_sql = _get_period_clause(period)
+
+    where_parts = [
+        f"o.{period_sql}",
+        "o.status NOT IN ('rejected', 'cancelled')",
+    ]
+    params: list = []
+
+    if target_location_id:
+        params.append(target_location_id)
+        where_parts.append(f"og.location_id = ${len(params)}")
+
+    params.append(limit)
+    limit_placeholder = f"${len(params)}"
+
+    where_clause = " AND ".join(where_parts)
+
+    query = f"""
+        SELECT
+            oi.product_name,
+            oi.variant_label,
+            COALESCE(SUM(oi.qty), 0) AS total_qty,
+            COALESCE(SUM(oi.subtotal), 0) AS total_revenue
+        FROM order_items oi
+        JOIN order_groups og ON og.id = oi.order_group_id
+        JOIN orders o ON o.id = og.order_id
+        WHERE {where_clause}
+        GROUP BY oi.product_name, oi.variant_label
+        ORDER BY total_qty DESC, total_revenue DESC
+        LIMIT {limit_placeholder}
+    """
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(query, *params)
+
+    return [
+        AnalyticsTopProductOut(
+            product_name=r["product_name"],
+            variant_label=r["variant_label"],
+            total_qty=int(r["total_qty"]),
+            total_revenue=float(r["total_revenue"]),
+        )
+        for r in rows
+    ]
+
+
+# ============================================================================
+# 9. Маркетингові розсилки (Broadcasts)
+# ============================================================================
+
+
+def _send_single_telegram_broadcast(
+    token: str,
+    chat_id: int,
+    text: str,
+    image_url: str | None,
+    reply_markup: dict | None,
+) -> bool:
+    data: dict = {
+        "chat_id": chat_id,
+        "parse_mode": "HTML",
+    }
+    if image_url:
+        url = f"https://api.telegram.org/bot{token}/sendPhoto"
+        data["photo"] = image_url
+        data["caption"] = text
+    else:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        data["text"] = text
+
+    if reply_markup:
+        data["reply_markup"] = reply_markup
+
+    raw_body = json.dumps(data).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=raw_body,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            resp.read()
+        return True
+    except urllib.error.HTTPError as err:
+        # Якщо сталася помилка через HTML-теги, робимо fallback на звичайний текст
+        if err.code == 400 and "parse_mode" in data:
+            data.pop("parse_mode", None)
+            fallback_req = urllib.request.Request(
+                url,
+                data=json.dumps(data).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            try:
+                with urllib.request.urlopen(fallback_req, timeout=8) as resp:
+                    resp.read()
+                return True
+            except Exception:
+                pass
+        logger.warning("Не вдалося надіслати розсилку chat_id=%s: %s", chat_id, err)
+        return False
+    except Exception as e:
+        logger.warning("Помилка надсилання розсилки chat_id=%s: %s", chat_id, e)
+        return False
+
+
+async def _send_broadcast_worker(
+    broadcast_id: int,
+    recipients: list[int],
+    payload_dict: dict,
+    bot_token: str,
+    pool: asyncpg.Pool,
+) -> None:
+    sent_count = 0
+    failed_count = 0
+
+    text = payload_dict["text"]
+    image_url = payload_dict.get("image_url")
+    button_text = payload_dict.get("button_text")
+    button_url = payload_dict.get("button_url")
+
+    reply_markup = None
+    if button_text and button_url:
+        reply_markup = {
+            "inline_keyboard": [[{"text": button_text, "url": button_url}]]
+        }
+
+    for tid in recipients:
+        success = await asyncio.to_thread(
+            _send_single_telegram_broadcast,
+            bot_token,
+            tid,
+            text,
+            image_url,
+            reply_markup,
+        )
+        if success:
+            sent_count += 1
+        else:
+            failed_count += 1
+
+        # Ліміт Telegram Bot API: не більше 30 повідомлень/сек
+        await asyncio.sleep(0.04)
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE broadcasts
+            SET status = 'completed',
+                sent_count = $1,
+                failed_count = $2,
+                completed_at = now()
+            WHERE id = $3
+            """,
+            sent_count,
+            failed_count,
+            broadcast_id,
+        )
+
+
+async def _get_segment_recipients(conn: asyncpg.Connection, segment: str) -> list[int]:
+    if segment == "all":
+        rows = await conn.fetch("SELECT telegram_id FROM users WHERE telegram_id IS NOT NULL")
+    elif segment == "active_30d":
+        rows = await conn.fetch(
+            """
+            SELECT DISTINCT telegram_id
+            FROM orders
+            WHERE status NOT IN ('rejected', 'cancelled')
+              AND created_at >= now() - INTERVAL '30 days'
+            """
+        )
+    elif segment == "inactive":
+        rows = await conn.fetch(
+            """
+            SELECT telegram_id
+            FROM users
+            WHERE telegram_id NOT IN (
+                SELECT DISTINCT telegram_id
+                FROM orders
+                WHERE status NOT IN ('rejected', 'cancelled')
+                  AND created_at >= now() - INTERVAL '30 days'
+            )
+            """
+        )
+    elif segment == "top_orders":
+        rows = await conn.fetch(
+            """
+            SELECT telegram_id
+            FROM orders
+            WHERE status NOT IN ('rejected', 'cancelled')
+            GROUP BY telegram_id
+            HAVING COUNT(*) >= 2
+            ORDER BY COUNT(*) DESC
+            """
+        )
+    else:
+        rows = []
+    return [r["telegram_id"] for r in rows if r["telegram_id"]]
+
+
+@router.get("/broadcasts/recipients-count", response_model=BroadcastRecipientsCountOut)
+async def get_broadcast_recipients_count(
+    segment: str = Query("all", regex="^(all|active_30d|inactive|top_orders)$"),
+    admin: asyncpg.Record = Depends(get_current_admin),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Повертає орієнтовну кількість клієнтів в обраному сегменті.
+    """
+    async with pool.acquire() as conn:
+        recipients = await _get_segment_recipients(conn, segment)
+    return BroadcastRecipientsCountOut(segment=segment, count=len(recipients))
+
+
+@router.post("/broadcasts", response_model=BroadcastOut)
+async def create_broadcast(
+    payload: BroadcastCreateIn,
+    background_tasks: BackgroundTasks,
+    admin: asyncpg.Record = Depends(get_current_admin),
+    settings=Depends(get_settings),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Створює розсилку та запускає відправку клієнтам у фоні.
+    """
+    async with pool.acquire() as conn:
+        recipients = await _get_segment_recipients(conn, payload.segment)
+        if not recipients:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="В обраному сегменті немає жодного користувача для розсилки",
+            )
+
+        row = await conn.fetchrow(
+            """
+            INSERT INTO broadcasts (
+                author_id, title, text, image_url, button_text, button_url,
+                segment, status, total_recipients
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'sending', $8)
+            RETURNING id, author_id, title, text, image_url, button_text, button_url,
+                      segment, status, total_recipients, sent_count, failed_count,
+                      created_at, completed_at
+            """,
+            admin["telegram_id"],
+            payload.title,
+            payload.text,
+            payload.image_url,
+            payload.button_text,
+            payload.button_url,
+            payload.segment,
+            len(recipients),
+        )
+
+    background_tasks.add_task(
+        _send_broadcast_worker,
+        row["id"],
+        recipients,
+        payload.model_dump(),
+        settings.bot_token,
+        pool,
+    )
+
+    return BroadcastOut(
+        id=row["id"],
+        author_id=row["author_id"],
+        author_name=admin["full_name"],
+        title=row["title"],
+        text=row["text"],
+        image_url=row["image_url"],
+        button_text=row["button_text"],
+        button_url=row["button_url"],
+        segment=row["segment"],
+        status=row["status"],
+        total_recipients=row["total_recipients"],
+        sent_count=row["sent_count"],
+        failed_count=row["failed_count"],
+        created_at=row["created_at"].isoformat(),
+        completed_at=row["completed_at"].isoformat() if row["completed_at"] else None,
+    )
+
+
+@router.get("/broadcasts", response_model=list[BroadcastOut])
+async def list_broadcasts(
+    admin: asyncpg.Record = Depends(get_current_admin),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Повертає історію проведених розсилок.
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT b.*, u.full_name AS author_name
+            FROM broadcasts b
+            LEFT JOIN users u ON u.telegram_id = b.author_id
+            ORDER BY b.created_at DESC
+            LIMIT 50
+            """
+        )
+
+    return [
+        BroadcastOut(
+            id=r["id"],
+            author_id=r["author_id"],
+            author_name=r["author_name"],
+            title=r["title"],
+            text=r["text"],
+            image_url=r["image_url"],
+            button_text=r["button_text"],
+            button_url=r["button_url"],
+            segment=r["segment"],
+            status=r["status"],
+            total_recipients=r["total_recipients"],
+            sent_count=r["sent_count"],
+            failed_count=r["failed_count"],
+            created_at=r["created_at"].isoformat(),
+            completed_at=r["completed_at"].isoformat() if r["completed_at"] else None,
+        )
+        for r in rows
+    ]

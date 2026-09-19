@@ -63,6 +63,11 @@ import type {
   AdminDeliveryAddress,
   DeliveryAddressCreatePayload,
   DeliveryAddressUpdatePayload,
+  AnalyticsSummary,
+  AnalyticsTopProduct,
+  Broadcast,
+  BroadcastCreatePayload,
+  BroadcastRecipientsCount,
 } from "@/api/types";
 
 /** Ключі кешу зібрані в одному місці — щоб інвалідація не розповзалась по компонентах. */
@@ -92,6 +97,13 @@ export const keys = {
   adminOrders: (params?: { status?: string | null; locationId?: number | null }) =>
     ["admin", "orders", params?.status, params?.locationId] as const,
   adminOrder: (orderId: number) => ["admin", "order", orderId] as const,
+  adminAnalyticsSummary: (params?: { period?: string; locationId?: number | null }) =>
+    ["admin", "analytics", "summary", params] as const,
+  adminAnalyticsTopProducts: (params?: { period?: string; locationId?: number | null; limit?: number }) =>
+    ["admin", "analytics", "top-products", params] as const,
+  adminBroadcastRecipientsCount: (segment: string) =>
+    ["admin", "broadcasts", "recipients-count", segment] as const,
+  adminBroadcasts: ["admin", "broadcasts"] as const,
 };
 
 // --- Каталог і контакти (публічні) ---
@@ -944,6 +956,71 @@ export function useNotifyAdminOrder() {
   return useMutation({
     mutationFn: (orderId: number) =>
       api.post<{ status: string; message: string }>(`/admin/orders/${orderId}/notify`),
+  });
+}
+
+// --- Аналітика та статистика замовлень (Адмінка) ---
+
+export function useAdminAnalyticsSummary(params?: { period?: string; locationId?: number | null }) {
+  return useQuery({
+    queryKey: keys.adminAnalyticsSummary(params),
+    queryFn: () => {
+      const sp = new URLSearchParams();
+      if (params?.period) sp.set("period", params.period);
+      if (params?.locationId) sp.set("location_id", String(params.locationId));
+      const qs = sp.toString() ? `?${sp.toString()}` : "";
+      return api.get<AnalyticsSummary>(`/admin/analytics/summary${qs}`);
+    },
+  });
+}
+
+export function useAdminAnalyticsTopProducts(params?: {
+  period?: string;
+  locationId?: number | null;
+  limit?: number;
+}) {
+  return useQuery({
+    queryKey: keys.adminAnalyticsTopProducts(params),
+    queryFn: () => {
+      const sp = new URLSearchParams();
+      if (params?.period) sp.set("period", params.period);
+      if (params?.locationId) sp.set("location_id", String(params.locationId));
+      if (params?.limit) sp.set("limit", String(params.limit));
+      const qs = sp.toString() ? `?${sp.toString()}` : "";
+      return api.get<AnalyticsTopProduct[]>(`/admin/analytics/top-products${qs}`);
+    },
+  });
+}
+
+// --- Маркетингові розсилки (Адмінка) ---
+
+export function useAdminBroadcastRecipientsCount(segment: string) {
+  return useQuery({
+    queryKey: keys.adminBroadcastRecipientsCount(segment),
+    queryFn: () =>
+      api.get<BroadcastRecipientsCount>(
+        `/admin/broadcasts/recipients-count?segment=${encodeURIComponent(segment)}`
+      ),
+    staleTime: 15000,
+  });
+}
+
+export function useAdminBroadcasts() {
+  return useQuery({
+    queryKey: keys.adminBroadcasts,
+    queryFn: () => api.get<Broadcast[]>("/admin/broadcasts"),
+    refetchInterval: 8000,
+  });
+}
+
+export function useCreateBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: BroadcastCreatePayload) =>
+      api.post<Broadcast>("/admin/broadcasts", payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.adminBroadcasts });
+    },
   });
 }
 
