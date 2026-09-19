@@ -1003,11 +1003,7 @@ async def cancel_order(
             )
 
         await conn.execute(
-            "UPDATE orders SET status = 'cancelled', updated_at = now() WHERE id = $1",
-            order_id,
-        )
-        await conn.execute(
-            "UPDATE order_groups SET status = 'cancelled' WHERE order_id = $1",
+            "UPDATE orders SET status = 'cancelled' WHERE id = $1",
             order_id,
         )
 

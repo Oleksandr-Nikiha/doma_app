@@ -20,10 +20,11 @@ UX замовлення у **Telegram Mini App**, залишивши бота д
 **Готово:**
 
 - Backend — понад 35 ендпоінтів, перевірені наскрізно
-- Схема БД (`0001_core_schema.sql` ... `0006_broadcasts.sql`):
+- Схема БД (`0001_core_schema.sql` ... `0007_db_triggers_and_integrity.sql`):
   `orders`, `order_groups`, `order_items`, `order_item_options`, `managers`,
   `delivery_addresses`, `admin_auth_sessions`, `broadcasts`, `broadcast_logs`,
-  поля верифікації телефонів та запланованого часу
+  тригери `updated_at`, тригер синхронізації статусів `orders` -> `order_groups`,
+  каскадне видалення кошика при видаленні страв та збережена процедура очищення кошиків
 - Каталог обох закладів: Doma Pizza та Doma Croissants (57 позицій завантажено у сид)
 - Дворівневі категорії з прихованими та стоп-лист (`is_available`)
 - Групи опцій з безкоштовною квотою

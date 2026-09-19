@@ -1,12 +1,12 @@
 import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import get_settings
-from src.db.connection import connect_db, disconnect_db
+from src.db.connection import connect_db, disconnect_db, get_pool
 from src.db.redis import connect_redis, disconnect_redis
 from src.routers import (
     admin,
@@ -23,11 +23,30 @@ from src.services.cache import invalidate_catalog_cache
 logger = logging.getLogger(__name__)
 
 
+async def _periodic_cleanup_task() -> None:
+    """Періодично викликає процедуру cleanup_abandoned_carts у БД кожні 24 години."""
+    while True:
+        try:
+            pool = get_pool()
+            async with pool.acquire() as conn:
+                await conn.execute("CALL cleanup_abandoned_carts(14)")
+            logger.info("Процедура cleanup_abandoned_carts(14) успішно виконана.")
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.warning("Помилка виконання cleanup_abandoned_carts: %s", exc)
+        await asyncio.sleep(86400)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_db()
     await connect_redis()
+    cleanup_task = asyncio.create_task(_periodic_cleanup_task())
     yield
+    cleanup_task.cancel()
+    with suppress(asyncio.CancelledError):
+        await cleanup_task
     await disconnect_redis()
     await disconnect_db()
 

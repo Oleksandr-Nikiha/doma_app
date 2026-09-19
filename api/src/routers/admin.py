@@ -350,20 +350,37 @@ async def create_category(
         )
 
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            INSERT INTO categories (name, location_id, parent_id, icon, sort_order, is_visible)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id, name, location_id, parent_id, icon, sort_order, is_visible
-            """,
-            data.name,
-            data.location_id,
-            data.parent_id,
-            data.icon,
-            data.sort_order,
-            data.is_visible,
+        loc_name = await conn.fetchval(
+            "SELECT name FROM locations WHERE id = $1", data.location_id
         )
-        loc_name = await conn.fetchval("SELECT name FROM locations WHERE id = $1", data.location_id)
+        async with conn.transaction():
+            if data.sort_order is not None:
+                await conn.execute(
+                    """
+                    UPDATE categories
+                    SET sort_order = sort_order + 1
+                    WHERE location_id = $1
+                      AND (parent_id IS NOT DISTINCT FROM $2)
+                      AND sort_order >= $3
+                    """,
+                    data.location_id,
+                    data.parent_id,
+                    data.sort_order,
+                )
+
+            row = await conn.fetchrow(
+                """
+                INSERT INTO categories (name, location_id, parent_id, icon, sort_order, is_visible)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id, name, location_id, parent_id, icon, sort_order, is_visible
+                """,
+                data.name,
+                data.location_id,
+                data.parent_id,
+                data.icon,
+                data.sort_order,
+                data.is_visible,
+            )
 
     res = dict(row)
     res["location_name"] = loc_name
@@ -381,7 +398,10 @@ async def update_category(
 ):
     """Редагування категорії."""
     async with pool.acquire() as conn:
-        cat = await conn.fetchrow("SELECT location_id FROM categories WHERE id = $1", category_id)
+        cat = await conn.fetchrow(
+            "SELECT location_id, parent_id, sort_order FROM categories WHERE id = $1",
+            category_id,
+        )
         if not cat:
             raise HTTPException(status_code=404, detail="Категорію не знайдено")
 
@@ -392,31 +412,54 @@ async def update_category(
         ):
             raise HTTPException(status_code=403, detail="Немає доступу до категорій іншого закладу")
 
-        updates = []
-        params = [category_id]
-        for field, val in data.model_dump(exclude_unset=True).items():
-            params.append(val)
-            updates.append(f"{field} = ${len(params)}")
+        update_dict = data.model_dump(exclude_unset=True)
 
-        if updates:
-            await conn.execute(
-                f"UPDATE categories SET {', '.join(updates)} WHERE id = $1",
-                *params,
+        async with conn.transaction():
+            if "sort_order" in update_dict and update_dict["sort_order"] is not None:
+                new_sort_order = update_dict["sort_order"]
+                new_parent_id = update_dict.get("parent_id", cat["parent_id"])
+                target_loc = update_dict.get("location_id", cat["location_id"])
+
+                await conn.execute(
+                    """
+                    UPDATE categories
+                    SET sort_order = sort_order + 1
+                    WHERE location_id = $1
+                      AND (parent_id IS NOT DISTINCT FROM $2)
+                      AND sort_order >= $3
+                      AND id <> $4
+                    """,
+                    target_loc,
+                    new_parent_id,
+                    new_sort_order,
+                    category_id,
+                )
+
+            updates = []
+            params = [category_id]
+            for field, val in update_dict.items():
+                params.append(val)
+                updates.append(f"{field} = ${len(params)}")
+
+            if updates:
+                await conn.execute(
+                    f"UPDATE categories SET {', '.join(updates)} WHERE id = $1",
+                    *params,
+                )
+
+            updated = await conn.fetchrow(
+                """
+                SELECT c.id, c.name, c.icon, c.parent_id, c.location_id,
+                       c.sort_order, c.is_visible, l.name AS location_name,
+                       COUNT(p.id)::int AS products_count
+                FROM categories c
+                JOIN locations l ON l.id = c.location_id
+                LEFT JOIN products p ON p.category_id = c.id
+                WHERE c.id = $1
+                GROUP BY c.id, l.name
+                """,
+                category_id,
             )
-
-        updated = await conn.fetchrow(
-            """
-            SELECT c.id, c.name, c.icon, c.parent_id, c.location_id,
-                   c.sort_order, c.is_visible, l.name AS location_name,
-                   COUNT(p.id)::int AS products_count
-            FROM categories c
-            JOIN locations l ON l.id = c.location_id
-            LEFT JOIN products p ON p.category_id = c.id
-            WHERE c.id = $1
-            GROUP BY c.id, l.name
-            """,
-            category_id,
-        )
 
     await invalidate_catalog_cache()
     return CategoryAdminOut(**dict(updated))
@@ -471,7 +514,9 @@ async def list_admin_products(
             FROM products p
             JOIN categories c ON c.id = p.category_id
             LEFT JOIN locations l ON l.id = c.location_id
-            WHERE ($1::int IS NULL OR p.category_id = $1)
+            WHERE ($1::int IS NULL
+                   OR p.category_id = $1
+                   OR p.category_id IN (SELECT id FROM categories WHERE parent_id = $1))
               AND ($2::int IS NULL OR c.location_id = $2)
             ORDER BY c.sort_order, p.sort_order, p.id
             """,
@@ -1999,10 +2044,6 @@ async def update_admin_order(
                 )
             order_params.append(clean_status)
             order_updates.append(f"status = ${len(order_params)}")
-            group_status = GROUP_STATUS_MAP[clean_status]
-            await conn.execute(
-                "UPDATE order_groups SET status = $1 WHERE order_id = $2", group_status, order_id
-            )
             if clean_status != existing["status"]:
                 status_changed = True
                 new_status = clean_status

@@ -112,7 +112,7 @@ SELECT p.location_id, p.id, 'Салати', 2 FROM categories p JOIN locations l
 UNION ALL
 SELECT p.location_id, p.id, 'Хенд-роли', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Закуски'
 UNION ALL
-SELECT p.location_id, p.id, 'Роли в тортильї', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Закуски'
+SELECT p.location_id, p.id, 'Ролліни', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Закуски'
 UNION ALL
 SELECT p.location_id, p.id, 'Бокси', 3 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Закуски'
 UNION ALL
@@ -1575,16 +1575,16 @@ FROM new_product, (VALUES
         ('1 порція', '200 г', 110, 1)
     ) AS v(label, weight, price, sort_order);
 
--- ========== Закуски / Роли в тортильї ==========
+-- ========== Закуски / Ролліни ==========
 
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'Чікен рол', 'Тартилья, Курячі нагетси, салат Асберг, помідор, соус фірмовий',
+    SELECT c.id, 'Чікен роллін', 'Тортилья, курячі нагетси, салат айсберг, помідор, фірмовий соус',
            'https://domapizza.com.ua/wp-content/uploads/Чікен-рол-400x400.webp', 1
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Роли в тортильї'
+    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1595,12 +1595,12 @@ FROM new_product, (VALUES
 
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'Верона рол', 'Тартилья, Салямі, Шинка, Філе куряче, Моцарела, Цибуля, Чедр, Фірмовий соус, комбінація фірмових спецій',
+    SELECT c.id, 'Верона роллін', 'Тортилья, салямі, шинка, куряче філе, моцарела, цибуля, чедер, фірмовий соус, спеції',
            'https://domapizza.com.ua/wp-content/uploads/Верона-рол-400x400.webp', 2
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Роли в тортильї'
+    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1611,12 +1611,12 @@ FROM new_product, (VALUES
 
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'Вишгородський рол', 'Тартилья, Бекон, Халапеньо, Моцарела, Фірмоуий соус, комбінація фірмових спецій',
+    SELECT c.id, 'Вишгородський роллін', 'Тортилья, бекон, халапеньйо, моцарела, фірмовий соус, спеції',
            'https://domapizza.com.ua/wp-content/uploads/Вишгородський-рол-400x400.webp', 3
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Роли в тортильї'
+    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1627,12 +1627,12 @@ FROM new_product, (VALUES
 
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'Цезар рол', 'Тартилья, Бекон, Філе куряче, Помідор, Моцарела, Фірмовий соус Цезар, Комбінація фірмових спецій',
+    SELECT c.id, 'Цезар роллін', 'Тортилья, бекон, куряче філе, помідор, моцарела, фірмовий соус Цезар, спеції',
            'https://domapizza.com.ua/wp-content/uploads/Цезарь-рол-400x400.webp', 4
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Роли в тортильї'
+    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1643,12 +1643,12 @@ FROM new_product, (VALUES
 
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'Хані міт роллінг', 'Тартилья, Салямі, Шинка, Рукола, Крем сир,Моцарела, Пармезан, Дор-Блю, Фірмовий соус Медово-гірчичний',
+    SELECT c.id, 'Хані міт роллін', 'Тортилья, салямі, шинка, рукола, крем-сир, моцарела, пармезан, Дор-Блю, фірмовий соус медово-гірчичний',
            'https://domapizza.com.ua/wp-content/uploads/Хані-міт-роллінг-400x400.webp', 5
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Роли в тортильї'
+    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1661,7 +1661,7 @@ FROM new_product, (VALUES
 
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'Чікен рол бокс', 'Чікен рол, картопля фрі з печі, напій',
+    SELECT c.id, 'Чікен рол бокс', 'Чікен роллін, картопля фрі з печі, напій',
            'https://domapizza.com.ua/wp-content/uploads/Чікен-рол-бокс-400x400.webp', 1
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id

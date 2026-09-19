@@ -2014,11 +2014,32 @@ function CatalogTab({
   userLocationId?: number | null;
 }) {
   const { data: categories = [], isPending: catLoading, error: catError } = useAdminCategories(locationId);
-  const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
+  const [selectedParentCatId, setSelectedParentCatId] = useState<number | null>(null);
+  const [selectedSubCatId, setSelectedSubCatId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
 
+  const rootCategories = useMemo(
+    () => categories.filter((c) => c.parent_id === null),
+    [categories]
+  );
+  const subcategories = useMemo(
+    () => categories.filter((c) => c.parent_id !== null),
+    [categories]
+  );
+
+  const selectedParentCat = useMemo(
+    () => (selectedParentCatId ? rootCategories.find((c) => c.id === selectedParentCatId) : null),
+    [rootCategories, selectedParentCatId]
+  );
+  const selectedSubCat = useMemo(
+    () => (selectedSubCatId ? subcategories.find((c) => c.id === selectedSubCatId) : null),
+    [subcategories, selectedSubCatId]
+  );
+
+  const effectiveCategoryId = selectedSubCatId || selectedParentCatId || null;
+
   const { data: products = [], isPending: prodLoading, error: prodError } = useAdminProducts({
-    categoryId: selectedCatId,
+    categoryId: effectiveCategoryId,
     locationId: locationId,
   });
 
@@ -2037,6 +2058,9 @@ function CatalogTab({
   // Модальні вікна
   const [catModalOpen, setCatModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<AdminCategory | null>(null);
+
+  const [subcatModalOpen, setSubcatModalOpen] = useState(false);
+  const [editingSubcategory, setEditingSubcategory] = useState<AdminCategory | null>(null);
 
   const [prodModalOpen, setProdModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null);
@@ -2085,10 +2109,13 @@ function CatalogTab({
 
   return (
     <div className="space-y-6">
-      {/* Блок категорій */}
+      {/* 1. Блок категорій (Надкатегорії) */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold">Категорії ({categories.length})</h2>
+          <div>
+            <h2 className="text-base font-bold">Категорії ({rootCategories.length})</h2>
+            <p className="text-[11px] opacity-60">Основні розділи меню (Піца, Суші, Закуски...)</p>
+          </div>
           <button
             onClick={() => {
               haptic("light");
@@ -2107,58 +2134,182 @@ function CatalogTab({
           <button
             onClick={() => {
               haptic("light");
-              setSelectedCatId(null);
+              setSelectedParentCatId(null);
+              setSelectedSubCatId(null);
             }}
             className="app-press shrink-0 rounded-xl px-3.5 py-2 text-xs font-medium transition-all"
             style={
-              selectedCatId === null
+              selectedParentCatId === null
                 ? { background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }
                 : { background: "var(--app-surface)", color: "var(--tg-theme-text-color)" }
             }
           >
-            Всі страви
+            Всі розділи
           </button>
-          {categories.map((c) => (
-            <div
-              key={c.id}
-              className="flex shrink-0 items-center overflow-hidden rounded-xl border text-xs transition-all"
-              style={{
-                borderColor: selectedCatId === c.id ? "var(--tg-theme-button-color)" : "var(--app-border)",
-                background: selectedCatId === c.id ? "var(--app-tint)" : "var(--app-surface)",
-              }}
-            >
-              <button
-                onClick={() => {
-                  haptic("light");
-                  setSelectedCatId(c.id);
+          {rootCategories.map((c) => {
+            const isSelected = selectedParentCatId === c.id;
+            return (
+              <div
+                key={c.id}
+                className="flex shrink-0 items-center overflow-hidden rounded-xl border text-xs transition-all"
+                style={{
+                  borderColor: isSelected ? "var(--tg-theme-button-color)" : "var(--app-border)",
+                  background: isSelected ? "var(--app-tint)" : "var(--app-surface)",
                 }}
-                className="px-3 py-2 font-medium"
               >
-                {c.icon && <span className="mr-1">{c.icon}</span>}
-                {c.name}
-                <span className="ml-1 opacity-50">({c.products_count})</span>
-              </button>
-              <button
-                onClick={() => {
-                  haptic("light");
-                  setEditingCategory(c);
-                  setCatModalOpen(true);
-                }}
-                title="Редагувати"
-                className="px-2 py-2 opacity-40 hover:opacity-100"
-              >
-                ✏️
-              </button>
-            </div>
-          ))}
+                <button
+                  onClick={() => {
+                    haptic("light");
+                    setSelectedParentCatId(c.id);
+                    setSelectedSubCatId(null);
+                  }}
+                  className="px-3 py-2 font-medium flex items-center gap-1"
+                >
+                  {c.icon && <span>{c.icon}</span>}
+                  <span>{c.name}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    haptic("light");
+                    setEditingCategory(c);
+                    setCatModalOpen(true);
+                  }}
+                  title="Редагувати категорію"
+                  className="px-2 py-2 opacity-40 hover:opacity-100"
+                >
+                  ✏️
+                </button>
+              </div>
+            );
+          })}
         </div>
       </section>
 
-      {/* Блок страв */}
+      {/* 2. Блок підкатегорій */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold">
+              Підкатегорії {selectedParentCat ? `(${selectedParentCat.name})` : `(${subcategories.length})`}
+            </h2>
+            <p className="text-[11px] opacity-60">Підрозділи страв без власних емодзі</p>
+          </div>
+          <button
+            onClick={() => {
+              haptic("light");
+              setEditingSubcategory(null);
+              setSubcatModalOpen(true);
+            }}
+            className="app-press flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold"
+            style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
+          >
+            <span>+</span> Підкатегорія
+          </button>
+        </div>
+
+        {/* Скрол списку підкатегорій */}
+        {(() => {
+          const visibleSubcats = selectedParentCatId
+            ? subcategories.filter((s) => s.parent_id === selectedParentCatId)
+            : subcategories;
+
+          if (selectedParentCatId && visibleSubcats.length === 0) {
+            return (
+              <div
+                className="rounded-xl border border-dashed p-3 text-center text-xs opacity-50"
+                style={{ borderColor: "var(--app-border)" }}
+              >
+                У категорії «{selectedParentCat?.name}» немає підкатегорій. Натисніть «+ Підкатегорія», щоб створити.
+              </div>
+            );
+          }
+
+          if (!selectedParentCatId && visibleSubcats.length === 0) {
+            return (
+              <div
+                className="rounded-xl border border-dashed p-3 text-center text-xs opacity-50"
+                style={{ borderColor: "var(--app-border)" }}
+              >
+                Немає створених підкатегорій
+              </div>
+            );
+          }
+
+          return (
+            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar md:flex-wrap">
+              {selectedParentCatId && (
+                <button
+                  onClick={() => {
+                    haptic("light");
+                    setSelectedSubCatId(null);
+                  }}
+                  className="app-press shrink-0 rounded-xl px-3.5 py-2 text-xs font-medium transition-all"
+                  style={
+                    selectedSubCatId === null
+                      ? { background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }
+                      : { background: "var(--app-surface)", color: "var(--tg-theme-text-color)" }
+                  }
+                >
+                  Всі в {selectedParentCat?.name}
+                </button>
+              )}
+              {visibleSubcats.map((sub) => {
+                const isSelected = selectedSubCatId === sub.id;
+                const parentOfSub = rootCategories.find((r) => r.id === sub.parent_id);
+                return (
+                  <div
+                    key={sub.id}
+                    className="flex shrink-0 items-center overflow-hidden rounded-xl border text-xs transition-all"
+                    style={{
+                      borderColor: isSelected ? "var(--tg-theme-button-color)" : "var(--app-border)",
+                      background: isSelected ? "var(--app-tint)" : "var(--app-surface)",
+                    }}
+                  >
+                    <button
+                      onClick={() => {
+                        haptic("light");
+                        setSelectedSubCatId(sub.id);
+                        if (sub.parent_id && selectedParentCatId !== sub.parent_id) {
+                          setSelectedParentCatId(sub.parent_id);
+                        }
+                      }}
+                      className="px-3 py-2 font-medium flex items-center"
+                    >
+                      {!selectedParentCatId && parentOfSub && (
+                        <span className="opacity-50 mr-1">{parentOfSub.name} →</span>
+                      )}
+                      <span>{sub.name}</span>
+                      <span className="ml-1 opacity-50">({sub.products_count})</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        haptic("light");
+                        setEditingSubcategory(sub);
+                        setSubcatModalOpen(true);
+                      }}
+                      title="Редагувати підкатегорію"
+                      className="px-2 py-2 opacity-40 hover:opacity-100"
+                    >
+                      ✏️
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+      </section>
+
+      {/* 3. Блок страв */}
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-bold">
-            Страви {selectedCatId ? `в категорії` : `(всі)`}{" "}
+            Страви{" "}
+            {selectedSubCat
+              ? `в «${selectedSubCat.name}»`
+              : selectedParentCat
+              ? `в «${selectedParentCat.name}» (всі)`
+              : "(всі)"}{" "}
             <span className="text-xs font-normal opacity-60">
               ({filteredProducts.length}
               {search.trim() ? ` з ${products.length}` : ""})
@@ -2519,10 +2670,26 @@ function CatalogTab({
           locations={locations}
           defaultLocationId={defaultLocation}
           isSuperAdmin={isSuperAdmin}
+          existingCategories={categories}
           onClose={() => setCatModalOpen(false)}
           onDelete={(id) => {
             deleteCategory.mutate(id);
             setCatModalOpen(false);
+          }}
+        />
+      )}
+
+      {/* Модальне вікно Підкатегорії */}
+      {subcatModalOpen && (
+        <SubcategoryModal
+          subcategory={editingSubcategory}
+          rootCategories={rootCategories}
+          defaultParentId={selectedParentCatId}
+          existingCategories={categories}
+          onClose={() => setSubcatModalOpen(false)}
+          onDelete={(id) => {
+            deleteCategory.mutate(id);
+            setSubcatModalOpen(false);
           }}
         />
       )}
@@ -2532,7 +2699,7 @@ function CatalogTab({
         <ProductModal
           product={editingProduct}
           categories={categories}
-          defaultCategoryId={selectedCatId || categories[0]?.id || 1}
+          defaultCategoryId={effectiveCategoryId || categories[0]?.id || 1}
           onClose={() => setProdModalOpen(false)}
         />
       )}
@@ -3996,6 +4163,7 @@ function CategoryModal({
   locations,
   defaultLocationId,
   isSuperAdmin,
+  existingCategories,
   onClose,
   onDelete,
 }: {
@@ -4003,14 +4171,31 @@ function CategoryModal({
   locations: Location[];
   defaultLocationId: number;
   isSuperAdmin: boolean;
+  existingCategories: AdminCategory[];
   onClose: () => void;
   onDelete: (id: number) => void;
 }) {
   const [name, setName] = useState(category?.name || "");
   const [icon, setIcon] = useState(category?.icon || "🍕");
-  const [sortOrder, setSortOrder] = useState(category?.sort_order ?? 0);
   const [isVisible, setIsVisible] = useState(category?.is_visible ?? true);
   const [locId, setLocId] = useState(category?.location_id || defaultLocationId);
+
+  const currentRootCats = useMemo(
+    () => existingCategories.filter((c) => c.parent_id === null && c.location_id === Number(locId)),
+    [existingCategories, locId]
+  );
+  const lastOrder = useMemo(
+    () => (currentRootCats.length > 0 ? Math.max(...currentRootCats.map((c) => c.sort_order)) : 0),
+    [currentRootCats]
+  );
+
+  const [sortOrder, setSortOrder] = useState(category?.sort_order ?? (lastOrder + 1));
+
+  useEffect(() => {
+    if (!category) {
+      setSortOrder(lastOrder + 1);
+    }
+  }, [lastOrder, category]);
 
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
@@ -4023,6 +4208,7 @@ function CategoryModal({
       const payload: CategoryUpdatePayload = {
         name: name.trim(),
         icon: icon.trim() || null,
+        parent_id: null,
         sort_order: Number(sortOrder),
         is_visible: isVisible,
       };
@@ -4041,6 +4227,7 @@ function CategoryModal({
       const payload: CategoryCreatePayload = {
         name: name.trim(),
         location_id: Number(locId),
+        parent_id: null,
         icon: icon.trim() || null,
         sort_order: Number(sortOrder),
         is_visible: isVisible,
@@ -4096,7 +4283,7 @@ function CategoryModal({
             </label>
 
             <label className="block">
-              <span className="opacity-60">Порядок сортування</span>
+              <span className="opacity-60">Порядок (останній: {lastOrder})</span>
               <input
                 type="number"
                 value={sortOrder}
@@ -4106,6 +4293,9 @@ function CategoryModal({
               />
             </label>
           </div>
+          <p className="text-[10px] opacity-50">
+            Якщо вписати порядковий номер у середину списку, наступні категорії автоматично зсунуться на +1.
+          </p>
 
           {isSuperAdmin && (
             <label className="block">
@@ -4142,6 +4332,203 @@ function CategoryModal({
                 onClick={() => {
                   if (window.confirm(`Видалити категорію "${category.name}" та всі її страви?`)) {
                     onDelete(category.id);
+                  }
+                }}
+                className="app-press rounded-xl px-4 py-2.5 font-semibold text-red-500 bg-red-500/10"
+              >
+                Видалити
+              </button>
+            )}
+            <button
+              type="submit"
+              className="app-press flex-1 rounded-xl py-2.5 font-bold"
+              style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
+            >
+              Зберегти
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function SubcategoryModal({
+  subcategory,
+  rootCategories,
+  defaultParentId,
+  existingCategories,
+  onClose,
+  onDelete,
+}: {
+  subcategory: AdminCategory | null;
+  rootCategories: AdminCategory[];
+  defaultParentId?: number | null;
+  existingCategories: AdminCategory[];
+  onClose: () => void;
+  onDelete: (id: number) => void;
+}) {
+  const [parentId, setParentId] = useState<number>(
+    subcategory?.parent_id || defaultParentId || (rootCategories[0]?.id ?? 1)
+  );
+  const [name, setName] = useState(subcategory?.name || "");
+
+  const selectedParent = useMemo(
+    () => rootCategories.find((c) => c.id === Number(parentId)),
+    [rootCategories, parentId]
+  );
+
+  const currentSubcats = useMemo(
+    () => existingCategories.filter((c) => c.parent_id === Number(parentId)),
+    [existingCategories, parentId]
+  );
+
+  const lastOrder = useMemo(
+    () => (currentSubcats.length > 0 ? Math.max(...currentSubcats.map((c) => c.sort_order)) : 0),
+    [currentSubcats]
+  );
+
+  const [sortOrder, setSortOrder] = useState<number>(
+    subcategory?.sort_order ?? (lastOrder + 1)
+  );
+  const [isVisible, setIsVisible] = useState(subcategory?.is_visible ?? true);
+
+  const createCategory = useCreateCategory();
+  const updateCategory = useUpdateCategory();
+
+  useEffect(() => {
+    if (!subcategory) {
+      setSortOrder(lastOrder + 1);
+    }
+  }, [lastOrder, subcategory]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !parentId) return;
+
+    if (subcategory) {
+      const payload: CategoryUpdatePayload = {
+        name: name.trim(),
+        parent_id: Number(parentId),
+        icon: null, // У підкатегорій немає емодзі
+        sort_order: Number(sortOrder),
+        is_visible: isVisible,
+      };
+      if (selectedParent) {
+        payload.location_id = selectedParent.location_id;
+      }
+
+      updateCategory.mutate(
+        { categoryId: subcategory.id, payload },
+        {
+          onSuccess: () => {
+            hapticNotify("success");
+            onClose();
+          },
+        }
+      );
+    } else {
+      if (!selectedParent) return;
+      const payload: CategoryCreatePayload = {
+        name: name.trim(),
+        location_id: selectedParent.location_id,
+        parent_id: Number(parentId),
+        icon: null, // У підкатегорій немає емодзі
+        sort_order: Number(sortOrder),
+        is_visible: isVisible,
+      };
+
+      createCategory.mutate(payload, {
+        onSuccess: () => {
+          hapticNotify("success");
+          onClose();
+        },
+      });
+    }
+  };
+
+  const inputStyle = { background: "var(--app-surface)", color: "var(--tg-theme-text-color)" };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div
+        className="app-card w-full max-w-sm rounded-2xl p-5 space-y-4"
+        style={{ background: "var(--tg-theme-bg-color)", border: "1px solid var(--app-border)" }}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-base">
+            {subcategory ? "Редагування підкатегорії" : "Нова підкатегорія"}
+          </h3>
+          <button onClick={onClose} className="opacity-50 text-lg">
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+          <label className="block">
+            <span className="opacity-60">Батьківська категорія</span>
+            <select
+              value={parentId}
+              onChange={(e) => setParentId(Number(e.target.value))}
+              required
+              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+              style={inputStyle}
+            >
+              {rootCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.icon ? `${c.icon} ` : ""}{c.name} ({c.location_name || ""})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="opacity-60">Назва підкатегорії</span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Фірмові, Ролліни, Сети з ролів..."
+              required
+              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+              style={inputStyle}
+            />
+          </label>
+
+          <div>
+            <label className="block">
+              <span className="opacity-60">
+                Порядок сортування (останній у категорії: {lastOrder})
+              </span>
+              <input
+                type="number"
+                value={sortOrder}
+                onChange={(e) => setSortOrder(Number(e.target.value))}
+                className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+                style={inputStyle}
+              />
+            </label>
+            <p className="text-[10px] opacity-50 mt-1">
+              Якщо вписати номер у середину списку, наступні підкатегорії зсунуться на +1.
+            </p>
+          </div>
+
+          <label className="flex items-center gap-2 pt-1 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isVisible}
+              onChange={(e) => setIsVisible(e.target.checked)}
+              className="h-4 w-4 rounded"
+            />
+            <span className="font-medium">Видима для клієнтів</span>
+          </label>
+
+          <div className="flex gap-2 pt-3">
+            {subcategory && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Видалити підкатегорію "${subcategory.name}" та всі її страви?`)) {
+                    onDelete(subcategory.id);
                   }
                 }}
                 className="app-press rounded-xl px-4 py-2.5 font-semibold text-red-500 bg-red-500/10"
@@ -4264,18 +4651,47 @@ function ProductModal({
           </label>
 
           <label className="block">
-            <span className="opacity-60">Категорія</span>
+            <span className="opacity-60">Категорія / Підкатегорія</span>
             <select
               value={categoryId}
               onChange={(e) => setCategoryId(Number(e.target.value))}
               className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
               style={inputStyle}
             >
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.icon} {c.name} ({c.location_name})
-                </option>
-              ))}
+              {(() => {
+                const roots = categories.filter((c) => c.parent_id === null);
+                const subsByParent = new Map<number, AdminCategory[]>();
+                categories
+                  .filter((c) => c.parent_id !== null)
+                  .forEach((c) => {
+                    const list = subsByParent.get(c.parent_id!) || [];
+                    list.push(c);
+                    subsByParent.set(c.parent_id!, list);
+                  });
+
+                return roots.map((root) => {
+                  const subs = subsByParent.get(root.id) || [];
+                  if (subs.length > 0) {
+                    return (
+                      <optgroup
+                        key={root.id}
+                        label={`${root.icon ? `${root.icon} ` : ""}${root.name} (${root.location_name || ""})`}
+                      >
+                        {subs.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {root.name} → {s.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    );
+                  }
+                  return (
+                    <option key={root.id} value={root.id}>
+                      {root.icon ? `${root.icon} ` : ""}{root.name} ({root.location_name || ""})
+                    </option>
+                  );
+                });
+              })()}
             </select>
           </label>
 
