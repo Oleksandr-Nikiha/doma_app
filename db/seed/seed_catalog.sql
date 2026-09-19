@@ -36,7 +36,7 @@
 --   * «Чотири сири»: 60-см піца підписана як XL — виправлено на 3XL за діаметром,
 --     інакше в товарі було б дві мітки XL
 --   * Напої на /deserty/ і /napiy/ мають різні ціни; узято прайс із /napiy/
---   * Doma Croissants: сайт на реконструкції, позицій немає — категорія порожня
+--   * Doma Croissants: 57 позицій завантажено з menu_import.xlsx
 --   * Одруки в назвах виправлено лише там, де на назву посилаються групи опцій:
 --     «Картоплая» → «Картопля», «Вишгоордський» → «Вишгородський», а також
 --     зведено різнобій тире в чотирьох «Хенд – рол» → «Хенд-рол».
@@ -68,7 +68,15 @@ SELECT id, NULL::INTEGER, 'Прибори', '🥢', false, 98 FROM locations WHE
 UNION ALL
 SELECT id, NULL::INTEGER, 'Соуси', '🥫', false, 99 FROM locations WHERE name = 'Doma Pizza'
 UNION ALL
-SELECT id, NULL::INTEGER, 'Круасани', '🥐', true, 1 FROM locations WHERE name = 'Doma Croissants';
+SELECT id, NULL::INTEGER, 'Круасани', '🥐', true, 1 FROM locations WHERE name = 'Doma Croissants'
+UNION ALL
+SELECT id, NULL::INTEGER, 'Бургери', '🍔', true, 2 FROM locations WHERE name = 'Doma Croissants'
+UNION ALL
+SELECT id, NULL::INTEGER, 'Ролліни', '🌯', true, 3 FROM locations WHERE name = 'Doma Croissants'
+UNION ALL
+SELECT id, NULL::INTEGER, 'Бенто піци', '🍕', true, 4 FROM locations WHERE name = 'Doma Croissants'
+UNION ALL
+SELECT id, NULL::INTEGER, 'Напої', '🥤', true, 5 FROM locations WHERE name = 'Doma Croissants';
 
 -- --- Підкатегорії ---
 INSERT INTO categories (location_id, parent_id, name, sort_order)
@@ -118,7 +126,19 @@ SELECT p.location_id, p.id, 'Соки', 2 FROM categories p JOIN locations l ON 
 UNION ALL
 SELECT p.location_id, p.id, 'Вода', 3 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Напої'
 UNION ALL
-SELECT p.location_id, p.id, 'Енергетики', 4 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Напої';
+SELECT p.location_id, p.id, 'Енергетики', 4 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Напої'
+UNION ALL
+SELECT p.location_id, p.id, 'Сендвіч-круасани', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Croissants' AND p.parent_id IS NULL AND p.name = 'Круасани'
+UNION ALL
+SELECT p.location_id, p.id, 'Солодкі круасани', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Croissants' AND p.parent_id IS NULL AND p.name = 'Круасани'
+UNION ALL
+SELECT p.location_id, p.id, 'Кавові', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Croissants' AND p.parent_id IS NULL AND p.name = 'Напої'
+UNION ALL
+SELECT p.location_id, p.id, 'Шоколадні', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Croissants' AND p.parent_id IS NULL AND p.name = 'Напої'
+UNION ALL
+SELECT p.location_id, p.id, 'Чаї', 3 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Croissants' AND p.parent_id IS NULL AND p.name = 'Напої'
+UNION ALL
+SELECT p.location_id, p.id, 'Літні напої bDOMA', 4 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Croissants' AND p.parent_id IS NULL AND p.name = 'Напої';
 
 -- ========== Піца / Фірмові ==========
 
@@ -2266,5 +2286,925 @@ JOIN categories c ON c.id = p.category_id
 JOIN categories parent ON parent.id = c.parent_id
 CROSS JOIN option_groups g
 WHERE parent.name = 'Суші та роли' AND c.name = 'Сети з ролів' AND g.name = 'Прибори';
+
+
+-- ============================================================================
+-- ========== Doma Croissants (каталог з menu_import.xlsx) ==========
+-- ============================================================================
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: з Моцарелою та Помідорами круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Моцарелою та Помідорами круасан', 'Моцарела, помідор, рукола, соус песто', NULL, 1
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 115, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: з Філадельфією та Шинкою круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Філадельфією та Шинкою круасан', 'сир філадельфія, шинка, помідор, салат, соус фірмовий', NULL, 2
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 135, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: з Куркою круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Куркою круасан', 'огірок, помідор, курка, салат, соус фірмовий', NULL, 3
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 125, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: з Куркою та Сиром круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Куркою та Сиром круасан', 'помідор, салат, сир, курка, соус фірмовий, огірок', NULL, 4
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 135, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: з Салямі та Сиром круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Салямі та Сиром круасан', 'огірок, помідор, салямі, сир столовий, салат, соус часниковий, огірок', NULL, 5
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 120, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: Чіккен бургер круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Чіккен бургер круасан', 'котлета куряча смажена на грилі, помідор, сир тостовий, салат, соус фірмовий бургер, краб цибуля, огірок бочковий', NULL, 6
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('M', NULL, 145, 1),
+        ('L', NULL, 175, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: Біф бургер круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Біф бургер круасан', 'котлета яловича смажена на грилі, помідор, сир тостовий, салат, соус фірмовий бургер, краб цибуля, огірок бочковий', NULL, 7
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('M', NULL, 165, 1),
+        ('L', NULL, 205, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: з Шинкою та Беконом круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Шинкою та Беконом круасан', 'солоний огірок, шинка, бекон, салат, соус часниковий', NULL, 8
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 130, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: з Куркою та Соусом Теріякі
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Куркою та Соусом Теріякі', 'курка, листок салату, огірок свіжий, соус Теріякі, насіння кунжуту, імбир', NULL, 9
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 135, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: Хані міт круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Хані міт круасан', 'соус фірмовий медовий, крем-сир, салямі, шинка, Дорблю, пармезан, рукола', NULL, 10
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 155, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: з Лососем та імбирем
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Лососем та імбирем', 'крем-сир, філе лосося, салат, огірок, імбир, соус теріякі, кунжут', NULL, 11
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 190, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: з Дерунами, цибулею та грибами
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Дерунами, цибулею та грибами', 'Деруни, мариновані гриби, салат, цибуля кранч, сир, фірмовий соус', NULL, 12
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 150, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: з Філадельфією та Лососем круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Філадельфією та Лососем круасан', 'сир філадельфія, лосось, салат, огірок', NULL, 13
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 180, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: з Куркою та Пармезаном круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Куркою та Пармезаном круасан', 'курка, помідор, сир пармезан, салат, соус фірмовий', NULL, 14
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 130, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: з Прошуто з В'яленими помідорами круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Прошуто з В''яленими помідорами круасан', 'прошуто, рукола, моцарела, помідор в''ялений, соус фірмовий', NULL, 15
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 170, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: з Філадельфією та Оселедцем круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Філадельфією та Оселедцем круасан', 'сир філадельфія, філе оселедця прямого посолу, салат, помідор, соус фірмовий часниковий, цибуля кранч', NULL, 16
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 135, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Сендвіч-круасани: з Тунцем та яєчнею
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Тунцем та яєчнею', 'фірмовий соус, філе тунця консервоване, помідор, огірок солоний, яєчня, листя салату', NULL, 17
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 170, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Бургери: БІФ БУРГЕР
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'БІФ БУРГЕР', NULL, NULL, 1
+    FROM categories c
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бургери'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 175, 1),
+        ('Дабл', NULL, 215, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Бургери: БІФ БУРГЕР меню
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'БІФ БУРГЕР меню', NULL, NULL, 2
+    FROM categories c
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бургери'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 280, 1),
+        ('Дабл', NULL, 330, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Бургери: ЧІКЕН БУРГЕР меню
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'ЧІКЕН БУРГЕР меню', NULL, NULL, 3
+    FROM categories c
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бургери'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 270, 1),
+        ('Дабл', NULL, 320, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Бургери: ЧІКЕН БУРГЕР
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'ЧІКЕН БУРГЕР', NULL, NULL, 4
+    FROM categories c
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бургери'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 155, 1),
+        ('Дабл', NULL, 185, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Ролліни: Хані міт роллін
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Хані міт роллін', 'Тортилья, салямі, шинка, рукола, крем-сир, моцарела, пармезан, Дор-Блю, фірмовий соус медово-гірчичний', NULL, 1
+    FROM categories c
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Ролліни'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('1 порція', '250 г', 135, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Ролліни: Верона роллін
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Верона роллін', 'Тортилья, салямі, шинка, куряче філе, моцарела, цибуля, чедер, фірмовий соус, спеції', NULL, 2
+    FROM categories c
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Ролліни'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('1 порція', '250 г', 135, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Ролліни: Вишгородський роллін
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Вишгородський роллін', 'Тортилья, бекон, халапеньйо, моцарела, фірмовий соус, спеції', NULL, 3
+    FROM categories c
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Ролліни'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('1 порція', '250 г', 135, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Ролліни: Цезар роллін
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Цезар роллін', 'Тортилья, бекон, куряче філе, помідор, моцарела, фірмовий соус Цезар, спеції', NULL, 4
+    FROM categories c
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Ролліни'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('1 порція', '250 г', 135, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Ролліни: Чікен роллін
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Чікен роллін', 'Тортилья, курячі нагетси, салат айсберг, помідор, фірмовий соус', NULL, 5
+    FROM categories c
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Ролліни'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('1 порція', '250 г', 135, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Солодкі круасани: Дубайський круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Дубайський круасан', 'Крем фісташковий, паста шоколадна, мигдаль', NULL, 1
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 155, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Солодкі круасани: з Мигдалем круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Мигдалем круасан', 'крем мигдалевий, мигдалеві пластівці, цукрова пудра', NULL, 2
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 105, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Солодкі круасани: з Шоколадом та Бананом круасан
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Шоколадом та Бананом круасан', 'шоколад з фундуком, банан, цукрова пудра', NULL, 3
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 120, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Солодкі круасани: з Кокосом, маскарпоне та мигдалем
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Кокосом, маскарпоне та мигдалем', 'крем маскарпоне, крем кокосовий, мигдаль, молоко згущене, кокосова стружка, цукрова пудра', NULL, 4
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 125, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Солодкі круасани: з Маскарпоне (з Абрикосом / Вишнею / Яблуком / Персиком)
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Маскарпоне (з Абрикосом / Вишнею / Яблуком / Персиком)', 'крем маскарпоне, цукрова пудра', NULL, 5
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 120, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Круасани / Солодкі круасани: з Маком та Вишнею
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'з Маком та Вишнею', 'макова начинка фірмова, конфітюр вишневий', NULL, 6
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 125, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Кавові: Еспресо
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Еспресо', NULL, NULL, 1
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('M', NULL, 50, 1),
+        ('L', NULL, 60, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Кавові: Американо
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Американо', NULL, NULL, 2
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('M', NULL, 50, 1),
+        ('L', NULL, 60, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Кавові: Еспресо з молоком
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Еспресо з молоком', NULL, NULL, 3
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('M', NULL, 52, 1),
+        ('L', NULL, 62, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Кавові: Американо з молоком
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Американо з молоком', NULL, NULL, 4
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('M', NULL, 62, 1),
+        ('L', NULL, 72, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Кавові: Лате
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Лате', NULL, NULL, 5
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('M', NULL, 62, 1),
+        ('L', NULL, 72, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Кавові: Капучіно
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Капучіно', NULL, NULL, 6
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('M', NULL, 62, 1),
+        ('L', NULL, 72, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Кавові: Флетвайт
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Флетвайт', NULL, NULL, 7
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('M', NULL, 62, 1),
+        ('L', NULL, 72, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Шоколадні: Шокочино
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Шокочино', NULL, NULL, 1
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Шоколадні'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 72, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Шоколадні: Гарячий шоколад
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Гарячий шоколад', NULL, NULL, 2
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Шоколадні'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 72, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Шоколадні: Какао
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Какао', NULL, NULL, 3
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Шоколадні'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('M', NULL, 72, 1),
+        ('L', NULL, 77, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Чаї: Чай заварний
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Чай заварний', NULL, NULL, 1
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Чаї'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 65, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Чаї: Чай концентрат (обліпиховий / імбирний)
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Чай концентрат (обліпиховий / імбирний)', NULL, NULL, 2
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Чаї'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 72, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Кавові: Молочна пінки
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Молочна пінки', NULL, NULL, 8
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 25, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Літні напої bDOMA: Айс Лате
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Айс Лате', NULL, NULL, 1
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Літні напої bDOMA'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('M', NULL, 72, 1),
+        ('L', NULL, 77, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Літні напої bDOMA: Айс кава (будь який сік)
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Айс кава (будь який сік)', NULL, NULL, 2
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Літні напої bDOMA'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 140, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Літні напої bDOMA: Айс капучіно
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Айс капучіно', NULL, NULL, 3
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Літні напої bDOMA'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('M', NULL, 72, 1),
+        ('L', NULL, 77, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Літні напої bDOMA: DOMA Лимонад (апельсин, тархун тропік)
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'DOMA Лимонад (апельсин, тархун тропік)', NULL, NULL, 4
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Літні напої bDOMA'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 140, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Літні напої bDOMA: Doma Мохіто
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Doma Мохіто', NULL, NULL, 5
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Літні напої bDOMA'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 140, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Літні напої bDOMA: Doma Шейк
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Doma Шейк', NULL, NULL, 6
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Літні напої bDOMA'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('Стандарт', NULL, 140, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Напої / Літні напої bDOMA: Doma лід
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Doma лід', NULL, NULL, 7
+    FROM categories c
+    JOIN categories parent ON parent.id = c.parent_id
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Літні напої bDOMA'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('M', NULL, 10, 1),
+        ('L', NULL, 15, 2)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Бенто піци: Салямі
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Салямі', 'сир моцарела, ковбаса салямі', NULL, 1
+    FROM categories c
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('1 шт.', '20 см', 120, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Бенто піци: Чотири сира
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Чотири сира', 'сир моцарела, сир Дор-Блю, сир Чедер, сир Пармезан', NULL, 2
+    FROM categories c
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('1 шт.', '20 см', 120, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Бенто піци: Чотири м'яса
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Чотири м''яса', 'сир моцарела, ковбаски єгерські, філе курки, бекон, шинка, печериці, солоний огірок', NULL, 3
+    FROM categories c
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('1 шт.', '20 см', 120, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Бенто піци: Б'янко
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Б''янко', 'сир моцарела, фірмове філе курки, печериці, помідори, сир Пармезан', NULL, 4
+    FROM categories c
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('1 шт.', '20 см', 120, 1)
+    ) AS v(label, weight, price, sort_order);
+
+-- Doma Croissants | Бенто піци: Маргарита
+WITH new_product AS (
+    INSERT INTO products (category_id, name, description, image_url, sort_order)
+    SELECT c.id, 'Маргарита', 'Тонке фірмове тісто, соус томатний, сир моцарела, помідори, базилік', NULL, 5
+    FROM categories c
+    JOIN locations l ON l.id = c.location_id
+    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
+    RETURNING id
+)
+INSERT INTO product_variants (product_id, label, weight, price, sort_order)
+SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
+FROM new_product, (VALUES
+        ('1 шт.', '20 см', 100, 1)
+    ) AS v(label, weight, price, sort_order);
 
 COMMIT;

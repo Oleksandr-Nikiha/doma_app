@@ -1,10 +1,13 @@
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import get_settings
 from src.db.connection import connect_db, disconnect_db
+from src.db.redis import connect_redis, disconnect_redis
 from src.routers import (
     admin,
     admin_auth,
@@ -15,12 +18,17 @@ from src.routers import (
     orders,
     users,
 )
+from src.services.cache import invalidate_catalog_cache
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_db()
+    await connect_redis()
     yield
+    await disconnect_redis()
     await disconnect_db()
 
 
@@ -37,6 +45,35 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def auto_invalidate_catalog_cache_middleware(request: Request, call_next):
+    """
+    Автоматично очищає кеш каталогу при успішних змінах меню в адмінці
+    (створення/редагування/видалення категорій, страв, модифікаторів чи локацій).
+    """
+    response = await call_next(request)
+    if (
+        request.method in ("POST", "PUT", "PATCH", "DELETE")
+        and response.status_code < 400
+    ):
+        path = request.url.path
+        if any(
+            path.startswith(prefix)
+            for prefix in (
+                "/api/admin/categories",
+                "/api/admin/products",
+                "/api/admin/option-groups",
+                "/api/admin/locations",
+            )
+        ):
+            try:
+                asyncio.create_task(invalidate_catalog_cache())
+            except Exception as exc:
+                logger.warning("Помилка автоматичної інвалідації кешу: %s", exc)
+    return response
+
 
 app.include_router(catalog.router)
 app.include_router(users.router)

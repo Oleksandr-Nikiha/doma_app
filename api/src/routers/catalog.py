@@ -1,19 +1,33 @@
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from src.db.connection import get_pool
+from src.middleware.rate_limiter import rate_limiter
 from src.schemas.catalog import (
     CategoryOut,
     ProductDetailOut,
     ProductListItemOut,
     ProductVariantOut,
 )
+from src.services.cache import get_cached_json, set_cached_json
 
-router = APIRouter(prefix="/api", tags=["catalog"])
+router = APIRouter(prefix="/api", tags=["catalog"], dependencies=[Depends(rate_limiter)])
 
 
 @router.get("/categories", response_model=list[CategoryOut])
-async def list_categories(pool: asyncpg.Pool = Depends(get_pool)):
+async def list_categories(
+    bypass_cache: bool = Query(False, description="Отримати свіжі дані повз кеш"),
+    x_bypass_cache: str | None = Header(None, alias="X-Bypass-Cache"),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    cache_key = "catalog:categories"
+    should_bypass = bypass_cache or (x_bypass_cache in ("1", "true", "True"))
+
+    if not should_bypass:
+        cached = await get_cached_json(cache_key)
+        if cached is not None:
+            return [CategoryOut(**item) for item in cached]
+
     rows = await pool.fetch(
         """
         SELECT c.id, c.name, c.icon, c.parent_id, c.location_id, l.name AS location_name
@@ -37,11 +51,29 @@ async def list_categories(pool: asyncpg.Pool = Depends(get_pool)):
             c.sort_order
         """
     )
-    return [CategoryOut(**dict(row)) for row in rows]
+    result = [CategoryOut(**dict(row)) for row in rows]
+
+    if not should_bypass:
+        await set_cached_json(cache_key, [r.model_dump(mode="json") for r in result])
+
+    return result
 
 
 @router.get("/categories/{category_id}/products", response_model=list[ProductListItemOut])
-async def list_products_by_category(category_id: int, pool: asyncpg.Pool = Depends(get_pool)):
+async def list_products_by_category(
+    category_id: int,
+    bypass_cache: bool = Query(False, description="Отримати свіжі дані повз кеш"),
+    x_bypass_cache: str | None = Header(None, alias="X-Bypass-Cache"),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    cache_key = f"catalog:category:{category_id}:products"
+    should_bypass = bypass_cache or (x_bypass_cache in ("1", "true", "True"))
+
+    if not should_bypass:
+        cached = await get_cached_json(cache_key)
+        if cached is not None:
+            return [ProductListItemOut(**item) for item in cached]
+
     rows = await pool.fetch(
         """
         SELECT
@@ -64,11 +96,29 @@ async def list_products_by_category(category_id: int, pool: asyncpg.Pool = Depen
         """,
         category_id,
     )
-    return [ProductListItemOut(**dict(row)) for row in rows]
+    result = [ProductListItemOut(**dict(row)) for row in rows]
+
+    if not should_bypass:
+        await set_cached_json(cache_key, [r.model_dump(mode="json") for r in result])
+
+    return result
 
 
 @router.get("/products/{product_id}", response_model=ProductDetailOut)
-async def get_product(product_id: int, pool: asyncpg.Pool = Depends(get_pool)):
+async def get_product(
+    product_id: int,
+    bypass_cache: bool = Query(False, description="Отримати свіжі дані повз кеш"),
+    x_bypass_cache: str | None = Header(None, alias="X-Bypass-Cache"),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    cache_key = f"catalog:product:{product_id}"
+    should_bypass = bypass_cache or (x_bypass_cache in ("1", "true", "True"))
+
+    if not should_bypass:
+        cached = await get_cached_json(cache_key)
+        if cached is not None:
+            return ProductDetailOut(**cached)
+
     product_row = await pool.fetchrow(
         """
         SELECT p.id, p.name, p.description, p.image_url 
@@ -135,8 +185,13 @@ async def get_product(product_id: int, pool: asyncpg.Pool = Depends(get_pool)):
             }
         )
 
-    return ProductDetailOut(
+    result = ProductDetailOut(
         **dict(product_row),
         variants=[ProductVariantOut(**dict(v)) for v in variant_rows],
         option_groups=list(groups_dict.values()),
     )
+
+    if not should_bypass:
+        await set_cached_json(cache_key, result.model_dump(mode="json"))
+
+    return result

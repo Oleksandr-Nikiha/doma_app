@@ -65,6 +65,7 @@ from src.schemas.delivery_address import (
     DeliveryAddressCreateIn,
     DeliveryAddressUpdateIn,
 )
+from src.services.cache import invalidate_catalog_cache
 
 logger = logging.getLogger(__name__)
 
@@ -287,6 +288,18 @@ async def delete_manager(
     return {"status": "ok", "message": "Менеджера успішно видалено"}
 
 
+@router.post("/catalog/cache/clear")
+async def clear_catalog_cache(
+    staff: asyncpg.Record = Depends(get_current_staff),
+):
+    """
+    Примусово очищає весь кеш публічного каталогу (категорії, товари, модифікатори, контакти).
+    Доступно співробітникам (адміністраторам та менеджерам).
+    """
+    cleared = await invalidate_catalog_cache()
+    return {"status": "ok", "cleared_keys": cleared}
+
+
 # ============================================================================
 # 3. Категорії (Staff)
 # ============================================================================
@@ -355,6 +368,7 @@ async def create_category(
     res = dict(row)
     res["location_name"] = loc_name
     res["products_count"] = 0
+    await invalidate_catalog_cache()
     return CategoryAdminOut(**res)
 
 
@@ -404,6 +418,7 @@ async def update_category(
             category_id,
         )
 
+    await invalidate_catalog_cache()
     return CategoryAdminOut(**dict(updated))
 
 
@@ -428,6 +443,7 @@ async def delete_category(
 
         await conn.execute("DELETE FROM categories WHERE id = $1", category_id)
 
+    await invalidate_catalog_cache()
     return {"status": "ok", "message": "Категорію видалено"}
 
 

@@ -15,6 +15,15 @@ class Settings(BaseSettings):
     manager_chat_id: int | None = None
     api_debug: bool = False
 
+    # Redis-кешування публічного каталогу (PERF-3)
+    catalog_cache_enabled: bool = True
+    catalog_cache_ttl: int = 1800  # 30 хвилин у секундах
+
+    # Redis Rate Limiting (PERF-3)
+    rate_limit_enabled: bool = True
+    rate_limit_requests: int = 120  # макс. кількість запитів за вікно
+    rate_limit_window_seconds: int = 60  # розмір вікна в секундах
+
     # Origins, яким дозволено ходити в API з браузера (Vite у dev, домен Mini App у проді).
     # У .env задається рядком через кому: CORS_ORIGINS=http://localhost:5173,https://app.example.com
     #

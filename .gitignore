@@ -29,5 +29,6 @@ yarn-error.log*
 CLAUDE.md
 .antigravityignore
 .gemini/
-
 error.log
+scripts/
+*.xlsx
