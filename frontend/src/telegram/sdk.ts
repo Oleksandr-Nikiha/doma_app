@@ -31,11 +31,32 @@ function dropEmptyThemeVars(): void {
 
 export function initSdk(): void {
   if (ready) return;
+
+  // Сповіщаємо Telegram (як нативний клієнт, так і iframe у web.telegram.org)
+  // що застосунок готовий, не чекаючи можливих винятків від sdk-react:
+  try {
+    const tg = (window as unknown as { Telegram?: { WebApp?: { ready?: () => void; expand?: () => void } } })
+      ?.Telegram?.WebApp;
+    tg?.ready?.();
+    tg?.expand?.();
+  } catch { /* ignore */ }
+  try {
+    if (typeof window !== "undefined" && window.parent && window.parent !== window) {
+      window.parent.postMessage(JSON.stringify({ eventType: "web_app_ready", eventData: "" }), "*");
+      window.parent.postMessage(JSON.stringify({ eventType: "web_app_expand", eventData: "" }), "*");
+    }
+  } catch { /* ignore */ }
+
   try {
     init();
     if (miniApp.mountSync.isAvailable()) {
       miniApp.mountSync();
     }
+    try {
+      if (miniApp.ready.isAvailable()) {
+        miniApp.ready();
+      }
+    } catch { /* ignore */ }
     // Прив'язка теми — окремо від miniApp: якщо mountSync недоступний
     // (старіший клієнт, мок), кольори Telegram інакше не приїхали б зовсім,
     // і застосунок лишався б світлим у темному клієнті.

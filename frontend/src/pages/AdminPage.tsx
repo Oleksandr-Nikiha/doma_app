@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 
 import { hasAdminAuth, removeAdminToken } from "@/api/client";
-import { isTelegramWebApp } from "@/telegram/env";
+import { isTelegramWebApp, getTelegramStartParam } from "@/telegram/env";
 import {
   useAddOptionGroupItem,
   useAdminCategories,
@@ -72,7 +72,7 @@ import type {
   VariantCreatePayload,
   VariantUpdatePayload,
 } from "@/api/types";
-import { EmptyState, ErrorBox, ScreenTitle, Spinner, Thumb, formatPrice } from "@/components/ui";
+import { EmptyState, ErrorBox, Spinner, Thumb, formatPrice } from "@/components/ui";
 import { AnalyticsTab } from "@/components/admin/AnalyticsTab";
 import { BroadcastsTab } from "@/components/admin/BroadcastsTab";
 import { useBackButton } from "@/hooks/useBackButton";
@@ -83,16 +83,30 @@ type AdminTab = "orders" | "stoplist" | "delivery" | "catalog" | "options" | "us
 
 export function AdminPage() {
   const navigate = useNavigate();
-  useBackButton(() => navigate("/profile"));
+  useBackButton(() => navigate("/"));
 
   const { data: adminMe, isPending: mePending, error: meError } = useAdminMe();
   const { data: locations = [] } = useLocations();
+
+  const [searchParams] = useSearchParams();
+  const rawOrderId = searchParams.get("order_id") || searchParams.get("edit_order");
+  const startParam = getTelegramStartParam();
+  const startOrderMatch = startParam?.match(/^(?:order_?)?(\d+)$/i);
+  const startOrderId = startOrderMatch ? startOrderMatch[1] : null;
+  const orderIdParam = rawOrderId || startOrderId;
 
   const [activeSection, setActiveSection] = useState<AdminSection>("operations");
   const [activeTab, setActiveTab] = useState<AdminTab>("orders");
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
 
   const isSuperAdmin = adminMe?.role === "admin";
+
+  useEffect(() => {
+    if (orderIdParam) {
+      setActiveSection("operations");
+      setActiveTab("orders");
+    }
+  }, [orderIdParam]);
 
   useEffect(() => {
     if (
@@ -164,14 +178,24 @@ export function AdminPage() {
       {/* 💻 ДЕСКТОПНИЙ САЙДБАР (відображається від md:) */}
       <aside className="hidden md:flex w-64 shrink-0 flex-col justify-between border-r border-[var(--app-border)] bg-[var(--app-surface)] p-4 min-h-screen sticky top-0 h-screen overflow-y-auto">
         <div className="space-y-5">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-2xl border border-amber-500/20">
-              🍕
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-2xl border border-amber-500/20">
+                🍕
+              </div>
+              <div>
+                <h1 className="font-bold text-sm leading-tight">Doma Admin</h1>
+                <p className="text-[10px] opacity-60">Панель керування</p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-bold text-sm leading-tight">Doma Admin</h1>
-              <p className="text-[10px] opacity-60">Панель керування</p>
-            </div>
+            <button
+              onClick={() => navigate("/")}
+              className="app-press rounded-xl px-2.5 py-1.5 text-xs font-bold border border-[var(--app-border)] bg-[var(--app-surface-2)] hover:bg-[var(--app-surface-3)] transition-colors flex items-center gap-1"
+              title="Перейти до меню ресторану"
+            >
+              <span>🍽️</span>
+              <span className="text-[11px]">Меню</span>
+            </button>
           </div>
 
           <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-2)] p-3 space-y-1">
@@ -314,28 +338,56 @@ export function AdminPage() {
               </span>
             )}
           </div>
-          <button
-            onClick={handleLogout}
-            className="rounded-xl px-3 py-1.5 text-xs font-medium text-rose-500 hover:bg-rose-500/10 transition-colors"
-          >
-            Вийти
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate("/")}
+              className="app-press rounded-xl px-3 py-1.5 text-xs font-bold border border-[var(--app-border)] bg-[var(--app-surface-2)] hover:bg-[var(--app-surface-3)] transition-colors flex items-center gap-1.5"
+            >
+              <span>🍽️</span>
+              <span>До меню ресторану</span>
+            </button>
+            <button
+              onClick={handleLogout}
+              className="rounded-xl px-3 py-1.5 text-xs font-medium text-rose-500 hover:bg-rose-500/10 transition-colors"
+            >
+              Вийти
+            </button>
+          </div>
         </div>
 
         {/* Мобільна верхня панель */}
         <div className="md:hidden px-4 pt-3">
-          <div className="flex items-center justify-between">
-            <ScreenTitle>Адмін-панель</ScreenTitle>
-          <div className="flex flex-col items-end gap-1 pr-2 pt-2 text-right">
-            <span
-              className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
-              style={{ background: "var(--app-tint)", color: "var(--tg-theme-button-color)" }}
-            >
-              {roleLabel}
-            </span>
-            {locationBadge && <span className="text-[11px] opacity-60">{locationBadge}</span>}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("light");
+                  navigate("/");
+                }}
+                className="app-press inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold border shadow-sm transition-all shrink-0"
+                style={{
+                  background: "var(--app-surface-2)",
+                  borderColor: "var(--app-border)",
+                  color: "var(--tg-theme-button-color)",
+                }}
+                title="Повернутися до меню ресторану"
+              >
+                <span>🍽️</span>
+                <span>До меню</span>
+              </button>
+              <h1 className="text-xl font-bold tracking-tight truncate">Адмін-панель</h1>
+            </div>
+            <div className="flex flex-col items-end gap-0.5 text-right shrink-0">
+              <span
+                className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                style={{ background: "var(--app-tint)", color: "var(--tg-theme-button-color)" }}
+              >
+                {roleLabel}
+              </span>
+              {locationBadge && <span className="text-[10px] opacity-60">{locationBadge}</span>}
+            </div>
           </div>
-        </div>
 
         {/* 1. Глобальний перемикач на 2 розділи: Заклад (Менеджер) vs Керування (Штат і Клієнти) */}
         <div
@@ -607,7 +659,10 @@ export function AdminPage() {
       {/* Вміст вкладок */}
       <div className="mt-4 px-4 md:px-8 max-w-7xl pb-12">
         {activeTab === "orders" && (
-          <OrdersTab locationId={effectiveLocationId} />
+          <OrdersTab
+            locationId={effectiveLocationId}
+            initialEditingOrderId={orderIdParam ? parseInt(orderIdParam, 10) : null}
+          />
         )}
         {activeTab === "analytics" && isSuperAdmin && (
           <AnalyticsTab locationId={effectiveLocationId} />
@@ -635,6 +690,36 @@ export function AdminPage() {
         {activeTab === "managers" && isSuperAdmin && (
           <ManagersTab locations={locations} />
         )}
+
+        {/* Кнопка повернення до меню ресторану внизу сторінки (мобільна) */}
+        <div className="md:hidden mt-8 px-4 pb-6 space-y-2">
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              navigate("/");
+            }}
+            className="app-press w-full flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold shadow-sm transition-all border"
+            style={{
+              background: "var(--app-surface)",
+              borderColor: "var(--app-border)",
+              color: "var(--tg-theme-button-color)",
+            }}
+          >
+            <span>🍽️</span>
+            <span>Повернутися до меню ресторану</span>
+          </button>
+          {!isTelegramWebApp() && (
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="app-press w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold text-rose-500 hover:bg-rose-500/10 transition-colors"
+            >
+              <span>🚪</span>
+              <span>Вийти з акаунта адміна</span>
+            </button>
+          )}
+        </div>
       </div>
       </main>
     </div>
@@ -661,10 +746,30 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }>
     bg: "color-mix(in srgb, #3b82f6 20%, transparent)",
     text: "#2563eb",
   },
+  cooking: {
+    label: "Готується",
+    bg: "color-mix(in srgb, #3b82f6 20%, transparent)",
+    text: "#2563eb",
+  },
   ready: {
-    label: "Готове / В дорозі",
+    label: "Готове (самовивіз)",
     bg: "color-mix(in srgb, #8b5cf6 20%, transparent)",
     text: "#7c3aed",
+  },
+  ready_for_pickup: {
+    label: "Готове (самовивіз)",
+    bg: "color-mix(in srgb, #8b5cf6 20%, transparent)",
+    text: "#7c3aed",
+  },
+  on_the_way: {
+    label: "В дорозі (доставка)",
+    bg: "color-mix(in srgb, #06b6d4 20%, transparent)",
+    text: "#0891b2",
+  },
+  delivering: {
+    label: "В дорозі (доставка)",
+    bg: "color-mix(in srgb, #06b6d4 20%, transparent)",
+    text: "#0891b2",
   },
   completed: {
     label: "Виконано",
@@ -685,8 +790,10 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }>
 
 function OrdersTab({
   locationId,
+  initialEditingOrderId,
 }: {
   locationId?: number | null;
+  initialEditingOrderId?: number | null;
 }) {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const {
@@ -698,15 +805,24 @@ function OrdersTab({
     status: statusFilter,
     locationId,
   });
-  const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<number | null>(
+    initialEditingOrderId ?? null
+  );
   const updateOrder = useUpdateAdminOrder();
+
+  useEffect(() => {
+    if (initialEditingOrderId) {
+      setEditingOrderId(initialEditingOrderId);
+    }
+  }, [initialEditingOrderId]);
 
   const statusFilters = [
     { key: null, label: "Всі" },
     { key: "pending_moderation", label: "⏳ Очікують" },
     { key: "confirmed", label: "✅ Підтверджені" },
     { key: "in_progress", label: "👨‍🍳 Готуються" },
-    { key: "ready", label: "🛵 Готові" },
+    { key: "ready", label: "🛍️ Готові" },
+    { key: "on_the_way", label: "🛵 В дорозі" },
     { key: "completed", label: "🏁 Виконані" },
     { key: "rejected", label: "❌ Відхилені" },
     { key: "cancelled", label: "🚫 Скасовані" },
@@ -874,9 +990,24 @@ function OrdersTab({
                         <button
                           onClick={() => {
                             haptic("medium");
+                            let nextStatus = "in_progress";
+                            if (o.scheduled_time) {
+                              try {
+                                const parts = o.scheduled_time.split(":");
+                                if (parts.length === 2) {
+                                  const now = new Date();
+                                  const sch = new Date();
+                                  sch.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), 0, 0);
+                                  const diffMins = (sch.getTime() - now.getTime()) / 60000;
+                                  if (diffMins > 30) {
+                                    nextStatus = "confirmed";
+                                  }
+                                }
+                              } catch { /* ignore */ }
+                            }
                             updateOrder.mutate({
                               orderId: o.id,
-                              payload: { status: "confirmed" },
+                              payload: { status: nextStatus },
                             });
                           }}
                           className="app-press rounded-xl px-3 py-1.5 text-xs font-semibold"
@@ -923,25 +1054,44 @@ function OrdersTab({
                         👨‍🍳 Готувати
                       </button>
                     )}
-                    {o.status === "in_progress" && (
-                      <button
-                        onClick={() => {
-                          haptic("light");
-                          updateOrder.mutate({
-                            orderId: o.id,
-                            payload: { status: "ready" },
-                          });
-                        }}
-                        className="app-press rounded-xl px-2.5 py-1.5 text-xs font-semibold"
-                        style={{
-                          background: "color-mix(in srgb, #8b5cf6 15%, transparent)",
-                          color: "#8b5cf6",
-                        }}
-                      >
-                        🛵 Готово
-                      </button>
+                    {(o.status === "in_progress" || o.status === "cooking") && (
+                      o.fulfillment_type === "delivery" ? (
+                        <button
+                          onClick={() => {
+                            haptic("light");
+                            updateOrder.mutate({
+                              orderId: o.id,
+                              payload: { status: "on_the_way" },
+                            });
+                          }}
+                          className="app-press rounded-xl px-2.5 py-1.5 text-xs font-semibold"
+                          style={{
+                            background: "color-mix(in srgb, #06b6d4 15%, transparent)",
+                            color: "#0891b2",
+                          }}
+                        >
+                          🛵 В дорозі
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            haptic("light");
+                            updateOrder.mutate({
+                              orderId: o.id,
+                              payload: { status: "ready" },
+                            });
+                          }}
+                          className="app-press rounded-xl px-2.5 py-1.5 text-xs font-semibold"
+                          style={{
+                            background: "color-mix(in srgb, #8b5cf6 15%, transparent)",
+                            color: "#8b5cf6",
+                          }}
+                        >
+                          🛍️ Готово
+                        </button>
+                      )
                     )}
-                    {o.status === "ready" && (
+                    {(o.status === "ready" || o.status === "ready_for_pickup" || o.status === "on_the_way" || o.status === "delivering") && (
                       <button
                         onClick={() => {
                           haptic("light");
@@ -981,7 +1131,17 @@ function OrdersTab({
       {editingOrderId !== null && (
         <OrderEditModal
           orderId={editingOrderId}
-          onClose={() => setEditingOrderId(null)}
+          onClose={() => {
+            setEditingOrderId(null);
+            try {
+              const url = new URL(window.location.href);
+              if (url.searchParams.has("order_id") || url.searchParams.has("edit_order")) {
+                url.searchParams.delete("order_id");
+                url.searchParams.delete("edit_order");
+                window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+              }
+            } catch {}
+          }}
         />
       )}
     </div>
@@ -1210,7 +1370,8 @@ function OrderEditModal({
               <option value="pending_moderation">⏳ Очікує підтвердження</option>
               <option value="confirmed">✅ Підтверджено</option>
               <option value="in_progress">👨‍🍳 Готується</option>
-              <option value="ready">🛵 Готове до видачі / доставки</option>
+              <option value="ready">🛍️ Готове до видачі (самовивіз)</option>
+              <option value="on_the_way">🛵 В дорозі (доставка)</option>
               <option value="completed">🏁 Виконано</option>
               <option value="rejected">❌ Відхилено</option>
               <option value="cancelled">🚫 Скасовано</option>

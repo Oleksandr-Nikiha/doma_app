@@ -18,9 +18,6 @@ export class ApiError extends Error {
  * Тож заголовок чіпляємо до кожного запиту — публічні ендпоінти його просто ігнорують.
  */
 export function getRawInitData(): string | null {
-  if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
-    return null;
-  }
   try {
     const raw = retrieveRawInitData();
     if (raw) return raw;
@@ -30,9 +27,26 @@ export function getRawInitData(): string | null {
   if (typeof window !== "undefined") {
     const tg = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp;
     if (tg?.initData) return tg.initData;
+
+    // Fallback: витягуємо tgWebAppData з hash або search (якщо SDK ще не ініціалізував об'єкт)
+    if (window.location.hash) {
+      try {
+        const hp = new URLSearchParams(window.location.hash.replace(/^#\/?/, ""));
+        const data = hp.get("tgWebAppData");
+        if (data) return data;
+      } catch {}
+    }
+    if (window.location.search) {
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        const data = sp.get("tgWebAppData");
+        if (data) return data;
+      } catch {}
+    }
   }
   return null;
 }
+
 
 export function hasTelegramAuth(): boolean {
   return Boolean(getRawInitData());
@@ -56,9 +70,6 @@ export function removeAdminToken(): void {
 }
 
 export function hasAdminAuth(): boolean {
-  if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
-    return Boolean(getAdminToken());
-  }
   return Boolean(getAdminToken()) || hasTelegramAuth();
 }
 

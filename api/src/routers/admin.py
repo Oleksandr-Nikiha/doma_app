@@ -2033,7 +2033,11 @@ async def update_admin_order(
                 "pending_moderation": "pending",
                 "confirmed": "accepted",
                 "in_progress": "cooking",
+                "cooking": "cooking",
                 "ready": "ready",
+                "ready_for_pickup": "ready",
+                "on_the_way": "ready",
+                "delivering": "ready",
                 "completed": "ready",
                 "rejected": "cancelled",
                 "cancelled": "cancelled",
@@ -2150,26 +2154,25 @@ async def update_admin_order(
                 )
                 client_text = (
                     f"🎉 <b>Ваше замовлення #{order_id} підтверджено!</b>\n\n"
-                    f"Ми вже розпочали приготування. 🍕✨\n"
+                    f"Ми почнемо готувати його своєчасно до обраного часу{time_part}. 🍕✨\n"
                     f"{client_fulfillment}\n"
                     f"💵 Сума: {final_total:.2f} ₴"
                 )
-            elif new_status == "in_progress":
+            elif new_status in ("in_progress", "cooking"):
                 client_text = (
                     f"👨‍🍳 <b>Замовлення #{order_id} готується!</b>\n\n"
-                    f"Наші кухарі вже готують ваші улюблені страви на кухні."
+                    f"Наші кухарі вже готують ваші улюблені страви на кухні. 🔥"
                 )
-            elif new_status == "ready":
-                if existing_fulfillment == "delivery":
-                    client_text = (
-                        f"🛵 <b>Замовлення #{order_id} готове та передано кур'єру!</b>\n\n"
-                        f"Кур'єр уже прямує за адресою: <code>{esc_addr}</code> 💨"
-                    )
-                else:
-                    client_text = (
-                        f"🛍️ <b>Замовлення #{order_id} готове до видачі!</b>\n\n"
-                        f"Ваше замовлення чекає на вас у закладі. Завітайте забрати!"
-                    )
+            elif new_status in ("ready", "ready_for_pickup"):
+                client_text = (
+                    f"🛍️ <b>Замовлення #{order_id} готове до видачі!</b>\n\n"
+                    f"Ваше замовлення чекає на вас у закладі. Завітайте забрати! ✨"
+                )
+            elif new_status in ("on_the_way", "delivering"):
+                client_text = (
+                    f"🛵 <b>Замовлення #{order_id} передано кур'єру та прямує до вас!</b>\n\n"
+                    f"Кур'єр уже прямує за адресою: <code>{esc_addr}</code> 💨"
+                )
             elif new_status == "completed":
                 client_text = (
                     f"🏁 <b>Замовлення #{order_id} виконано!</b>\n\n"

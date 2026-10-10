@@ -22,7 +22,11 @@ GROUP_STATUS_MAP = {
     "pending_moderation": "pending",
     "confirmed": "accepted",
     "in_progress": "cooking",
+    "cooking": "cooking",
     "ready": "ready",
+    "ready_for_pickup": "ready",
+    "on_the_way": "ready",
+    "delivering": "ready",
     "completed": "ready",
     "rejected": "cancelled",
     "cancelled": "cancelled",
@@ -32,17 +36,79 @@ STATUS_TITLES = {
     "pending_moderation": "⏳ Очікує підтвердження",
     "confirmed": "✅ Підтверджено",
     "in_progress": "👨‍🍳 Готується",
-    "ready": "🛵 Готове / В дорозі",
+    "cooking": "👨‍🍳 Готується",
+    "ready": "🛍️ Готове",
+    "ready_for_pickup": "🛍️ Готове",
+    "on_the_way": "🛵 В дорозі",
+    "delivering": "🛵 В дорозі",
     "completed": "🏁 Виконано",
     "rejected": "❌ Відхилено",
     "cancelled": "🚫 Скасовано",
 }
 
 
+def get_minutes_until_scheduled(scheduled_str: str | None) -> float | None:
+    """Обчислює кількість хвилин, що залишилися до запланованого часу замовлення (у Києві)."""
+    if not scheduled_str or not scheduled_str.strip():
+        return None
+    clean = scheduled_str.strip()
+    now_kyiv = datetime.now(KYIV_TZ)
+    today_kyiv = now_kyiv.date()
+    scheduled_dt: datetime | None = None
+
+    # 1. YYYY-MM-DD HH:MM або YYYY-MM-DDTHH:MM
+    iso_match = re.match(r"^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}:\d{2})$", clean)
+    if iso_match:
+        with contextlib.suppress(Exception):
+            d_obj = datetime.strptime(iso_match.group(1), "%Y-%m-%d").date()
+            h, m = map(int, iso_match.group(2).split(":"))
+            scheduled_dt = datetime(d_obj.year, d_obj.month, d_obj.day, h, m, tzinfo=KYIV_TZ)
+
+    # 2. 'Завтра, HH:MM' або 'Завтра HH:MM'
+    if not scheduled_dt:
+        tomorrow_match = re.match(r"^Завтра[, ]+(\d{1,2}:\d{2})$", clean, re.IGNORECASE)
+        if tomorrow_match:
+            with contextlib.suppress(Exception):
+                t_str = tomorrow_match.group(1)
+                h, m = map(int, t_str.split(":"))
+                d_obj = today_kyiv + timedelta(days=1)
+                scheduled_dt = datetime(d_obj.year, d_obj.month, d_obj.day, h, m, tzinfo=KYIV_TZ)
+
+    # 3. 'Сьогодні, HH:MM' або 'Сьогодні HH:MM'
+    if not scheduled_dt:
+        today_match = re.match(r"^Сьогодні[, ]+(\d{1,2}:\d{2})$", clean, re.IGNORECASE)
+        if today_match:
+            with contextlib.suppress(Exception):
+                t_str = today_match.group(1)
+                h, m = map(int, t_str.split(":"))
+                scheduled_dt = datetime(
+                    today_kyiv.year, today_kyiv.month, today_kyiv.day, h, m, tzinfo=KYIV_TZ
+                )
+
+    # 4. 'HH:MM'
+    if not scheduled_dt:
+        time_match = re.match(r"^(\d{1,2}):(\d{2})$", clean)
+        if time_match:
+            with contextlib.suppress(Exception):
+                h, m = int(time_match.group(1)), int(time_match.group(2))
+                scheduled_dt = datetime(
+                    today_kyiv.year, today_kyiv.month, today_kyiv.day, h, m, tzinfo=KYIV_TZ
+                )
+
+
+    if not scheduled_dt:
+        return None
+
+    return (scheduled_dt - now_kyiv).total_seconds() / 60.0
+
+
 def build_order_keyboard(
     order_id: int, status: str, fulfillment_type: str
 ) -> InlineKeyboardMarkup | None:
     """Генерує клавіатуру під повідомленням замовлення залежно від поточного статусу."""
+    bot_username = getattr(settings, "bot_username", "ncoffee_app_tst_bot") or "ncoffee_app_tst_bot"
+    app_link = f"https://t.me/{bot_username}?startapp=order_{order_id}"
+
     buttons: list[list[InlineKeyboardButton]] = []
 
     if status == "pending_moderation":
@@ -59,6 +125,9 @@ def build_order_keyboard(
         buttons.append([
             InlineKeyboardButton(text="⏱ Змінити час", callback_data=f"order:time_menu:{order_id}"),
         ])
+        buttons.append([
+            InlineKeyboardButton(text="✏️ Редагувати замовлення", url=app_link),
+        ])
     elif status == "confirmed":
         buttons.append([
             InlineKeyboardButton(
@@ -74,20 +143,27 @@ def build_order_keyboard(
             ),
         ])
         buttons.append([
+            InlineKeyboardButton(text="✏️ Редагувати замовлення", url=app_link),
             InlineKeyboardButton(
                 text="🔄 Інший статус",
                 callback_data=f"order:status_menu:{order_id}",
             ),
         ])
-    elif status == "in_progress":
-        ready_label = (
-            "🛵 Передати кур'єру"
-            if fulfillment_type == "delivery"
-            else "🛍️ Готово до видачі"
-        )
-        buttons.append([
-            InlineKeyboardButton(text=ready_label, callback_data=f"order:status:{order_id}:ready"),
-        ])
+    elif status in ("in_progress", "cooking"):
+        if fulfillment_type == "delivery":
+            buttons.append([
+                InlineKeyboardButton(
+                    text="🛵 Передати кур'єру (В дорозі)",
+                    callback_data=f"order:status:{order_id}:on_the_way",
+                ),
+            ])
+        else:
+            buttons.append([
+                InlineKeyboardButton(
+                    text="🛍️ Готово до видачі",
+                    callback_data=f"order:status:{order_id}:ready",
+                ),
+            ])
         buttons.append([
             InlineKeyboardButton(text="⏱ Змінити час", callback_data=f"order:time_menu:{order_id}"),
             InlineKeyboardButton(
@@ -96,15 +172,16 @@ def build_order_keyboard(
             ),
         ])
         buttons.append([
+            InlineKeyboardButton(text="✏️ Редагувати замовлення", url=app_link),
             InlineKeyboardButton(
                 text="🔄 Інший статус",
                 callback_data=f"order:status_menu:{order_id}",
             ),
         ])
-    elif status == "ready":
+    elif status in ("ready", "ready_for_pickup"):
         buttons.append([
             InlineKeyboardButton(
-                text="🏁 Замовлення виконано",
+                text="🏁 Замовлення видано (Виконано)",
                 callback_data=f"order:status:{order_id}:completed",
             ),
         ])
@@ -115,9 +192,31 @@ def build_order_keyboard(
                 callback_data=f"order:status_menu:{order_id}",
             ),
         ])
+        buttons.append([
+            InlineKeyboardButton(text="✏️ Редагувати замовлення", url=app_link),
+        ])
+    elif status in ("on_the_way", "delivering"):
+        buttons.append([
+            InlineKeyboardButton(
+                text="🏁 Доставлено кур'єром (Виконано)",
+                callback_data=f"order:status:{order_id}:completed",
+            ),
+        ])
+        buttons.append([
+            InlineKeyboardButton(text="⏱ Змінити час", callback_data=f"order:time_menu:{order_id}"),
+            InlineKeyboardButton(
+                text="🔄 Інший статус",
+                callback_data=f"order:status_menu:{order_id}",
+            ),
+        ])
+        buttons.append([
+            InlineKeyboardButton(text="✏️ Редагувати замовлення", url=app_link),
+        ])
     else:
-        # Для фінальних статусів (completed, rejected, cancelled) кнопок немає
-        return None
+        # Для фінальних статусів (completed, rejected, cancelled)
+        buttons.append([
+            InlineKeyboardButton(text="✏️ Переглянути в додатку", url=app_link),
+        ])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -145,16 +244,29 @@ def build_time_keyboard(order_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def build_all_statuses_keyboard(order_id: int, current_status: str) -> InlineKeyboardMarkup:
+def build_all_statuses_keyboard(
+    order_id: int, current_status: str, fulfillment_type: str = "delivery"
+) -> InlineKeyboardMarkup:
     """Клавіатура ручного вибору будь-якого доступного статусу."""
-    all_statuses = [
-        ("pending_moderation", "⏳ Очікує"),
-        ("confirmed", "✅ Підтверджено"),
-        ("in_progress", "👨‍🍳 Готується"),
-        ("ready", "🛵 Готове/В дорозі"),
-        ("completed", "🏁 Виконано"),
-        ("cancelled", "🚫 Скасовано"),
-    ]
+    if fulfillment_type == "pickup":
+        all_statuses = [
+            ("pending_moderation", "⏳ Очікує"),
+            ("confirmed", "✅ Підтверджено"),
+            ("in_progress", "👨‍🍳 Готується"),
+            ("ready", "🛍️ Готове"),
+            ("completed", "🏁 Виконано"),
+            ("cancelled", "🚫 Скасовано"),
+        ]
+    else:
+        all_statuses = [
+            ("pending_moderation", "⏳ Очікує"),
+            ("confirmed", "✅ Підтверджено"),
+            ("in_progress", "👨‍🍳 Готується"),
+            ("on_the_way", "🛵 В дорозі"),
+            ("completed", "🏁 Виконано"),
+            ("cancelled", "🚫 Скасовано"),
+        ]
+
     buttons: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
     for code, title in all_statuses:
@@ -173,9 +285,7 @@ def build_all_statuses_keyboard(order_id: int, current_status: str) -> InlineKey
 
 
 def calculate_new_time(current_scheduled: str | None, option: str) -> str | None:
-    """
-    Обчислює новий запланований час замовлення у поясі Києва.
-    """
+    """Обчислює новий запланований час замовлення у поясі Києва."""
     if option == "asap":
         return None
 
@@ -224,26 +334,25 @@ def get_client_status_message(
         )
         return (
             f"🎉 <b>Ваше замовлення #{order_id} підтверджено!</b>\n\n"
-            f"Ми вже розпочали приготування. 🍕✨\n"
+            f"Ми почнемо готувати його своєчасно до обраного часу{time_part}. 🍕✨\n"
             f"{client_fulfillment}\n"
             f"💵 Сума: {total_price:.2f} ₴"
         )
-    elif status == "in_progress":
+    elif status in ("in_progress", "cooking"):
         return (
             f"👨‍🍳 <b>Замовлення #{order_id} готується!</b>\n\n"
             f"Наші кухарі вже готують ваші улюблені страви на кухні. 🔥"
         )
-    elif status == "ready":
-        if fulfillment_type == "delivery":
-            return (
-                f"🛵 <b>Замовлення #{order_id} готове та передано кур'єру!</b>\n\n"
-                f"Кур'єр уже прямує за адресою: <code>{esc_addr}</code> 💨"
-            )
-        else:
-            return (
-                f"🛍️ <b>Замовлення #{order_id} готове до видачі!</b>\n\n"
-                f"Ваше замовлення чекає на вас у закладі. Завітайте забрати! ✨"
-            )
+    elif status in ("ready", "ready_for_pickup"):
+        return (
+            f"🛍️ <b>Замовлення #{order_id} готове до видачі!</b>\n\n"
+            f"Ваше замовлення чекає на вас у закладі. Завітайте забрати! ✨"
+        )
+    elif status in ("on_the_way", "delivering"):
+        return (
+            f"🛵 <b>Замовлення #{order_id} передано кур'єру та прямує до вас!</b>\n\n"
+            f"Кур'єр уже прямує за адресою: <code>{esc_addr}</code> 💨"
+        )
     elif status == "completed":
         return (
             f"🏁 <b>Замовлення #{order_id} виконано!</b>\n\n"
@@ -259,13 +368,22 @@ def get_client_status_message(
 
 
 async def check_manager_permission(
-    pool, user_id: int, order_id: int
+    pool, user_id: int, order_id: int, chat_id: int | None = None
 ) -> tuple[bool, str | None]:
     """
-    Перевіряє права співробітника на керування замовленням за БД (таблиця managers):
-    - role == 'admin': повний доступ до всіх замовлень усіх локацій
-    - role == 'manager': доступ до замовлень свого закладу (або всіх, якщо location_id IS NULL)
+    Перевіряє права співробітника на керування замовленням:
+    1) Якщо клік здійснено в офіційному чаті/групі менеджерів (manager_chat_id) — дозволено.
+    2) Якщо в приватному чаті з ботом — перевіряє таблицю managers:
+       - role == 'admin': повний доступ
+       - role == 'manager': доступ до замовлень свого закладу (або всіх, якщо location_id IS NULL)
     """
+    if (
+        chat_id is not None
+        and settings.manager_chat_id is not None
+        and chat_id == settings.manager_chat_id
+    ):
+        return True, None
+
     async with pool.acquire() as conn:
         manager = await conn.fetchrow(
             """
@@ -326,7 +444,6 @@ def update_admin_message_text(
 
     # Оновлення або додавання статусу
     if status_label:
-        # Видаляємо попередній статусний рядок, якщо він був доданий раніше
         status_pattern = (
             r"\n\n(✅ <b>Підтверджено|❌ <b>Відхилено|Статус: <b>|📌 <b>Поточний статус:)[^\n]+"
         )
@@ -346,6 +463,9 @@ async def handle_order_status_change(callback: CallbackQuery) -> None:
     Обробляє зміну статусу замовлення:
     - confirm/reject для зворотної сумісності зі старими кнопками
     - order:status:<order_id>:<new_status> для всіх переходів
+    Логіка підтвердження (2.2, 2.3):
+    - якщо замовлення на час і > 30 хв: 'confirmed'
+    - якщо замовлення на найближчий час або <= 30 хв: одразу 'in_progress'
     """
     if not callback.data:
         await callback.answer("Некоректні дані кнопки")
@@ -354,9 +474,9 @@ async def handle_order_status_change(callback: CallbackQuery) -> None:
     parts = callback.data.split(":")
     if len(parts) == 3 and parts[0] == "order" and parts[1] in ("confirm", "reject"):
         action, order_id_str = parts[1], parts[2]
-        new_status = "confirmed" if action == "confirm" else "rejected"
+        requested_status = "confirmed" if action == "confirm" else "rejected"
     elif len(parts) == 4 and parts[0] == "order" and parts[1] == "status":
-        order_id_str, new_status = parts[2], parts[3]
+        order_id_str, requested_status = parts[2], parts[3]
     else:
         await callback.answer("Некоректний формат команди")
         return
@@ -367,14 +487,15 @@ async def handle_order_status_change(callback: CallbackQuery) -> None:
         await callback.answer("Некоректний ID замовлення")
         return
 
-    if new_status not in GROUP_STATUS_MAP:
+    if requested_status not in GROUP_STATUS_MAP:
         await callback.answer("Невідомий статус замовлення", show_alert=True)
         return
 
     pool = get_pool()
     user_id = callback.from_user.id
+    chat_id = callback.message.chat.id if callback.message else None
 
-    allowed, err_msg = await check_manager_permission(pool, user_id, order_id)
+    allowed, err_msg = await check_manager_permission(pool, user_id, order_id, chat_id=chat_id)
     if not allowed:
         await callback.answer(err_msg or "⛔ Доступ заборонено", show_alert=True)
         return
@@ -402,6 +523,16 @@ async def handle_order_status_change(callback: CallbackQuery) -> None:
             return
 
         current_status = order["status"]
+
+        # Логіка визначення статусу при підтвердженні менеджером
+        new_status = requested_status
+        if requested_status == "confirmed":
+            mins_left = get_minutes_until_scheduled(order["scheduled_time"])
+            new_status = (
+                "confirmed" if mins_left is not None and mins_left > 30 else "in_progress"
+            )
+
+
         if current_status == new_status:
             status_title = STATUS_TITLES.get(new_status, new_status)
             await callback.answer(f"Замовлення вже має статус '{status_title}'")
@@ -441,7 +572,7 @@ async def handle_order_status_change(callback: CallbackQuery) -> None:
 
     # Оновлення повідомлення в адмін-групі
     st_title = STATUS_TITLES.get(new_status, new_status)
-    status_label = f"{st_title} (менеджер {manager_name})"
+    status_label = f"{st_title} (співробітник {manager_name})"
     new_keyboard = build_order_keyboard(order_id, new_status, order["fulfillment_type"])
 
     if callback.message:
@@ -471,19 +602,24 @@ async def handle_order_status_menu(callback: CallbackQuery) -> None:
         return
 
     pool = get_pool()
-    allowed, err_msg = await check_manager_permission(pool, callback.from_user.id, order_id)
+    chat_id = callback.message.chat.id if callback.message else None
+    allowed, err_msg = await check_manager_permission(
+        pool, callback.from_user.id, order_id, chat_id=chat_id
+    )
     if not allowed:
         await callback.answer(err_msg or "⛔ Доступ заборонено", show_alert=True)
         return
 
     async with pool.acquire() as conn:
-        order = await conn.fetchrow("SELECT status FROM orders WHERE id = $1", order_id)
+        order = await conn.fetchrow(
+            "SELECT status, fulfillment_type FROM orders WHERE id = $1", order_id
+        )
 
     if not order:
         await callback.answer("Замовлення не знайдено", show_alert=True)
         return
 
-    keyboard = build_all_statuses_keyboard(order_id, order["status"])
+    keyboard = build_all_statuses_keyboard(order_id, order["status"], order["fulfillment_type"])
     if callback.message:
         with contextlib.suppress(Exception):
             await callback.message.edit_reply_markup(reply_markup=keyboard)
@@ -504,7 +640,10 @@ async def handle_order_time_menu(callback: CallbackQuery) -> None:
         return
 
     pool = get_pool()
-    allowed, err_msg = await check_manager_permission(pool, callback.from_user.id, order_id)
+    chat_id = callback.message.chat.id if callback.message else None
+    allowed, err_msg = await check_manager_permission(
+        pool, callback.from_user.id, order_id, chat_id=chat_id
+    )
     if not allowed:
         await callback.answer(err_msg or "⛔ Доступ заборонено", show_alert=True)
         return
@@ -535,7 +674,10 @@ async def handle_order_time_set(callback: CallbackQuery) -> None:
     option = parts[3]
 
     pool = get_pool()
-    allowed, err_msg = await check_manager_permission(pool, callback.from_user.id, order_id)
+    chat_id = callback.message.chat.id if callback.message else None
+    allowed, err_msg = await check_manager_permission(
+        pool, callback.from_user.id, order_id, chat_id=chat_id
+    )
     if not allowed:
         await callback.answer(err_msg or "⛔ Доступ заборонено", show_alert=True)
         return
@@ -625,7 +767,10 @@ async def handle_order_back(callback: CallbackQuery) -> None:
         return
 
     pool = get_pool()
-    allowed, err_msg = await check_manager_permission(pool, callback.from_user.id, order_id)
+    chat_id = callback.message.chat.id if callback.message else None
+    allowed, err_msg = await check_manager_permission(
+        pool, callback.from_user.id, order_id, chat_id=chat_id
+    )
     if not allowed:
         await callback.answer(err_msg or "⛔ Доступ заборонено", show_alert=True)
         return

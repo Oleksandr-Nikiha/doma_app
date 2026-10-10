@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     database_url: str
     redis_url: str = "redis://redis:6379/0"
     bot_token: str
+    bot_username: str = "ncoffee_app_tst_bot"
+    mini_app_url: str = "https://nikiga-ax.duckdns.org"
     manager_chat_id: int | None = None
     api_debug: bool = False
 

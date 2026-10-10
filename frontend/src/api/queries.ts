@@ -11,6 +11,7 @@ import {
   clearGuestCart,
   getGuestCart,
   removeGuestItem,
+  updateGuestItem,
   updateGuestItemQty,
 } from "@/store/guestCart";
 import type {
@@ -244,14 +245,44 @@ export function useAddToCart() {
   });
 }
 
+export interface UpdateCartItemPayload {
+  itemId: number;
+  qty?: number;
+  variant_id?: number;
+  options?: OptionSelection[];
+  guest_meta?: {
+    variant_label?: string;
+    weight?: string | null;
+    price?: number;
+    options_details: CartItemOption[];
+    group_free_count?: Record<number, number>;
+  };
+}
+
 export function useUpdateCartItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (v: { itemId: number; qty: number }) => {
+    mutationFn: async (v: UpdateCartItemPayload) => {
       if (!hasTelegramAuth()) {
-        return updateGuestItemQty(v.itemId, v.qty);
+        if (v.options !== undefined || v.guest_meta) {
+          return updateGuestItem(v.itemId, {
+            variant_id: v.variant_id,
+            variant_label: v.guest_meta?.variant_label,
+            weight: v.guest_meta?.weight,
+            price: v.guest_meta?.price,
+            qty: v.qty,
+            options: v.options,
+            options_details: v.guest_meta?.options_details,
+            group_free_count: v.guest_meta?.group_free_count,
+          });
+        }
+        return updateGuestItemQty(v.itemId, v.qty ?? 1);
       }
-      return api.patch<Cart>(`/cart/items/${v.itemId}`, { qty: v.qty });
+      return api.patch<Cart>(`/cart/items/${v.itemId}`, {
+        qty: v.qty,
+        variant_id: v.variant_id,
+        options: v.options,
+      });
     },
     onSuccess: (cart) => qc.setQueryData(keys.cart, cart),
   });

@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import { useAddToCart, useLocations, useProduct } from "@/api/queries";
+import { useAddToCart, useCart, useLocations, useProduct, useUpdateCartItem } from "@/api/queries";
 import { ErrorBox, ProductDetailSkeleton, Thumb, formatPrice } from "@/components/ui";
 import { useBackButton } from "@/hooks/useBackButton";
 import { isTelegramWebApp } from "@/telegram/env";
@@ -65,7 +65,7 @@ function selectionHint(group: OptionGroup, qty: number) {
         ? `до ${max}`
         : `${min}–${max}`;
 
-  if (free === 0) return need;
+  if (free === 0 || free >= max) return need;
   const freeLabel = free === 1 ? "перша безкоштовно" : `${free} безкоштовно`;
   return `${need} · ${freeLabel}`;
 }
@@ -84,18 +84,46 @@ export function ProductPage() {
   const { productId } = useParams();
   const navigate = useNavigate();
   const { state } = useLocation();
-  const locationState = state as { location_id?: number; location_name?: string } | undefined;
+  const [searchParams] = useSearchParams();
+  const locationState = state as { location_id?: number; location_name?: string; editCartItemId?: number } | undefined;
+  const editCartItemId = locationState?.editCartItemId ?? (searchParams.get("edit_cart_item") ? Number(searchParams.get("edit_cart_item")) : null);
+
   const { data: locations } = useLocations();
+  const { data: cartData } = useCart();
   useBackButton();
 
   const { data, isPending, error, refetch } = useProduct(Number(productId));
   const addToCart = useAddToCart();
+  const updateCartItem = useUpdateCartItem();
+
+  const cartItemToEdit = useMemo(() => {
+    if (!editCartItemId || !cartData?.items) return null;
+    return cartData.items.find((it) => it.id === editCartItemId) ?? null;
+  }, [editCartItemId, cartData]);
 
   const [variantId, setVariantId] = useState<number | null>(null);
   const [qty, setQty] = useState(1);
   const [showErrors, setShowErrors] = useState(false);
   const [picked, setPicked] = useState<Record<number, Picks>>({});
   const optionsContainerRef = useRef<HTMLDivElement>(null);
+  const initializedFromCart = useRef(false);
+
+  useEffect(() => {
+    if (cartItemToEdit && !initializedFromCart.current && data) {
+      initializedFromCart.current = true;
+      setQty(cartItemToEdit.qty);
+      const matchingVariant = data.variants.find((v) => v.label === cartItemToEdit.variant_label);
+      if (matchingVariant) {
+        setVariantId(matchingVariant.id);
+      }
+      const initialPicks: Record<number, Picks> = {};
+      for (const opt of cartItemToEdit.options) {
+        if (!initialPicks[opt.group_id]) initialPicks[opt.group_id] = {};
+        initialPicks[opt.group_id][opt.variant_id] = opt.qty;
+      }
+      setPicked(initialPicks);
+    }
+  }, [cartItemToEdit, data]);
 
   if (isPending) return <ProductDetailSkeleton />;
   if (error) return <ErrorBox message={error.message} onRetry={() => void refetch()} />;
@@ -125,6 +153,9 @@ export function ProductPage() {
   function pickOne(group: OptionGroup, optionVariantId: number) {
     const current = picksFor(group);
     haptic("light");
+    if (current[optionVariantId] && group.min_select >= 1) {
+      return;
+    }
     setPicks(group, current[optionVariantId] ? {} : { [optionVariantId]: 1 });
   }
 
@@ -250,12 +281,12 @@ export function ProductPage() {
                   boxShadow: "var(--app-shadow-sm)",
                 }}
               >
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
                     <p className="text-sm font-bold tracking-tight">{group.name}</p>
-                    {isFilled ? (
+                    {!fixed && isFilled ? (
                       <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide flex items-center gap-1"
+                        className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide inline-flex items-center gap-1 shrink-0"
                         style={{
                           background: "color-mix(in srgb, #22c55e 14%, transparent)",
                           color: "#22c55e",
@@ -263,9 +294,9 @@ export function ProductPage() {
                       >
                         ✓ Обрано
                       </span>
-                    ) : isUrgentNotice ? (
+                    ) : !fixed && isUrgentNotice ? (
                       <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide"
+                        className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide shrink-0"
                         style={{
                           background: "color-mix(in srgb, #f59e0b 20%, transparent)",
                           color: "#d97706",
@@ -273,9 +304,9 @@ export function ProductPage() {
                       >
                         Оберіть варіант
                       </span>
-                    ) : effMin > 0 ? (
+                    ) : !fixed && effMin > 0 ? (
                       <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide"
+                        className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide shrink-0"
                         style={{
                           background: "var(--app-tint)",
                           color: "var(--tg-theme-button-color)",
@@ -337,7 +368,7 @@ export function ProductPage() {
                     })}
                   </div>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {group.items.map((item) => {
                       const active = Boolean(picks[item.variant_id]);
                       return (
@@ -345,7 +376,7 @@ export function ProductPage() {
                           key={item.variant_id}
                           disabled={fixed}
                           onClick={() => pickOne(group, item.variant_id)}
-                          className={`rounded-xl px-3.5 py-2 text-xs font-semibold disabled:opacity-100 transition-all ${
+                          className={`inline-flex items-center justify-center rounded-xl px-3.5 py-2 text-xs font-semibold disabled:opacity-100 transition-all ${
                             fixed ? "" : "app-press"
                           }`}
                           style={chipStyle(active)}
@@ -467,31 +498,56 @@ export function ProductPage() {
                 locations?.find((l) => l.id === locId)?.name ??
                 "Doma Pizza";
 
-              addToCart.mutate(
-                {
-                  variant_id: selected.id,
-                  qty,
-                  options,
-                  guest_meta: {
-                    product_id: data.id,
-                    product_name: data.name,
-                    variant_label: selected.label,
-                    weight: selected.weight,
-                    price: selected.price,
-                    location_id: locId,
-                    location_name: locName,
-                    options_details: optionsDetails,
-                    group_free_count: groupFreeCount,
+              if (cartItemToEdit) {
+                updateCartItem.mutate(
+                  {
+                    itemId: cartItemToEdit.id,
+                    variant_id: selected.id,
+                    qty,
+                    options,
+                    guest_meta: {
+                      variant_label: selected.label,
+                      weight: selected.weight,
+                      price: selected.price,
+                      options_details: optionsDetails,
+                      group_free_count: groupFreeCount,
+                    },
                   },
-                },
-                {
-                  onSuccess: () => {
-                    hapticNotify("success");
-                    void navigate("/cart");
+                  {
+                    onSuccess: () => {
+                      hapticNotify("success");
+                      void navigate("/cart");
+                    },
+                    onError: () => hapticNotify("error"),
                   },
-                  onError: () => hapticNotify("error"),
-                },
-              );
+                );
+              } else {
+                addToCart.mutate(
+                  {
+                    variant_id: selected.id,
+                    qty,
+                    options,
+                    guest_meta: {
+                      product_id: data.id,
+                      product_name: data.name,
+                      variant_label: selected.label,
+                      weight: selected.weight,
+                      price: selected.price,
+                      location_id: locId,
+                      location_name: locName,
+                      options_details: optionsDetails,
+                      group_free_count: groupFreeCount,
+                    },
+                  },
+                  {
+                    onSuccess: () => {
+                      hapticNotify("success");
+                      void navigate("/cart");
+                    },
+                    onError: () => hapticNotify("error"),
+                  },
+                );
+              }
             }}
             className="app-press flex-1 rounded-xl py-3.5 px-4 font-bold text-sm shadow-md transition-all flex items-center justify-between"
             style={
@@ -508,7 +564,13 @@ export function ProductPage() {
                   }
             }
           >
-            <span>{addToCart.isPending ? "Додаємо…" : "В кошик"}</span>
+            <span>
+              {addToCart.isPending || updateCartItem.isPending
+                ? "Зберігаємо…"
+                : cartItemToEdit
+                  ? "Зберегти зміни"
+                  : "В кошик"}
+            </span>
             <span className="font-extrabold">{formatPrice(total)}</span>
           </button>
         </div>

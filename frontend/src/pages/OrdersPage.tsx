@@ -15,13 +15,22 @@ function getStatusBadge(status: string, fulfillmentType?: string) {
         color: "#22c55e",
         bg: "rgba(34, 197, 94, 0.12)",
       };
+    case "cooking":
     case "in_progress":
       return {
         label: "👨‍🍳 Готується",
         color: "#3b82f6",
         bg: "rgba(59, 130, 246, 0.12)",
       };
+    case "on_the_way":
+    case "delivering":
+      return {
+        label: "🛵 В дорозі",
+        color: "#0891b2",
+        bg: "rgba(6, 182, 212, 0.12)",
+      };
     case "ready":
+    case "ready_for_pickup":
       return {
         label: fulfillmentType === "delivery" ? "🛵 В дорозі" : "🛍️ Готове до видачі",
         color: "#8b5cf6",

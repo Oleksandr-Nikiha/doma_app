@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 
 from aiogram import Bot, Dispatcher
@@ -7,7 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 from src.config import get_settings
-from src.db.connection import connect_db, disconnect_db
+from src.db.connection import connect_db, disconnect_db, get_pool
 from src.handlers import orders, start
 
 logging.basicConfig(
@@ -30,6 +31,94 @@ async def setup_menu_button(bot: Bot, mini_app_url: str) -> None:
     )
 
 
+async def auto_transition_scheduled_orders(bot: Bot) -> None:
+    """
+    Періодично перевіряє замовлення у статусі 'confirmed' із scheduled_time.
+    Якщо залишилося <= 30 хв:
+    - автоматично переводить замовлення у статус 'in_progress' (Готується)
+    - сповіщає клієнта у Telegram
+    - сповіщає групу менеджерів
+    """
+    while True:
+        try:
+            pool = get_pool()
+            async with pool.acquire() as conn:
+                order_rows = await conn.fetch(
+                    """
+                    SELECT id, telegram_id, status, fulfillment_type, delivery_address,
+                           contact_name, contact_phone, total_price, scheduled_time
+                    FROM orders
+                    WHERE status = 'confirmed' AND scheduled_time IS NOT NULL
+                    """
+                )
+                for order in order_rows:
+                    mins_left = orders.get_minutes_until_scheduled(order["scheduled_time"])
+                    if mins_left is not None and mins_left <= 30:
+                        order_id = order["id"]
+                        logger.info(
+                            "Автоперехід #%s у in_progress (залишилось %.1f хв)",
+                            order_id,
+                            mins_left,
+                        )
+                        await conn.execute(
+                            "UPDATE orders SET status = 'in_progress', updated_at = now() "
+                            "WHERE id = $1",
+                            order_id,
+                        )
+                        await conn.execute(
+                            "UPDATE order_groups SET status = 'cooking' WHERE order_id = $1",
+                            order_id,
+                        )
+
+                        # Сповіщення клієнта
+                        if order["telegram_id"]:
+                            client_msg = orders.get_client_status_message(
+                                order_id=order_id,
+                                status="in_progress",
+                                fulfillment_type=order["fulfillment_type"],
+                                addr=order["delivery_address"],
+                                total_price=float(order["total_price"]),
+                                scheduled_time=order["scheduled_time"],
+                            )
+                            if client_msg:
+                                with contextlib.suppress(Exception):
+                                    await bot.send_message(
+                                        chat_id=order["telegram_id"],
+                                        text=client_msg,
+                                        parse_mode="HTML",
+                                    )
+
+                        # Сповіщення у групу менеджерів
+                        settings = get_settings()
+                        if settings.manager_chat_id:
+                            is_deliv = order["fulfillment_type"] == "delivery"
+                            f_type_str = "доставки" if is_deliv else "самовивозу"
+                            s_time = order["scheduled_time"]
+                            mgr_msg = (
+                                f"👨‍🍳 <b>Замовлення #{order_id} → «Готується»!</b>\n"
+                                f"⏰ До часу {f_type_str} ({s_time}) залишилось < 30 хв.\n"
+                                "Починаємо приготування страв на кухні 🔥"
+                            )
+                            keyboard = orders.build_order_keyboard(
+                                order_id=order_id,
+                                status="in_progress",
+                                fulfillment_type=order["fulfillment_type"],
+                            )
+                            with contextlib.suppress(Exception):
+                                await bot.send_message(
+                                    chat_id=settings.manager_chat_id,
+                                    text=mgr_msg,
+                                    reply_markup=keyboard,
+                                    parse_mode="HTML",
+                                )
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.warning("Помилка у auto_transition_scheduled_orders: %s", e)
+
+        await asyncio.sleep(30)
+
+
 async def main() -> None:
     settings = get_settings()
 
@@ -47,8 +136,14 @@ async def main() -> None:
         me = await bot.get_me()
         logger.info("Бот @%s запущено, Mini App: %s", me.username, settings.mini_app_url)
 
-        # drop_pending_updates — щоб після рестарту не обробляти накопичену чергу
-        await dp.start_polling(bot, drop_pending_updates=True)
+        scheduler_task = asyncio.create_task(auto_transition_scheduled_orders(bot))
+        try:
+            # drop_pending_updates — щоб після рестарту не обробляти накопичену чергу
+            await dp.start_polling(bot, drop_pending_updates=True)
+        finally:
+            scheduler_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await scheduler_task
     finally:
         await disconnect_db()
         await bot.session.close()

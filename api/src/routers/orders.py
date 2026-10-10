@@ -221,6 +221,11 @@ async def send_order_to_manager(order_id: int, order_data: dict[str, Any], setti
         f"\n⚠️ <b>Примітка про клієнта:</b> {html.escape(str(user_note))}" if user_note else ""
     )
 
+    bot_username = getattr(settings, "bot_username", "ncoffee_app_tst_bot") or "ncoffee_app_tst_bot"
+    mini_app_url = getattr(settings, "mini_app_url", "") or "https://nikiga-ax.duckdns.org"
+    app_link = f"https://t.me/{bot_username}?startapp=order_{order_id}"
+    web_admin_link = f"{mini_app_url.rstrip('/')}/admin?order_id={order_id}"
+
     text = (
         f"📦 <b>Нове замовлення #{order_id}</b>\n"
         f"📍 <b>Заклад:</b> {loc_name}\n"
@@ -230,7 +235,9 @@ async def send_order_to_manager(order_id: int, order_data: dict[str, Any], setti
         f"💰 <b>Оплата:</b> {payment_label}"
         f"{comment_line}\n\n"
         f"📋 <b>Страви:</b>\n{items_block}\n\n"
-        f"💵 <b>Разом до сплати: {order_data['total_price']:.2f} ₴</b>"
+        f"💵 <b>Разом до сплати: {order_data['total_price']:.2f} ₴</b>\n\n"
+        f"🔗 <a href=\"{app_link}\">Відкрити у додатку</a> | "
+        f"<a href=\"{web_admin_link}\">Веб-панель</a>"
     )
 
     reply_markup = {
@@ -249,6 +256,12 @@ async def send_order_to_manager(order_id: int, order_data: dict[str, Any], setti
                 {
                     "text": "⏱ Змінити час",
                     "callback_data": f"order:time_menu:{order_id}",
+                }
+            ],
+            [
+                {
+                    "text": "✏️ Редагувати замовлення",
+                    "url": app_link,
                 }
             ],
         ]

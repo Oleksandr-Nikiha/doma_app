@@ -16,7 +16,9 @@ class CartItemIn(BaseModel):
 
 
 class CartItemUpdateIn(BaseModel):
-    qty: int = Field(..., gt=0)
+    qty: int | None = Field(None, gt=0)
+    variant_id: int | None = None
+    options: list[OptionSelectionIn] | None = None
 
 
 class CartItemOptionOut(BaseModel):

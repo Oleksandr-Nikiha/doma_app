@@ -20,12 +20,18 @@ UX замовлення у **Telegram Mini App**, залишивши бота д
 **Готово:**
 
 - Backend — понад 35 ендпоінтів, перевірені наскрізно
-- Схема БД (`0001_core_schema.sql` ... `0007_db_triggers_and_integrity.sql`):
+- Схема БД (`0001_core_schema.sql` ... `0009_product_images_directus.sql`):
   `orders`, `order_groups`, `order_items`, `order_item_options`, `managers`,
   `delivery_addresses`, `admin_auth_sessions`, `broadcasts`, `broadcast_logs`,
-  тригери `updated_at`, тригер синхронізації статусів `orders` -> `order_groups`,
-  каскадне видалення кошика при видаленні страв та збережена процедура очищення кошиків
-- Каталог обох закладів: Doma Pizza та Doma Croissants (57 позицій завантажено у сид)
+  статуси замовлень (`on_the_way`, `delivering`), тригери `updated_at`,
+  тригер синхронізації статусів `orders` -> `order_groups`,
+  каскадне видалення кошика при видаленні страв та збережена процедура очищення кошиків,
+  інтеграція з Directus File Storage (`products.image` UUID -> `directus_files.id`, тригер `trg_sync_product_image_url`)
+- Інтеграція з Directus CMS та локальне медіа-сховище:
+  спільний Docker-том `directus_uploads`, локальна роздача файлів через FastAPI (`/api/uploads`),
+  автоматична синхронізація фотографій страв
+- Каталог обох закладів: Doma Pizza та Doma Croissants (149 страв мають локальні фотографії,
+  пропарсені з domacroissants.com.ua та domapizza.com.ua)
 - Дворівневі категорії з прихованими та стоп-лист (`is_available`)
 - Групи опцій з безкоштовною квотою
 - Бот: `/start` із кнопкою Mini App + постійна Menu Button + інтерактивна модерація замовлень

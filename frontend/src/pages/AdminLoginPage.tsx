@@ -63,7 +63,7 @@ export function AdminLoginPage() {
         if (res.status === "approved" && res.token) {
           clearInterval(interval);
           setAdminToken(res.token);
-          navigate("/admin", { replace: true });
+          navigate("/admin" + window.location.search, { replace: true });
         } else if (res.status === "rejected" || res.status === "expired") {
           clearInterval(interval);
           setError(
@@ -86,7 +86,7 @@ export function AdminLoginPage() {
     const token = manualToken.trim();
     if (!token) return;
     setAdminToken(token);
-    navigate("/admin", { replace: true });
+    navigate("/admin" + window.location.search, { replace: true });
   };
 
   return (

@@ -13,7 +13,7 @@ const getSteps = (fulfillmentType?: string) => [
   { key: "confirmed", label: "Підтверджено", icon: "👍" },
   { key: "in_progress", label: "Готується", icon: "👨‍🍳" },
   {
-    key: "ready",
+    key: fulfillmentType === "delivery" ? "on_the_way" : "ready",
     label: fulfillmentType === "delivery" ? "В дорозі" : "Готово",
     icon: fulfillmentType === "delivery" ? "🛵" : "🛍️",
   },
@@ -28,8 +28,12 @@ function getStepIndex(status: string) {
     case "confirmed":
       return 1;
     case "in_progress":
+    case "cooking":
       return 2;
     case "ready":
+    case "ready_for_pickup":
+    case "on_the_way":
+    case "delivering":
       return 3;
     case "completed":
       return 4;
@@ -114,6 +118,7 @@ export function OrderSuccessPage() {
           color: "#22c55e",
           bg: "rgba(34, 197, 94, 0.12)",
         };
+      case "cooking":
       case "in_progress":
         return {
           text: "Готується на кухні",
@@ -121,7 +126,16 @@ export function OrderSuccessPage() {
           color: "#3b82f6",
           bg: "rgba(59, 130, 246, 0.12)",
         };
+      case "on_the_way":
+      case "delivering":
+        return {
+          text: "Кур'єр у дорозі",
+          subtitle: "Кур'єр уже прямує до вас із вашим гарячим замовленням! 🛵💨",
+          color: "#0891b2",
+          bg: "rgba(6, 182, 212, 0.12)",
+        };
       case "ready":
+      case "ready_for_pickup":
         return {
           text: order.fulfillment_type === "delivery" ? "Кур'єр у дорозі" : "Готове до видачі",
           subtitle:
@@ -172,8 +186,9 @@ export function OrderSuccessPage() {
     if (order.status === "rejected") return "😔";
     if (order.status === "cancelled") return "🚫";
     if (order.status === "completed") return "🎉";
-    if (order.status === "ready") return order.fulfillment_type === "delivery" ? "🛵" : "🛍️";
-    if (order.status === "in_progress") return "👨‍🍳";
+    if (order.status === "on_the_way" || order.status === "delivering") return "🛵";
+    if (order.status === "ready" || order.status === "ready_for_pickup") return "🛍️";
+    if (order.status === "in_progress" || order.status === "cooking") return "👨‍🍳";
     if (order.status === "confirmed") return "👍";
     return "🍕";
   };

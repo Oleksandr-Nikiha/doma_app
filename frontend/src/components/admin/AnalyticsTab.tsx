@@ -22,6 +22,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   confirmed: { label: "Підтверджено", color: "bg-blue-500/15 text-blue-500" },
   in_progress: { label: "Готується", color: "bg-indigo-500/15 text-indigo-500" },
   ready: { label: "Готове", color: "bg-teal-500/15 text-teal-500" },
+  on_the_way: { label: "В дорозі", color: "bg-cyan-500/15 text-cyan-500" },
   completed: { label: "Завершено", color: "bg-emerald-500/15 text-emerald-500" },
   rejected: { label: "Відхилено", color: "bg-rose-500/15 text-rose-500" },
   cancelled: { label: "Скасовано", color: "bg-zinc-500/15 text-zinc-400" },

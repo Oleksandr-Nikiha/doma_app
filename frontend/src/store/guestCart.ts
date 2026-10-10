@@ -150,6 +150,80 @@ export function addGuestItem(payload: AddGuestCartPayload): Cart {
   return cart;
 }
 
+export interface UpdateGuestCartPayload {
+  variant_id?: number;
+  variant_label?: string;
+  weight?: string | null;
+  price?: number;
+  qty?: number;
+  options?: OptionSelection[];
+  options_details?: CartItemOption[];
+  group_free_count?: Record<number, number>;
+}
+
+export function updateGuestItem(itemId: number, payload: UpdateGuestCartPayload): Cart {
+  const cart = getGuestCart();
+  const itemIdx = cart.items.findIndex((it) => it.id === itemId);
+  if (itemIdx === -1) return cart;
+
+  const current = cart.items[itemIdx];
+
+  // Якщо оновлюються лише кількість без опцій — використовуємо updateGuestItemQty
+  if (payload.options_details === undefined && payload.options === undefined) {
+    if (payload.qty !== undefined) {
+      return updateGuestItemQty(itemId, payload.qty);
+    }
+    return cart;
+  }
+
+  const newVariantLabel = payload.variant_label ?? current.variant_label;
+  const newWeight = payload.weight !== undefined ? payload.weight : current.weight;
+  const newPrice = payload.price ?? current.price;
+  const newQty = payload.qty ?? current.qty;
+  const newOptions = payload.options_details ?? current.options;
+  const groupFreeCount = payload.group_free_count ?? {};
+
+  const optionsKey = buildOptionsKey(
+    newOptions.map((o) => ({ group_id: o.group_id, variant_id: o.variant_id, qty: o.qty })),
+  );
+
+  // Перевіряємо, чи є інша позиція з таким же товаром і опціями для злиття
+  const otherIdx = cart.items.findIndex(
+    (it) =>
+      it.id !== itemId &&
+      it.product_id === current.product_id &&
+      it.variant_label === newVariantLabel &&
+      buildOptionsKey(
+        it.options.map((o) => ({ group_id: o.group_id, variant_id: o.variant_id, qty: o.qty })),
+      ) === optionsKey,
+  );
+
+  if (otherIdx >= 0) {
+    const other = cart.items[otherIdx];
+    const mergedQty = other.qty + newQty;
+    other.qty = mergedQty;
+    other.options = other.options.map((opt) => {
+      const match = newOptions.find((no) => no.group_id === opt.group_id && no.variant_id === opt.variant_id);
+      return {
+        ...opt,
+        qty: opt.qty + (match ? match.qty : 0),
+      };
+    });
+    other.subtotal = calculateItemSubtotal(other.price, mergedQty, other.options, groupFreeCount);
+    cart.items.splice(itemIdx, 1);
+  } else {
+    current.variant_label = newVariantLabel;
+    current.weight = newWeight;
+    current.price = newPrice;
+    current.qty = newQty;
+    current.options = newOptions;
+    current.subtotal = calculateItemSubtotal(newPrice, newQty, newOptions, groupFreeCount);
+  }
+
+  saveGuestCart(cart);
+  return cart;
+}
+
 export function updateGuestItemQty(itemId: number, newQty: number): Cart {
   const cart = getGuestCart();
   const item = cart.items.find((it) => it.id === itemId);

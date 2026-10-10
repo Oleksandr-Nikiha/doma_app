@@ -13,6 +13,12 @@ import "@/styles/index.css";
 // компоненти читають launch params одразу на маунті.
 initTelegramEnv();
 initSdk();
+try {
+  const tg = (window as unknown as { Telegram?: { WebApp?: { ready?: () => void; expand?: () => void } } })
+    ?.Telegram?.WebApp;
+  tg?.ready?.();
+  tg?.expand?.();
+} catch { /* ignore */ }
 
 const queryClient = new QueryClient({
   defaultOptions: {

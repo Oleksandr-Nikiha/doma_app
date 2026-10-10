@@ -3,15 +3,103 @@ import { isTMA, mockTelegramEnv } from "@telegram-apps/sdk-react";
 
 export function isTelegramWebApp(): boolean {
   if (typeof window === "undefined") return false;
-  if (window.location.pathname.startsWith("/admin")) {
-    return false;
-  }
   const tg = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp;
   if (tg && typeof tg.initData === "string" && tg.initData.trim().length > 0) {
     return true;
   }
   return isTMA();
 }
+
+export function getTelegramStartParam(): string | null {
+  if (typeof window === "undefined") return null;
+
+  // 1. Пряма перевірка в об'єкті window.Telegram.WebApp
+  try {
+    const tg = (
+      window as unknown as {
+        Telegram?: {
+          WebApp?: {
+            initDataUnsafe?: { start_param?: string };
+            initData?: string;
+          };
+        };
+      }
+    )?.Telegram?.WebApp;
+
+    if (tg?.initDataUnsafe?.start_param) {
+      return tg.initDataUnsafe.start_param;
+    }
+    if (tg?.initData) {
+      const initParams = new URLSearchParams(tg.initData);
+      const p =
+        initParams.get("start_param") ||
+        initParams.get("startapp") ||
+        initParams.get("tgWebAppStartParam");
+      if (p) return p;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const parseParamFromQuery = (query: string): string | null => {
+    if (!query) return null;
+    try {
+      const clean = query.replace(/^[#?]/, "");
+      const params = new URLSearchParams(clean);
+
+      // Прямі ключі
+      const direct =
+        params.get("start_param") ||
+        params.get("startapp") ||
+        params.get("tgWebAppStartParam");
+      if (direct) return direct;
+
+      // Прямий order_id
+      const orderId = params.get("order_id") || params.get("edit_order");
+      if (orderId) return `order_${orderId}`;
+
+      // Перевірка всередині tgWebAppData (Telegram десктоп/мобільний передає всередині нього)
+      const rawTgData = params.get("tgWebAppData");
+      if (rawTgData) {
+        const innerParams = new URLSearchParams(rawTgData);
+        const inner =
+          innerParams.get("start_param") ||
+          innerParams.get("startapp") ||
+          innerParams.get("tgWebAppStartParam");
+        if (inner) return inner;
+
+        const innerOrderId =
+          innerParams.get("order_id") || innerParams.get("edit_order");
+        if (innerOrderId) return `order_${innerOrderId}`;
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
+  };
+
+  // 2. Параметри в window.location.search (?startapp=... або ?tgWebAppData=...)
+  if (window.location.search) {
+    const res = parseParamFromQuery(window.location.search);
+    if (res) return res;
+  }
+
+  // 3. Параметри в window.location.hash (#tgWebAppData=... або #startapp=...)
+  if (window.location.hash) {
+    const hashStr = window.location.hash;
+    const res = parseParamFromQuery(hashStr);
+    if (res) return res;
+
+    // Обробка складних хеш-роутів на зразок "#/?order_id=3"
+    if (hashStr.includes("?")) {
+      const resQuery = parseParamFromQuery(hashStr.split("?")[1]);
+      if (resQuery) return resQuery;
+    }
+  }
+
+  return null;
+}
+
 
 export function initTelegramEnv(): void {
   // Блокуємо мокинг у продакшені на рівні збірки

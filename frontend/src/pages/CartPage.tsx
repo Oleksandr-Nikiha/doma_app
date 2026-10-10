@@ -10,6 +10,7 @@ import {
   useUpdateCartItem,
 } from "@/api/queries";
 import type { CartItem } from "@/api/types";
+import { CartItemEditModal } from "@/components/CartItemEditModal";
 import { EmptyState, ErrorBox, ScreenTitle, Spinner, formatPrice } from "@/components/ui";
 import { haptic, hapticNotify } from "@/telegram/sdk";
 
@@ -29,6 +30,7 @@ export function CartPage() {
   const clearCart = useClearCart();
 
   const [itemErrors, setItemErrors] = useState<Record<number, string>>({});
+  const [editingItem, setEditingItem] = useState<CartItem | null>(null);
 
   const clearItemError = (itemId: number) =>
     setItemErrors((prev) => {
@@ -152,20 +154,33 @@ export function CartPage() {
                 {group.items.map((item) => (
                   <div key={item.id} className="app-card rounded-2xl p-3.5 transition-all">
                     <div className="flex items-start justify-between gap-2">
-                      <div
-                        onClick={() => navigate(`/products/${item.product_id}`)}
-                        className="app-press min-w-0 cursor-pointer flex-1"
-                      >
-                        <p className="truncate font-semibold text-sm flex items-center gap-1.5 hover:underline">
-                          <span>{item.product_name}</span>
-                          <span className="text-xs opacity-35">↗</span>
-                        </p>
-                        <p className="mt-0.5 text-xs opacity-60">
-                          {item.variant_label}
-                          {item.weight && ` · ${item.weight}`}
-                        </p>
+                      <div className="min-w-0 flex-1">
+                        <div
+                          onClick={() => {
+                            haptic("light");
+                            setEditingItem(item);
+                          }}
+                          className="app-press cursor-pointer"
+                        >
+                          <p className="truncate font-semibold text-sm flex items-center gap-1.5 hover:underline">
+                            <span>{item.product_name}</span>
+                            <span className="text-xs opacity-40">✏️</span>
+                          </p>
+                          <p className="mt-0.5 text-xs opacity-60">
+                            {item.variant_label}
+                            {item.weight && ` · ${item.weight}`}
+                          </p>
+                        </div>
+
                         {item.options.length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
+                          <div
+                            onClick={() => {
+                              haptic("light");
+                              setEditingItem(item);
+                            }}
+                            className="app-press mt-1.5 flex flex-wrap gap-1 cursor-pointer"
+                            title="Змінити опції"
+                          >
                             {item.options.map((o) => (
                               <span
                                 key={o.variant_id}
@@ -177,6 +192,23 @@ export function CartPage() {
                             ))}
                           </div>
                         )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            haptic("light");
+                            setEditingItem(item);
+                          }}
+                          className="app-press inline-flex items-center gap-1.5 text-[11px] font-bold mt-2 py-1 px-2.5 rounded-lg border transition-all"
+                          style={{
+                            borderColor: "color-mix(in srgb, var(--tg-theme-button-color) 35%, transparent)",
+                            color: "var(--tg-theme-button-color)",
+                            background: "var(--app-tint)",
+                          }}
+                        >
+                          <span>✏️</span>
+                          <span>{item.options.length > 0 ? "Змінити соус / напій" : "Налаштувати"}</span>
+                        </button>
                       </div>
 
                       <button
@@ -255,11 +287,14 @@ export function CartPage() {
                       >
                         <p className="leading-relaxed">{itemErrors[item.id]}</p>
                         <button
-                          onClick={() => navigate(`/products/${item.product_id}`)}
+                          onClick={() => {
+                            haptic("light");
+                            setEditingItem(item);
+                          }}
                           className="app-press self-start font-semibold underline"
                           style={{ color: "var(--tg-theme-link-color)" }}
                         >
-                          Налаштувати страву в меню →
+                          Налаштувати соуси та опції тут →
                         </button>
                       </div>
                     )}
@@ -331,6 +366,14 @@ export function CartPage() {
           Очистити весь кошик
         </button>
       </div>
+
+      {/* Модальне вікно редагування позиції кошика */}
+      {editingItem && (
+        <CartItemEditModal
+          item={editingItem}
+          onClose={() => setEditingItem(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,9 +1,12 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.staticfiles import StaticFiles
 
 from src.config import get_settings
 from src.db.connection import connect_db, disconnect_db, get_pool
@@ -103,8 +106,17 @@ app.include_router(delivery_addresses.router)
 app.include_router(admin.router)
 app.include_router(admin_auth.router)
 
+# Роздача збережених фотографій страв
+_uploads_dir = os.environ.get("UPLOADS_DIR", "/directus/uploads")
+if not os.path.isdir(_uploads_dir):
+    _uploads_dir = str(Path(__file__).resolve().parent.parent.parent / "uploads")
+os.makedirs(_uploads_dir, exist_ok=True)
+app.mount("/api/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
+
+
 
 @app.get("/api/health")
 async def health():
     """Простий healthcheck — не звертається до БД, лише підтверджує, що процес живий."""
     return {"status": "ok"}
+

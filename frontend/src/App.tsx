@@ -1,5 +1,5 @@
-import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { lazy, Suspense, useEffect } from "react";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { ApiError } from "@/api/client";
 import { useMe } from "@/api/queries";
@@ -16,17 +16,77 @@ import { ProductsPage } from "@/pages/ProductsPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { RegisterPage } from "@/pages/RegisterPage";
 
-import { isTelegramWebApp } from "@/telegram/env";
+import { getTelegramStartParam, isTelegramWebApp } from "@/telegram/env";
 
 // Адмінка важить 150 КБ і потрібна лише персоналу — завантажуємо окремим чанком
 const AdminPage = lazy(() => import("@/pages/AdminPage").then((m) => ({ default: m.AdminPage })));
 const AdminLoginPage = lazy(() => import("@/pages/AdminLoginPage").then((m) => ({ default: m.AdminLoginPage })));
 
+function resolveTargetOrderId(): string | null {
+  const startParam = getTelegramStartParam();
+  if (startParam) {
+    const match = startParam.match(/^(?:order_?)?(\d+)$/i);
+    if (match) return match[1];
+  }
+  if (typeof window !== "undefined") {
+    if (window.location.search) {
+      const sp = new URLSearchParams(window.location.search);
+      const id = sp.get("order_id") || sp.get("edit_order");
+      if (id && /^\d+$/.test(id)) return id;
+    }
+    if (window.location.hash) {
+      const hp = new URLSearchParams(window.location.hash.replace(/^#\/?/, ""));
+      const id = hp.get("order_id") || hp.get("edit_order");
+      if (id && /^\d+$/.test(id)) return id;
+    }
+  }
+  return null;
+}
+
 export function App() {
+  const navigate = useNavigate();
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith("/admin");
   const { data: user, isPending, error, refetch } = useMe();
   const isTg = isTelegramWebApp();
+
+  const targetOrderId = resolveTargetOrderId();
+
+  useEffect(() => {
+    if (location.pathname.startsWith("/admin")) return;
+
+    const checkAndRedirect = () => {
+      const orderId = resolveTargetOrderId();
+      if (orderId && !location.pathname.startsWith("/admin")) {
+        navigate(`/admin?order_id=${orderId}`, { replace: true });
+        return true;
+      }
+      return false;
+    };
+
+    if (checkAndRedirect()) return;
+
+    // Перевіряємо повторно у разі асинхронного завантаження Telegram WebApp SDK
+    const interval = setInterval(() => {
+      if (checkAndRedirect()) {
+        clearInterval(interval);
+      }
+    }, 150);
+
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+    }, 2000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [location.pathname, navigate]);
+
+  // Якщо передано ID замовлення (через startapp або order_id), одразу ведемо в адмінку
+  if (targetOrderId && !isAdminRoute) {
+    return <Navigate to={`/admin?order_id=${targetOrderId}`} replace />;
+  }
 
   // Для адмін-панелі (/admin, /admin/login) не показуємо онбординг клієнта
   if (!isAdminRoute) {
