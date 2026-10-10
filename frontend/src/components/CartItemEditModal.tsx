@@ -9,63 +9,15 @@ interface CartItemEditModalProps {
   item: CartItem;
   onClose: () => void;
 }
-
-type Picks = Record<number, number>;
-
-function isFixed(group: OptionGroup) {
-  return group.min_select >= group.items.length && group.max_select <= group.items.length;
-}
-
-function unitsIn(picks: Picks) {
-  return Object.values(picks).reduce((sum, n) => sum + n, 0);
-}
-
-function effectiveLimits(group: OptionGroup, qty: number) {
-  return {
-    min: group.min_select * qty,
-    max: group.max_select * qty,
-    free: group.free_count * qty,
-  };
-}
-
-function groupCost(group: OptionGroup, picks: Picks, qty: number) {
-  const { free } = effectiveLimits(group, qty);
-  const units: number[] = [];
-  for (const item of group.items) {
-    const pickedQty = picks[item.variant_id] ?? 0;
-    for (let i = 0; i < pickedQty; i++) units.push(item.price_delta);
-  }
-  return units
-    .sort((a, b) => b - a)
-    .slice(free)
-    .reduce((sum, price) => sum + price, 0);
-}
-
-function selectionHint(group: OptionGroup, qty: number) {
-  if (isFixed(group)) return "усе включено";
-
-  const { min, max, free } = effectiveLimits(group, qty);
-
-  const need =
-    min === max
-      ? `оберіть ${min}`
-      : min === 0
-        ? `до ${max} (необовʼязково)`
-        : `${min}–${max}`;
-
-  if (free === 0 || free >= max) return need;
-  const freeLabel = free === 1 ? "перша безкоштовно" : `${free} безкоштовно`;
-  return `${need} · ${freeLabel}`;
-}
-
-function chipStyle(active: boolean): React.CSSProperties {
-  return {
-    background: active ? "var(--tg-theme-button-color)" : "var(--app-surface)",
-    color: active ? "var(--tg-theme-button-text-color)" : "inherit",
-    boxShadow: active ? "var(--app-shadow-sm)" : undefined,
-    border: active ? "1px solid transparent" : "1px solid var(--app-border)",
-  };
-}
+import {
+  chipStyle,
+  effectiveLimits,
+  groupCost,
+  isFixed,
+  selectionHint,
+  unitsIn,
+  type Picks,
+} from "@/utils/productOptions";
 
 export function CartItemEditModal({ item, onClose }: CartItemEditModalProps) {
   const { data: product, isPending, error, refetch } = useProduct(item.product_id);

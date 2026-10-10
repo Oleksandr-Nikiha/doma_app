@@ -41,13 +41,12 @@ def build_options_key(options) -> str:
     return "|".join(f"{o.group_id}:{o.variant_id}:{o.qty}" for o in ordered)
 
 
-async def _fetch_cart(pool: asyncpg.Pool, telegram_id: int) -> CartOut:
+async def _fetch_cart(
+    conn_or_pool: asyncpg.Connection | asyncpg.Pool, telegram_id: int
+) -> CartOut:
     """
     Витягує кошик разом із вибраними опціями.
-
-    Двома запитами, а не одним із jsonb_agg: безкоштовна квота вимагає
-    розгортання вибору по окремих одиницях, а це в SQL виходить громіздко
-    (generate_series усередині агрегату). У Python — три рядки.
+    Підтримує як asyncpg.Connection, так і asyncpg.Pool для уникнення зайвих циклів acquire/release.
     """
     items_query = """
         SELECT ci.id, p.id AS product_id, p.name AS product_name,
@@ -62,27 +61,38 @@ async def _fetch_cart(pool: asyncpg.Pool, telegram_id: int) -> CartOut:
         WHERE c.telegram_id = $1
         ORDER BY ci.id
     """
-    # free_count живе на парі (товар кошика, група), тож піднімаємось від
-    # позиції кошика через її варіант до товару й уже звідти до звʼязку.
     options_query = """
         SELECT cio.cart_item_id, cio.group_id, cio.variant_id, cio.qty,
                op.name, opv.label, ogi.price_delta, pog.free_count
         FROM cart_item_options cio
-        JOIN cart_items ci ON ci.id = cio.cart_item_id
-        JOIN carts c ON c.id = ci.cart_id
         JOIN option_group_items ogi
              ON ogi.group_id = cio.group_id AND ogi.variant_id = cio.variant_id
         JOIN product_variants opv ON opv.id = cio.variant_id
         JOIN products op ON op.id = opv.product_id
+        JOIN cart_items ci ON ci.id = cio.cart_item_id
         JOIN product_variants cv ON cv.id = ci.variant_id
         JOIN product_option_groups pog
              ON pog.product_id = cv.product_id AND pog.group_id = cio.group_id
-        WHERE c.telegram_id = $1
+        WHERE cio.cart_item_id = ANY($1::int[])
         ORDER BY cio.cart_item_id, pog.sort_order, ogi.sort_order
     """
-    async with pool.acquire() as conn:
+
+    async def _fetch_data(conn: asyncpg.Connection):
         item_rows = await conn.fetch(items_query, telegram_id)
-        option_rows = await conn.fetch(options_query, telegram_id)
+        if not item_rows:
+            return item_rows, []
+        cart_item_ids = [r["id"] for r in item_rows]
+        option_rows = await conn.fetch(options_query, cart_item_ids)
+        return item_rows, option_rows
+
+    if hasattr(conn_or_pool, "acquire"):
+        async with conn_or_pool.acquire() as conn:
+            item_rows, option_rows = await _fetch_data(conn)
+    else:
+        item_rows, option_rows = await _fetch_data(conn_or_pool)
+
+    if not item_rows:
+        return CartOut(items=[], total=0.0)
 
     # Опції за позицією кошика, і всередині — за групою: квота діє на групу
     by_item: dict[int, dict[int, list[asyncpg.Record]]] = {}
@@ -156,8 +166,9 @@ async def add_item_to_cart(
             raise HTTPException(status_code=400, detail="Дублювання опцій у запиті")
         seen_opts.add(pair)
 
-    async with pool.acquire() as conn, conn.transaction():
-        variant = await conn.fetchrow(
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            variant = await conn.fetchrow(
             """
             SELECT p.id as product_id, p.is_available as p_avail, pv.is_available as pv_avail 
             FROM product_variants pv
@@ -257,20 +268,15 @@ async def add_item_to_cart(
                 )
         else:
             if sorted_opts:
-                for o in sorted_opts:
-                    await conn.execute(
-                        """
-                        UPDATE cart_item_options
-                        SET qty = qty + $1
-                        WHERE cart_item_id = $2 AND group_id = $3 AND variant_id = $4
-                        """,
-                        o.qty,
-                        cart_item_id,
-                        o.group_id,
-                        o.variant_id,
-                    )
-
-    return await _fetch_cart(pool, user["telegram_id"])
+                await conn.executemany(
+                    """
+                    UPDATE cart_item_options
+                    SET qty = qty + $1
+                    WHERE cart_item_id = $2 AND group_id = $3 AND variant_id = $4
+                    """,
+                    [(o.qty, cart_item_id, o.group_id, o.variant_id) for o in sorted_opts],
+                )
+        return await _fetch_cart(conn, user["telegram_id"])
 
 
 @router.patch("/items/{item_id}", response_model=CartOut)
@@ -292,8 +298,9 @@ async def update_cart_item(
     Якщо передано лише payload.qty (без options):
     - Зберігається пропорційне масштабування раніше обраних опцій.
     """
-    async with pool.acquire() as conn, conn.transaction():
-        item = await conn.fetchrow(
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            item = await conn.fetchrow(
             """
             SELECT ci.id, ci.cart_id, ci.qty, ci.variant_id, pv.product_id
             FROM cart_items ci
@@ -507,19 +514,17 @@ async def update_cart_item(
                                 break
 
                         if valid:
-                            # Оновлюємо кількості опцій у БД
-                            for g_id, v_id, s_qty in scaled_options:
-                                await conn.execute(
-                                    """
-                                    UPDATE cart_item_options 
-                                    SET qty = $1 
-                                    WHERE cart_item_id = $2 AND group_id = $3 AND variant_id = $4
-                                    """,
-                                    s_qty,
-                                    item_id,
-                                    g_id,
-                                    v_id,
-                                    )
+                            await conn.executemany(
+                                """
+                                UPDATE cart_item_options 
+                                SET qty = $1 
+                                WHERE cart_item_id = $2 AND group_id = $3 AND variant_id = $4
+                                """,
+                                [
+                                    (s_qty, item_id, g_id, v_id)
+                                    for g_id, v_id, s_qty in scaled_options
+                                ],
+                            )
 
                             # Перераховуємо options_key
                             ordered = sorted(scaled_options, key=lambda o: (o[0], o[1]))
@@ -562,8 +567,7 @@ async def update_cart_item(
                         "UPDATE cart_items SET qty = $1 WHERE id = $2", new_qty, item_id
                     )
 
-
-    return await _fetch_cart(pool, user["telegram_id"])
+        return await _fetch_cart(conn, user["telegram_id"])
 
 
 @router.delete("/items/{item_id}", response_model=CartOut)
@@ -586,7 +590,7 @@ async def delete_cart_item(
         if result == "DELETE 0":
             raise HTTPException(status_code=404, detail="Товар не знайдено в кошику")
 
-    return await _fetch_cart(pool, user["telegram_id"])
+        return await _fetch_cart(conn, user["telegram_id"])
 
 
 @router.delete("", response_model=CartOut)
@@ -604,5 +608,4 @@ async def clear_cart(user=Depends(get_current_user), pool: asyncpg.Pool = Depend
     """
     async with pool.acquire() as conn:
         await conn.execute(clear_query, user["telegram_id"])
-
-    return await _fetch_cart(pool, user["telegram_id"])
+        return await _fetch_cart(conn, user["telegram_id"])

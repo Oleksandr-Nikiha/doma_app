@@ -86,6 +86,7 @@ async def auto_invalidate_catalog_cache_middleware(request: Request, call_next):
             for prefix in (
                 "/api/admin/categories",
                 "/api/admin/products",
+                "/api/admin/variants",
                 "/api/admin/option-groups",
                 "/api/admin/locations",
             )

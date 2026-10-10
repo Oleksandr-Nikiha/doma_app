@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useAdminMe, useMe, useOrders, useUpdateProfile } from "@/api/queries";
@@ -48,14 +48,16 @@ export function ProfilePage() {
 
   // Оновлюємо внутрішній стан, якщо дані користувача змінилися з сервера
   const [loadedUserId, setLoadedUserId] = useState<number | null>(null);
-  if (user && user.id !== loadedUserId) {
-    setLoadedUserId(user.id);
-    setFirstName(user.first_name || user.full_name?.split(" ")[0] || "");
-    setLastName(user.last_name || (user.full_name && user.full_name.split(" ").slice(1).join(" ")) || "");
-    setPhone(user.phone || "");
-    setDeliveryAddress(user.delivery_address || "");
-    setAdditionalAddress(user.additional_address || "");
-  }
+  useEffect(() => {
+    if (user && user.id !== loadedUserId) {
+      setLoadedUserId(user.id);
+      setFirstName(user.first_name || user.full_name?.split(" ")[0] || "");
+      setLastName(user.last_name || (user.full_name && user.full_name.split(" ").slice(1).join(" ")) || "");
+      setPhone(user.phone || "");
+      setDeliveryAddress(user.delivery_address || "");
+      setAdditionalAddress(user.additional_address || "");
+    }
+  }, [user, loadedUserId]);
 
   if (isPending) return <Spinner />;
   if (error) return <ErrorBox message={error.message} onRetry={() => void refetch()} />;

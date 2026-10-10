@@ -394,31 +394,30 @@ async def check_manager_permission(
             user_id,
         )
 
-    if not manager:
-        return (
-            False,
-            (
-                "⛔ У вас немає прав для керування замовленнями.\n"
-                f"Користувач ID: {user_id} не зареєстрований у персоналі закладу."
-            ),
-        )
+        if not manager:
+            return (
+                False,
+                (
+                    "⛔ У вас немає прав для керування замовленнями.\n"
+                    f"Користувач ID: {user_id} не зареєстрований у персоналі закладу."
+                ),
+            )
 
-    # Адміністратор має повний доступ до всіх закладів
-    if manager["role"] == "admin":
-        return True, None
+        # Адміністратор має повний доступ до всіх закладів
+        if manager["role"] == "admin":
+            return True, None
 
-    # Менеджер, закріплений за конкретним закладом
-    if manager["role"] == "manager" and manager["location_id"] is not None:
-        async with pool.acquire() as conn:
+        # Менеджер, закріплений за конкретним закладом
+        if manager["role"] == "manager" and manager["location_id"] is not None:
             loc_match = await conn.fetchval(
                 "SELECT 1 FROM order_groups WHERE order_id = $1 AND location_id = $2 LIMIT 1",
                 order_id,
                 manager["location_id"],
             )
-        if not loc_match:
-            return False, "⛔ Ви можете керувати замовленнями тільки свого закладу"
+            if not loc_match:
+                return False, "⛔ Ви можете керувати замовленнями тільки свого закладу"
 
-    return True, None
+        return True, None
 
 
 def update_admin_message_text(

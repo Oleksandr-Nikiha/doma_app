@@ -21,6 +21,10 @@
 | **UX-4** | `P3` | Frontend / UX | Редизайн підсвітки обов'язкових груп опцій у картці товару | ✅ Готово |
 | **DB-1** | `P1` | База даних | Автоматизація застосування міграцій БД (Migration Runner + таблиця `schema_migrations`) | ✅ Готово |
 | **DB-2** | `P2` | База даних | Складені індекси для швидкої фільтрації та сортування каталогу | ✅ Готово |
+| **DB-3** | `P2` | База даних | Композитний індекс для прискорення історії замовлень клієнта (0010) | ✅ Готово |
+| **PERF-4** | `P1` | Продуктивність | Оптимізація роботи з пулом БД (single connection) та пакетні оновлення опцій кошика (`executemany`) | ✅ Готово |
+| **SEC-4** | `P1` | Безпека / DevOps | Запуск Docker-контейнерів від непривілейованого `appuser` та Docker Healthcheck | ✅ Готово |
+| **ARCH-1** | `P2` | Архітектура | Модуляризація адмін-панелі (backend `admin/`, frontend `components/admin/`) та спільний модуль опцій | ✅ Готово |
 | **QA-1** | `P4` | Тестування | Додавання автотестів (pytest + httpx) для кошика, розрахунку квот і замовлень | ⏸️ Відкладено (до фіналу) |
 
 ---
@@ -117,21 +121,62 @@
 * **Проблема:** Наразі всі міграції (`0001` ... `0004`) потрібно застосовувати вручну по черзі через `psql`. Немає реєстру вже виконаних міграцій, що небезпечно при розгортанні на новому сервері або в CI.
 * **Рішення:** Створити таблицю `schema_migrations` та автораннер, який при запуску застосунку перевіряє каталог `db/migrations/` і автоматично транзакційно накочує лише нові міграції.
 
-#### [ ] DB-2: Складені індекси для каталогу
+#### [x] DB-2: Складені індекси для каталогу
 
-* **Файли:** `db/migrations/0005_catalog_indexes.sql`
+* **Файли:** `db/migrations/0001_core_schema.sql`
 * **Проблема:** Запити категорій та списку товарів виконують сортування та фільтрацію за декількома колонками (`is_visible`, `sort_order`, `is_available`, `category_id`).
-* **Рішення:** Додати складені індекси:
-
+* **Рішення:** Складені індекси створено безпосередньо в базовій схемі:
   ```sql
   CREATE INDEX IF NOT EXISTS idx_categories_listing ON categories(location_id, is_visible, sort_order);
   CREATE INDEX IF NOT EXISTS idx_products_listing ON products(category_id, is_available, sort_order);
-  CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id, is_available, sort_order);
+  CREATE INDEX IF NOT EXISTS idx_variants_product_sort ON product_variants(product_id, is_available, sort_order);
+  ```
+
+#### [x] DB-3: Композитний індекс для історії замовлень клієнта
+
+* **Файли:** `db/migrations/0010_orders_user_history_index.sql`
+* **Проблема:** Запит списку минулих замовлень користувача (`GET /api/orders`) фільтрує за `telegram_id` та сортує за спаданням ідентифікатора (`id DESC`), що без відповідного індексу призводило до сортування в пам'яті (Sort operation).
+* **Рішення:** Створено композитний індекс:
+  ```sql
+  CREATE INDEX IF NOT EXISTS idx_orders_telegram_id_id_desc ON orders(telegram_id, id DESC);
   ```
 
 ---
 
-### 5. Тестування та якість (Quality Assurance)
+### 5. Архітектура, Безпека та DevOps
+
+#### [x] PERF-4: Оптимізація роботи з пулом з'єднань БД та пакетні операції
+
+* **Файли:** `api/src/routers/cart.py`, `api/src/routers/catalog.py`, `api/src/routers/orders.py`
+* **Проблема:** У функціях додавання/оновлення позицій кошика відкривалися нові транзакції, а подальший виклик `_fetch_cart` робив додатковий `pool.acquire()`. Також оновлення кількостей опцій виконувалося циклом послідовних запитів `UPDATE`.
+* **Рішення:**
+  1. `_fetch_cart` тепер приймає `conn_or_pool` і перевикористовує відкрите з'єднання `conn`, заощаджуючи ресурси пулу.
+  2. Запит опцій кошика фільтрується через `WHERE cio.cart_item_id = ANY($1::int[])`.
+  3. Оновлення кількостей опцій переведено на пакетний `conn.executemany`.
+  4. У `get_product` вибірка товару, варіантів і опцій об'єднана в одне захоплення з'єднання з пулу.
+
+#### [x] SEC-4: Безпека Docker-контейнерів та Healthcheck
+
+* **Файли:** `api/Dockerfile`, `bot/Dockerfile`, `docker-compose.yml`
+* **Проблема:** Контейнери API та бота запускалися від імені `root`. У compose-файлі сервіси `bot` та `nginx` запускалися паралельно з API без перевірки його фактичної готовності відповідати на HTTP-запити.
+* **Рішення:**
+  1. Створено системного користувача `appuser` (non-root) для виконання процесів API та бота.
+  2. Налаштовано права власності на теки медіа `/directus/uploads` та `/app/uploads`.
+  3. Додано команду healthcheck (`curl -f http://localhost:8000/api/health`) у сервіс `api`.
+  4. Налаштовано `depends_on: api: condition: service_healthy` для `bot` та `nginx`.
+
+#### [x] ARCH-1: Модуляризація адмін-панелі та уніфікація опцій страв
+
+* **Файли:** `api/src/routers/admin/`, `frontend/src/components/admin/`, `frontend/src/utils/productOptions.ts`, `frontend/src/pages/AdminPage.tsx`
+* **Проблема:** Файли `api/src/routers/admin.py` (>2900 рядків) та `frontend/src/pages/AdminPage.tsx` (>5500 рядків) перетворилися на надвеликі складнопідтримувані моноліти. Крім того, математика та підказки опцій дублювалися між `ProductPage.tsx` та `CartItemEditModal.tsx`.
+* **Рішення:**
+  1. Бекенд адмінки розділено на окремі доменні роутери (`me.py`, `managers.py`, `categories.py`, `products.py`, `option_groups.py`, `locations_delivery.py`, `users.py`, `orders.py`, `delivery_addresses.py`, `analytics.py`, `broadcasts.py`).
+  2. Фронтенд адмінки розділено на окремі таби (`CatalogTab`, `OrdersTab`, `UsersTab`, `ManagersTab`, `DeliverySettingsTab`, `OptionGroupsTab`, `StopListTab`, `AnalyticsTab`, `BroadcastsTab`) та модалки в `components/admin/modals/`.
+  3. Спільну логіку розрахунку квот і цін опцій винесено в `@/utils/productOptions.ts`.
+
+---
+
+### 6. Тестування та якість (Quality Assurance)
 
 #### [ ] QA-1: Автотести для бекенду (pytest + httpx)
 

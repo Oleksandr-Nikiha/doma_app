@@ -44,6 +44,7 @@ docker compose -f docker-compose.dev.yml config -q    # валідність com
 docker compose -f docker-compose.yml config -q
 docker run --rm -v "$PWD/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
   nginx:1.27-alpine nginx -t                          # синтаксис nginx
+cd frontend && npm ci && npx tsc --noEmit && npx vite build # типізація та збірка фронтенду
 ```
 
 Ендпоінти зручно перевіряти наскрізно — згенеруйте підписаний `initData`

@@ -122,50 +122,51 @@ async def get_product(
         if cached is not None:
             return ProductDetailOut(**cached)
 
-    product_row = await pool.fetchrow(
-        """
-        SELECT p.id, p.name, p.description, p.image_url 
-        FROM products p
-        JOIN categories c ON c.id = p.category_id
-        LEFT JOIN categories parent ON parent.id = c.parent_id
-        WHERE p.id = $1 
-          AND p.is_available = true 
-          AND c.is_visible = true
-          AND (parent.id IS NULL OR parent.is_visible = true)
-        """,
-        product_id,
-    )
-    if product_row is None:
-        raise HTTPException(status_code=404, detail="Товар не знайдено або він недоступний")
+    async with pool.acquire() as conn:
+        product_row = await conn.fetchrow(
+            """
+            SELECT p.id, p.name, p.description, p.image_url 
+            FROM products p
+            JOIN categories c ON c.id = p.category_id
+            LEFT JOIN categories parent ON parent.id = c.parent_id
+            WHERE p.id = $1 
+              AND p.is_available = true 
+              AND c.is_visible = true
+              AND (parent.id IS NULL OR parent.is_visible = true)
+            """,
+            product_id,
+        )
+        if product_row is None:
+            raise HTTPException(status_code=404, detail="Товар не знайдено або він недоступний")
 
-    variant_rows = await pool.fetch(
-        """
-        SELECT id, label, weight, price 
-        FROM product_variants 
-        WHERE product_id = $1 AND is_available = true
-        ORDER BY sort_order
-        """,
-        product_id,
-    )
+        variant_rows = await conn.fetch(
+            """
+            SELECT id, label, weight, price 
+            FROM product_variants 
+            WHERE product_id = $1 AND is_available = true
+            ORDER BY sort_order
+            """,
+            product_id,
+        )
 
-    option_rows = await pool.fetch(
-        """
-        SELECT g.id AS group_id, g.name AS group_name, pog.min_select, pog.max_select,
-               pog.free_count,
-               ogi.variant_id, ogi.price_delta, op.name
-        FROM product_option_groups pog
-        JOIN option_groups g ON g.id = pog.group_id
-        JOIN option_group_items ogi ON ogi.group_id = g.id
-        JOIN product_variants v ON v.id = ogi.variant_id
-        JOIN products op ON op.id = v.product_id
-        WHERE pog.product_id = $1
-          AND ogi.is_available = true 
-          AND v.is_available = true
-          AND op.is_available = true
-        ORDER BY pog.sort_order, ogi.sort_order
-        """,
-        product_id,
-    )
+        option_rows = await conn.fetch(
+            """
+            SELECT g.id AS group_id, g.name AS group_name, pog.min_select, pog.max_select,
+                   pog.free_count,
+                   ogi.variant_id, ogi.price_delta, op.name
+            FROM product_option_groups pog
+            JOIN option_groups g ON g.id = pog.group_id
+            JOIN option_group_items ogi ON ogi.group_id = g.id
+            JOIN product_variants v ON v.id = ogi.variant_id
+            JOIN products op ON op.id = v.product_id
+            WHERE pog.product_id = $1
+              AND ogi.is_available = true 
+              AND v.is_available = true
+              AND op.is_available = true
+            ORDER BY pog.sort_order, ogi.sort_order
+            """,
+            product_id,
+        )
 
     groups_dict = {}
     for row in option_rows:

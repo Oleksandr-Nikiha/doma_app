@@ -25,6 +25,13 @@ def _get_bot_username(bot_token: str) -> str:
     if _cached_bot_username:
         return _cached_bot_username
     try:
+        settings = get_settings()
+        if settings.bot_username and settings.bot_username != "domapizza_bot":
+            _cached_bot_username = settings.bot_username
+            return _cached_bot_username
+    except Exception:
+        pass
+    try:
         url = f"https://api.telegram.org/bot{bot_token}/getMe"
         req = urllib.request.Request(url, headers={"User-Agent": "FastAPI"})
         with urllib.request.urlopen(req, timeout=5) as resp:

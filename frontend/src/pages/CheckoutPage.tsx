@@ -59,26 +59,29 @@ export function CheckoutPage() {
   const [scheduledTime, setScheduledTime] = useState<string>("");
 
   // Розрахунок дат та часу для замовлення
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+  const { todayStr, tomorrowStr, min30TimeStr } = useMemo(() => {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tom = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+    const min30Date = new Date(now.getTime() + 30 * 60 * 1000);
+    const min30 = `${String(min30Date.getHours()).padStart(2, "0")}:${String(min30Date.getMinutes()).padStart(2, "0")}`;
+    return { todayStr: today, tomorrowStr: tom, min30TimeStr: min30 };
+  }, []);
 
   const [scheduledDate, setScheduledDate] = useState<string>(todayStr);
-
-  const min30Date = new Date(now.getTime() + 30 * 60 * 1000);
-  const min30TimeStr = `${String(min30Date.getHours()).padStart(2, "0")}:${String(min30Date.getMinutes()).padStart(2, "0")}`;
 
   const locStartTime = targetLocation?.delivery_start_time || "10:30";
   const locEndTime = targetLocation?.delivery_end_time || "21:30";
 
-  const effectiveMinTime =
-    scheduledDate === todayStr
+  const effectiveMinTime = useMemo(() => {
+    return scheduledDate === todayStr
       ? min30TimeStr > locStartTime
         ? min30TimeStr
         : locStartTime
       : locStartTime;
+  }, [scheduledDate, todayStr, min30TimeStr, locStartTime]);
 
   const isTodayClosedForScheduled = scheduledDate === todayStr && effectiveMinTime > locEndTime;
 

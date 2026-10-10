@@ -10,7 +10,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import asyncpg
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
 from src.auth.deps import get_current_user
 from src.config import get_settings
@@ -763,6 +763,7 @@ async def create_order(
 
 @router.get("", response_model=list[OrderOut])
 async def get_user_orders(
+    limit: int = Query(50, ge=1, le=100),
     user=Depends(get_current_user),
     pool: asyncpg.Pool = Depends(get_pool),
 ):
@@ -776,43 +777,43 @@ async def get_user_orders(
         FROM orders
         WHERE telegram_id = $1
         ORDER BY id DESC
+        LIMIT $2
     """
     groups_sql = """
         SELECT og.id, og.order_id, og.location_id, loc.name AS location_name, og.status, og.subtotal
         FROM order_groups og
         JOIN locations loc ON loc.id = og.location_id
-        JOIN orders o ON o.id = og.order_id
-        WHERE o.telegram_id = $1
+        WHERE og.order_id = ANY($1::int[])
         ORDER BY og.id
     """
     items_sql = """
         SELECT oi.id, oi.order_group_id, oi.variant_id, oi.product_name,
                oi.variant_label, oi.unit_price, oi.qty, oi.subtotal
         FROM order_items oi
-        JOIN order_groups og ON og.id = oi.order_group_id
-        JOIN orders o ON o.id = og.order_id
-        WHERE o.telegram_id = $1
+        WHERE oi.order_group_id = ANY($1::int[])
         ORDER BY oi.id
     """
     options_sql = """
         SELECT oio.id, oio.order_item_id, oio.option_group_name,
                oio.option_name, oio.price_delta, oio.qty
         FROM order_item_options oio
-        JOIN order_items oi ON oi.id = oio.order_item_id
-        JOIN order_groups og ON og.id = oi.order_group_id
-        JOIN orders o ON o.id = og.order_id
-        WHERE o.telegram_id = $1
+        WHERE oio.order_item_id = ANY($1::int[])
         ORDER BY oio.id
     """
 
     async with pool.acquire() as conn:
-        order_rows = await conn.fetch(orders_sql, telegram_id)
+        order_rows = await conn.fetch(orders_sql, telegram_id, limit)
         if not order_rows:
             return []
 
-        group_rows = await conn.fetch(groups_sql, telegram_id)
-        item_rows = await conn.fetch(items_sql, telegram_id)
-        option_rows = await conn.fetch(options_sql, telegram_id)
+        order_ids = [r["id"] for r in order_rows]
+        group_rows = await conn.fetch(groups_sql, order_ids)
+
+        group_ids = [g["id"] for g in group_rows]
+        item_rows = await conn.fetch(items_sql, group_ids) if group_ids else []
+
+        item_ids = [i["id"] for i in item_rows]
+        option_rows = await conn.fetch(options_sql, item_ids) if item_ids else []
 
     opts_by_item: dict[int, list[OrderItemOptionOut]] = {}
     for r in option_rows:
@@ -882,103 +883,11 @@ async def get_order(
 ):
     """Отримує деталі конкретного замовлення поточного користувача."""
     telegram_id = user["telegram_id"]
-
-    order_sql = """
-        SELECT id, telegram_id, status, fulfillment_type, delivery_address,
-               contact_name, contact_phone, payment_method, scheduled_time,
-               comment, total_price, created_at
-        FROM orders
-        WHERE id = $1 AND telegram_id = $2
-    """
-    groups_sql = """
-        SELECT og.id, og.location_id, loc.name AS location_name, og.status, og.subtotal
-        FROM order_groups og
-        JOIN locations loc ON loc.id = og.location_id
-        WHERE og.order_id = $1
-        ORDER BY og.id
-    """
-    items_sql = """
-        SELECT oi.id, oi.order_group_id, oi.variant_id, oi.product_name,
-               oi.variant_label, oi.unit_price, oi.qty, oi.subtotal
-        FROM order_items oi
-        JOIN order_groups og ON og.id = oi.order_group_id
-        WHERE og.order_id = $1
-        ORDER BY oi.id
-    """
-    options_sql = """
-        SELECT oio.id, oio.order_item_id, oio.option_group_name,
-               oio.option_name, oio.price_delta, oio.qty
-        FROM order_item_options oio
-        JOIN order_items oi ON oi.id = oio.order_item_id
-        JOIN order_groups og ON og.id = oi.order_group_id
-        WHERE og.order_id = $1
-        ORDER BY oio.id
-    """
-
     async with pool.acquire() as conn:
-        order_row = await conn.fetchrow(order_sql, order_id, telegram_id)
-        if not order_row:
+        order = await _fetch_order_by_id(conn, order_id, telegram_id)
+        if not order:
             raise HTTPException(status_code=404, detail="Замовлення не знайдено")
-
-        group_rows = await conn.fetch(groups_sql, order_id)
-        item_rows = await conn.fetch(items_sql, order_id)
-        option_rows = await conn.fetch(options_sql, order_id)
-
-    opts_by_item: dict[int, list[OrderItemOptionOut]] = {}
-    for r in option_rows:
-        opts_by_item.setdefault(r["order_item_id"], []).append(
-            OrderItemOptionOut(
-                id=r["id"],
-                option_group_name=r["option_group_name"],
-                option_name=r["option_name"],
-                price_delta=float(r["price_delta"]),
-                qty=r["qty"],
-            )
-        )
-
-    items_by_group: dict[int, list[OrderItemOut]] = {}
-    for r in item_rows:
-        items_by_group.setdefault(r["order_group_id"], []).append(
-            OrderItemOut(
-                id=r["id"],
-                variant_id=r["variant_id"],
-                product_name=r["product_name"],
-                variant_label=r["variant_label"],
-                unit_price=float(r["unit_price"]),
-                qty=r["qty"],
-                subtotal=float(r["subtotal"]),
-                options=opts_by_item.get(r["id"], []),
-            )
-        )
-
-    groups: list[OrderGroupOut] = []
-    for g in group_rows:
-        groups.append(
-            OrderGroupOut(
-                id=g["id"],
-                location_id=g["location_id"],
-                location_name=g["location_name"],
-                status=g["status"],
-                subtotal=float(g["subtotal"]),
-                items=items_by_group.get(g["id"], []),
-            )
-        )
-
-    return OrderOut(
-        id=order_row["id"],
-        telegram_id=order_row["telegram_id"],
-        status=order_row["status"],
-        fulfillment_type=order_row["fulfillment_type"],
-        delivery_address=order_row["delivery_address"],
-        contact_name=order_row["contact_name"],
-        contact_phone=order_row["contact_phone"],
-        payment_method=order_row["payment_method"],
-        scheduled_time=order_row["scheduled_time"],
-        comment=order_row["comment"],
-        total_price=float(order_row["total_price"]),
-        created_at=order_row["created_at"],
-        groups=groups,
-    )
+        return order
 
 
 @router.post("/{order_id}/cancel", response_model=OrderOut)
@@ -992,33 +901,38 @@ async def cancel_order(
     telegram_id = user["telegram_id"]
     settings = get_settings()
 
-    async with pool.acquire() as conn, conn.transaction():
-        order_row = await conn.fetchrow(
-            """
-            SELECT id, telegram_id, status, contact_name, contact_phone, total_price
-            FROM orders
-            WHERE id = $1 AND telegram_id = $2
-            FOR UPDATE
-            """,
-            order_id,
-            telegram_id,
-        )
-        if not order_row:
-            raise HTTPException(status_code=404, detail="Замовлення не знайдено")
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            order_row = await conn.fetchrow(
+                """
+                SELECT id, telegram_id, status, contact_name, contact_phone, total_price
+                FROM orders
+                WHERE id = $1 AND telegram_id = $2
+                FOR UPDATE
+                """,
+                order_id,
+                telegram_id,
+            )
+            if not order_row:
+                raise HTTPException(status_code=404, detail="Замовлення не знайдено")
 
-        if order_row["status"] != "pending_moderation":
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Неможливо скасувати замовлення, оскільки воно вже обробляється або завершено. "
-                    "Для скасування зателефонуйте, будь ласка, до закладу."
-                ),
+            if order_row["status"] != "pending_moderation":
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Неможливо скасувати замовлення, оскільки воно вже обробляється "
+                        "або завершено. Для скасування зателефонуйте, будь ласка, до закладу."
+                    ),
+                )
+
+            await conn.execute(
+                "UPDATE orders SET status = 'cancelled' WHERE id = $1",
+                order_id,
             )
 
-        await conn.execute(
-            "UPDATE orders SET status = 'cancelled' WHERE id = $1",
-            order_id,
-        )
+        updated = await _fetch_order_by_id(conn, order_id, telegram_id)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Замовлення не знайдено")
 
     # Сповіщаємо менеджера у чат про скасування замовлення клієнтом
     if settings.manager_chat_id and settings.bot_token:
@@ -1040,11 +954,7 @@ async def cancel_order(
             },
         )
 
-    async with pool.acquire() as conn:
-        updated = await _fetch_order_by_id(conn, order_id, telegram_id)
-        if not updated:
-            raise HTTPException(status_code=404, detail="Замовлення не знайдено")
-        return updated
+    return updated
 
 
 @router.post("/{order_id}/repeat", response_model=RepeatOrderOut)
