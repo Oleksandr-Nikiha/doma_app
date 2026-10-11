@@ -16,7 +16,12 @@ import { ProductsPage } from "@/pages/ProductsPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { RegisterPage } from "@/pages/RegisterPage";
 
-import { getTelegramStartParam, isTelegramWebApp } from "@/telegram/env";
+import {
+  getTelegramStartParam,
+  isStartParamConsumed,
+  markStartParamConsumed,
+  isTelegramWebApp,
+} from "@/telegram/env";
 
 // Адмінка важить 150 КБ і потрібна лише персоналу — завантажуємо окремим чанком
 const AdminPage = lazy(() => import("@/pages/AdminPage").then((m) => ({ default: m.AdminPage })));
@@ -24,7 +29,7 @@ const AdminLoginPage = lazy(() => import("@/pages/AdminLoginPage").then((m) => (
 
 function resolveTargetOrderId(): string | null {
   const startParam = getTelegramStartParam();
-  if (startParam) {
+  if (startParam && !isStartParamConsumed(startParam)) {
     const match = startParam.match(/^(?:order_?)?(\d+)$/i);
     if (match) return match[1];
   }
@@ -53,11 +58,16 @@ export function App() {
   const targetOrderId = resolveTargetOrderId();
 
   useEffect(() => {
-    if (location.pathname.startsWith("/admin")) return;
+    if (location.pathname.startsWith("/admin")) {
+      const sp = getTelegramStartParam();
+      if (sp) markStartParamConsumed(sp);
+      return;
+    }
 
     const checkAndRedirect = () => {
       const orderId = resolveTargetOrderId();
       if (orderId && !location.pathname.startsWith("/admin")) {
+        markStartParamConsumed();
         navigate(`/admin?order_id=${orderId}`, { replace: true });
         return true;
       }
@@ -85,7 +95,14 @@ export function App() {
 
   // Якщо передано ID замовлення (через startapp або order_id), одразу ведемо в адмінку
   if (targetOrderId && !isAdminRoute) {
+    markStartParamConsumed();
     return <Navigate to={`/admin?order_id=${targetOrderId}`} replace />;
+  }
+
+  // Тільки Admin панель доступна з браузерів десктопу / поза Telegram.
+  // Меню та клієнтська частина доступні виключно з додатку Telegram або Telegram Web фрейму.
+  if (!isTg && !isAdminRoute) {
+    return <Navigate to="/admin" replace />;
   }
 
   // Для адмін-панелі (/admin, /admin/login) не показуємо онбординг клієнта
@@ -145,7 +162,7 @@ export function App() {
       <Route path="/products/:productId" element={<ProductPage />} />
       <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/orders/:orderId/success" element={<OrderSuccessPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to={isTg ? "/" : "/admin"} replace />} />
     </Routes>
   );
 }

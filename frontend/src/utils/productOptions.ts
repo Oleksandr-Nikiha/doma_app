@@ -73,3 +73,97 @@ export function chipStyle(active: boolean): React.CSSProperties {
   };
 }
 
+export interface RawOptionItem {
+  option_group_name: string;
+  option_name: string;
+  price_delta: number;
+  qty: number;
+}
+
+export interface OptionGroupRule {
+  name?: string;
+  group_name?: string;
+  free_count?: number;
+}
+
+export interface OptionCostItemBreakdown {
+  option_group_name: string;
+  option_name: string;
+  price_delta: number;
+  qty: number;
+  freeQty: number;
+  paidQty: number;
+  effectiveCost: number;
+}
+
+export interface ItemOptionsCalculation {
+  totalOptionsCost: number;
+  itemSubtotal: number;
+  breakdown: OptionCostItemBreakdown[];
+}
+
+function roundPrice(val: number): number {
+  return Math.round((val + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Розрахунок вартості додатків/опцій для позиції замовлення з урахуванням безкоштовної квоти (free_count).
+ * Дзеркалить логіку бекенду (cart.py options_cost).
+ */
+export function calculateItemOptionsWithFreeQuota(
+  options: RawOptionItem[],
+  rules: OptionGroupRule[],
+  itemUnitPrice: number,
+  itemQty: number
+): ItemOptionsCalculation {
+  const groupsMap = new Map<string, RawOptionItem[]>();
+  for (const opt of options) {
+    const gName = opt.option_group_name.trim();
+    const list = groupsMap.get(gName) || [];
+    list.push(opt);
+    groupsMap.set(gName, list);
+  }
+
+  let totalOptionsCost = 0;
+  const breakdown: OptionCostItemBreakdown[] = [];
+
+  for (const [groupName, groupOpts] of groupsMap.entries()) {
+    const rule = rules.find(
+      (r) =>
+        (r.name && r.name.trim().toLowerCase() === groupName.toLowerCase()) ||
+        (r.group_name && r.group_name.trim().toLowerCase() === groupName.toLowerCase())
+    );
+
+    const freeQuota = (rule?.free_count ?? 0) * itemQty;
+    const sorted = [...groupOpts].sort((a, b) => b.price_delta - a.price_delta);
+    let remainingFree = freeQuota;
+
+    for (const opt of sorted) {
+      const freeQty = Math.min(opt.qty, remainingFree);
+      const paidQty = opt.qty - freeQty;
+      remainingFree -= freeQty;
+
+      const effectiveCost = roundPrice(paidQty * opt.price_delta);
+      totalOptionsCost += effectiveCost;
+
+      breakdown.push({
+        option_group_name: opt.option_group_name,
+        option_name: opt.option_name,
+        price_delta: opt.price_delta,
+        qty: opt.qty,
+        freeQty,
+        paidQty,
+        effectiveCost,
+      });
+    }
+  }
+
+  const itemSubtotal = roundPrice(itemUnitPrice * itemQty + totalOptionsCost);
+
+  return {
+    totalOptionsCost: roundPrice(totalOptionsCost),
+    itemSubtotal,
+    breakdown,
+  };
+}
+

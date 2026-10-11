@@ -4,7 +4,6 @@ import { useLocation, useNavigate, useParams, useSearchParams } from "react-rout
 import { useAddToCart, useCart, useLocations, useProduct, useUpdateCartItem } from "@/api/queries";
 import { ErrorBox, ProductDetailSkeleton, Thumb, formatPrice } from "@/components/ui";
 import { useBackButton } from "@/hooks/useBackButton";
-import { isTelegramWebApp } from "@/telegram/env";
 import { haptic, hapticNotify } from "@/telegram/sdk";
 import type { CartItemOption, OptionGroup, OptionSelection } from "@/api/types";
 import {
@@ -27,7 +26,15 @@ export function ProductPage() {
 
   const { data: locations } = useLocations();
   const { data: cartData } = useCart();
-  useBackButton();
+  const handleBack = () => {
+    haptic("light");
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/");
+    }
+  };
+  useBackButton(handleBack);
 
   const { data, isPending, error, refetch } = useProduct(Number(productId));
   const addToCart = useAddToCart();
@@ -41,6 +48,7 @@ export function ProductPage() {
   const [variantId, setVariantId] = useState<number | null>(null);
   const [qty, setQty] = useState(1);
   const [showErrors, setShowErrors] = useState(false);
+  const [addedSuccess, setAddedSuccess] = useState(false);
   const [picked, setPicked] = useState<Record<number, Picks>>({});
   const optionsContainerRef = useRef<HTMLDivElement>(null);
   const initializedFromCart = useRef(false);
@@ -130,19 +138,19 @@ export function ProductPage() {
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col bg-[var(--tg-theme-bg-color)]">
+      {/* Кнопка "Назад" - фіксована у верхньому лівому куті для швидкого доступу */}
+      <button
+        type="button"
+        onClick={handleBack}
+        className="app-press fixed left-3.5 top-[max(0.875rem,calc(env(safe-area-inset-top)+0.5rem))] z-40 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white backdrop-blur-md shadow-lg border border-white/20 active:scale-95 text-lg font-bold transition-all"
+        aria-label="Назад"
+      >
+        ←
+      </button>
+
       {/* Скролована частина зі стравою та опціями */}
       <div className="flex-1 pb-6">
         <div className="relative overflow-hidden">
-          {!isTelegramWebApp() && (
-            <button
-              type="button"
-              onClick={() => void navigate(-1)}
-              className="app-press absolute left-3.5 top-3.5 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition-transform active:scale-95 shadow-md"
-              aria-label="Назад"
-            >
-              ←
-            </button>
-          )}
           <Thumb src={data.image_url} rounded="" className="aspect-[4/3] w-full text-6xl" eager />
           <div
             className="absolute inset-x-0 bottom-0 h-10 pointer-events-none"
@@ -359,6 +367,25 @@ export function ProductPage() {
           </p>
         )}
 
+        {addedSuccess && (
+          <div className="mb-2.5 flex items-center justify-between rounded-xl bg-emerald-500/15 border border-emerald-500/30 px-3.5 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 app-rise">
+            <span className="flex items-center gap-1.5">
+              <span>✓</span>
+              <span>Додано в кошик!</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                haptic("light");
+                navigate("/cart");
+              }}
+              className="underline hover:opacity-80 font-bold"
+            >
+              Перейти до кошика →
+            </button>
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
           {/* Лічильник кількості порцій */}
           <div
@@ -479,7 +506,8 @@ export function ProductPage() {
                   {
                     onSuccess: () => {
                       hapticNotify("success");
-                      void navigate("/cart");
+                      setAddedSuccess(true);
+                      setTimeout(() => setAddedSuccess(false), 2500);
                     },
                     onError: () => hapticNotify("error"),
                   },
@@ -490,7 +518,7 @@ export function ProductPage() {
             style={
               canAdd
                 ? {
-                    background: "var(--tg-theme-button-color)",
+                    background: addedSuccess ? "#16a34a" : "var(--tg-theme-button-color)",
                     color: "var(--tg-theme-button-text-color)",
                     boxShadow: "var(--app-shadow)",
                   }
@@ -504,9 +532,11 @@ export function ProductPage() {
             <span>
               {addToCart.isPending || updateCartItem.isPending
                 ? "Зберігаємо…"
-                : cartItemToEdit
-                  ? "Зберегти зміни"
-                  : "В кошик"}
+                : addedSuccess
+                  ? "✓ Додано в кошик"
+                  : cartItemToEdit
+                    ? "Зберегти зміни"
+                    : "В кошик"}
             </span>
             <span className="font-extrabold">{formatPrice(total)}</span>
           </button>

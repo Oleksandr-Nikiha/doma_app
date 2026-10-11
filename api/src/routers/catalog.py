@@ -1,6 +1,7 @@
 import asyncpg
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
+from src.auth.deps import require_telegram_or_staff
 from src.db.connection import get_pool
 from src.middleware.rate_limiter import rate_limiter
 from src.schemas.catalog import (
@@ -11,7 +12,11 @@ from src.schemas.catalog import (
 )
 from src.services.cache import get_cached_json, set_cached_json
 
-router = APIRouter(prefix="/api", tags=["catalog"], dependencies=[Depends(rate_limiter)])
+router = APIRouter(
+    prefix="/api",
+    tags=["catalog"],
+    dependencies=[Depends(rate_limiter), Depends(require_telegram_or_staff)],
+)
 
 
 @router.get("/categories", response_model=list[CategoryOut])

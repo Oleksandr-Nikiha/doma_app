@@ -141,3 +141,24 @@ export function openTelegramLink(url: string): void {
   window.open(url, "_blank");
 }
 
+/** Закриває Telegram Mini App фрейм */
+export function closeMiniApp(): void {
+  try {
+    const tg = (window as unknown as { Telegram?: { WebApp?: { close?: () => void } } })
+      ?.Telegram?.WebApp;
+    if (tg?.close) {
+      tg.close();
+      return;
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (miniApp.close.isAvailable()) {
+      miniApp.close();
+    }
+  } catch {
+    /* ignore */
+  }
+}
+

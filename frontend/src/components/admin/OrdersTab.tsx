@@ -8,9 +8,11 @@ import { OrderEditModal } from "./modals/OrderEditModal";
 export function OrdersTab({
   locationId,
   initialEditingOrderId,
+  onCloseEditingOrder,
 }: {
   locationId?: number | null;
   initialEditingOrderId?: number | null;
+  onCloseEditingOrder?: () => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const {
@@ -350,6 +352,7 @@ export function OrdersTab({
           orderId={editingOrderId}
           onClose={() => {
             setEditingOrderId(null);
+            onCloseEditingOrder?.();
             try {
               const url = new URL(window.location.href);
               if (url.searchParams.has("order_id") || url.searchParams.has("edit_order")) {

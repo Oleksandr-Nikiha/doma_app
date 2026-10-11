@@ -46,6 +46,35 @@ async def get_init_data(
         ) from e
 
 
+async def require_telegram_or_staff(
+    init_data_raw: str | None = Depends(init_data_header),
+    admin_token_raw: str | None = Depends(admin_token_header),
+    settings=Depends(get_settings),
+) -> bool:
+    """
+    Дозволяє доступ до каталогу та меню виключно через Telegram (додаток чи вебфрейм)
+    або для персоналу закладу з валідним токеном адміністратора.
+    Усі запити в обхід Telegram без токена персоналу блокуються.
+    """
+    if admin_token_raw:
+        telegram_id = verify_admin_token(admin_token_raw, settings.bot_token)
+        if telegram_id:
+            return True
+
+    if init_data_raw:
+        try:
+            validate_init_data(init_data=init_data_raw, bot_token=settings.bot_token)
+            return True
+        except ValueError:
+            pass
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Доступ до меню дозволено лише через Telegram або для адміністратора.",
+    )
+
+
+
 async def get_current_user(
     init_data_raw: str | None = Depends(init_data_header),
     admin_token_raw: str | None = Depends(admin_token_header),

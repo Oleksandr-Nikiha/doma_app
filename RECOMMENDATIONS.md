@@ -77,10 +77,10 @@
   1. Реалізовано асинхронний клієнт Redis із коректним управлінням життєвим циклом (`lifespan`) та відмовостійкістю (graceful fallback без падіння API, якщо Redis недоступний).
   2. Кешування відповідей `GET /api/categories`, `GET /api/categories/{id}/products`, `GET /api/products/{id}` та `GET /api/locations` із TTL (`CATALOG_CACHE_TTL=1800`).
   3. **Гнучке керування кешем на випадок частих змін:**
-     - Глобальне вимкнення через конфіг / `.env`: `CATALOG_CACHE_ENABLED=false` (усі запити йдуть напряму в PostgreSQL).
-     - Автоматична інвалідація кешу (`invalidate_catalog_cache()`) при будь-яких змінах категорій, страв, варіантів або модифікаторів через адмін-панель.
-     - Окремий ендпоінт `POST /api/admin/catalog/cache/clear` для ручного скидання кешу персоналом в 1 клік.
-     - Підтримка заголовка `X-Bypass-Cache: true` та query-параметра `?bypass_cache=true` для миттєвого тестування свіжих даних без кешу.
+      * Глобальне вимкнення через конфіг / `.env`: `CATALOG_CACHE_ENABLED=false` (усі запити йдуть напряму в PostgreSQL).
+      * Автоматична інвалідація кешу (`invalidate_catalog_cache()`) при будь-яких змінах категорій, страв, варіантів або модифікаторів через адмін-панель.
+      * Окремий ендпоінт `POST /api/admin/catalog/cache/clear` для ручного скидання кешу персоналом в 1 клік.
+      * Підтримка заголовка `X-Bypass-Cache: true` та query-параметра `?bypass_cache=true` для миттєвого тестування свіжих даних без кешу.
   4. Впроваджено Redis-based Rate Limiting (`RATE_LIMIT_ENABLED=true`, 120 запитів/хвилину на клієнта) для захисту публічних ендпоінтів від спаму.
 
 ---
@@ -126,6 +126,7 @@
 * **Файли:** `db/migrations/0001_core_schema.sql`
 * **Проблема:** Запити категорій та списку товарів виконують сортування та фільтрацію за декількома колонками (`is_visible`, `sort_order`, `is_available`, `category_id`).
 * **Рішення:** Складені індекси створено безпосередньо в базовій схемі:
+  
   ```sql
   CREATE INDEX IF NOT EXISTS idx_categories_listing ON categories(location_id, is_visible, sort_order);
   CREATE INDEX IF NOT EXISTS idx_products_listing ON products(category_id, is_available, sort_order);
@@ -137,6 +138,7 @@
 * **Файли:** `db/migrations/0010_orders_user_history_index.sql`
 * **Проблема:** Запит списку минулих замовлень користувача (`GET /api/orders`) фільтрує за `telegram_id` та сортує за спаданням ідентифікатора (`id DESC`), що без відповідного індексу призводило до сортування в пам'яті (Sort operation).
 * **Рішення:** Створено композитний індекс:
+  
   ```sql
   CREATE INDEX IF NOT EXISTS idx_orders_telegram_id_id_desc ON orders(telegram_id, id DESC);
   ```
@@ -173,6 +175,16 @@
   1. Бекенд адмінки розділено на окремі доменні роутери (`me.py`, `managers.py`, `categories.py`, `products.py`, `option_groups.py`, `locations_delivery.py`, `users.py`, `orders.py`, `delivery_addresses.py`, `analytics.py`, `broadcasts.py`).
   2. Фронтенд адмінки розділено на окремі таби (`CatalogTab`, `OrdersTab`, `UsersTab`, `ManagersTab`, `DeliverySettingsTab`, `OptionGroupsTab`, `StopListTab`, `AnalyticsTab`, `BroadcastsTab`) та модалки в `components/admin/modals/`.
   3. Спільну логіку розрахунку квот і цін опцій винесено в `@/utils/productOptions.ts`.
+
+#### [x] SEC-5: Ізоляція доступу до каталогу та адмін-панелі (обмеження поза Telegram)
+
+* **Файли:** `api/src/auth/deps.py`, `api/src/routers/catalog.py`, `api/src/routers/locations.py`, `api/src/routers/delivery_addresses.py`, `frontend/src/App.tsx`, `frontend/src/pages/AdminPage.tsx`, `frontend/src/pages/AdminLoginPage.tsx`
+* **Проблема:** Раніше публічний каталог і клієнтське меню були доступні прямо у веб-браузері будь-кому в обхід Telegram, що створювало ризики несанкціонованого парсингу меню. Крім того, в адмінці відображалися кнопки повернення до меню, які вели на клієнтські сторінки.
+* **Рішення:**
+  1. Реалізовано залежність бекенду `require_telegram_or_staff`, яка блокує прямі запити до каталогу без валідного `X-Telegram-Init-Data` або токена персоналу `X-Admin-Token` з кодом 403 Forbidden.
+  2. На фронтенді налаштовано перевірку середовища: поза Telegram дозволено виключно адмін-панель (`/admin`, `/admin/login`). Будь-які спроби переходу на клієнтські маршрути автоматично редиректяться в адмінку.
+  3. В адмін-панелі та на екрані авторизації поза Telegram приховано всі кнопки повернення до меню ресторану.
+
 
 ---
 

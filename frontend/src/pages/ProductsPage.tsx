@@ -41,7 +41,15 @@ export function ProductsPage() {
   const { categoryId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  useBackButton();
+  const handleBack = () => {
+    haptic("light");
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/");
+    }
+  };
+  useBackButton(handleBack);
 
   const id = Number(categoryId);
   const { data, isPending, error, refetch } = useProducts(id);
@@ -74,14 +82,28 @@ export function ProductsPage() {
 
   return (
     <div className="pb-6">
-      <ScreenTitle>{title}</ScreenTitle>
+      <ScreenTitle onBack={handleBack}>{title}</ScreenTitle>
 
       {/* Липка горизонтальна стрічка швидкої навігації по підкатегоріях */}
       {withHeadings && (
         <div
-          className="sticky top-0 z-20 app-glass border-b px-4 py-2 flex gap-1.5 overflow-x-auto no-scrollbar"
+          className="sticky top-0 z-20 app-glass border-b px-4 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar"
           style={{ borderColor: "var(--app-border)" }}
         >
+          <button
+            type="button"
+            onClick={handleBack}
+            className="app-press shrink-0 flex h-7 w-7 items-center justify-center rounded-xl text-xs font-bold border transition-all"
+            style={{
+              background: "var(--app-surface-2)",
+              borderColor: "var(--app-border)",
+              color: "var(--tg-theme-text-color)",
+            }}
+            title="Назад до меню"
+            aria-label="Назад до меню"
+          >
+            ←
+          </button>
           {groups.map((group) => (
             <button
               key={group.id}

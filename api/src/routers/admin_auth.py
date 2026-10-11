@@ -41,12 +41,13 @@ def _get_bot_username(bot_token: str) -> str:
                 return _cached_bot_username
     except Exception as e:
         logger.warning("Не вдалося автоматично визначити username бота: %s", e)
-    return "domapizza_bot"
+    return "ncoffee_app_tst_bot"
 
 
 class AuthSessionOut(BaseModel):
     session_id: str
     bot_url: str
+    tg_url: str | None = None
     code: str
     expires_in: int
 
@@ -83,11 +84,13 @@ async def create_auth_session(
         )
 
     bot_username = _get_bot_username(settings.bot_token)
-    bot_url = f"https://t.me/{bot_username}?start=admin_{session_id}"
+    bot_url = f"https://t.me/{bot_username}?start=admin_{code}"
+    tg_url = f"tg://resolve?domain={bot_username}&start=admin_{code}"
 
     return AuthSessionOut(
         session_id=str(session_id),
         bot_url=bot_url,
+        tg_url=tg_url,
         code=code,
         expires_in=600,
     )

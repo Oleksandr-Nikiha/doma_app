@@ -1,10 +1,15 @@
 import asyncpg
 from fastapi import APIRouter, Depends, Query
 
+from src.auth.deps import require_telegram_or_staff
 from src.db.connection import get_pool
 from src.schemas.delivery_address import DeliveryAddressOut
 
-router = APIRouter(prefix="/api/delivery", tags=["delivery"])
+router = APIRouter(
+    prefix="/api/delivery",
+    tags=["delivery"],
+    dependencies=[Depends(require_telegram_or_staff)],
+)
 
 
 @router.get("/cities", response_model=list[str])

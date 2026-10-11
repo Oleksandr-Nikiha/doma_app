@@ -16,11 +16,12 @@ from src.schemas.admin import (
 
 router = APIRouter()
 
-def _get_period_clause(period: str) -> str:
+def _get_period_clause(period: str, prefix: str = "") -> str:
+    col = f"{prefix}.created_at" if prefix else "created_at"
     clauses = {
-        "today": "created_at >= date_trunc('day', now() AT TIME ZONE 'Europe/Kyiv')",
-        "7d": "created_at >= now() - INTERVAL '7 days'",
-        "30d": "created_at >= now() - INTERVAL '30 days'",
+        "today": f"{col} >= date_trunc('day', now() AT TIME ZONE 'Europe/Kyiv')",
+        "7d": f"{col} >= now() - INTERVAL '7 days'",
+        "30d": f"{col} >= now() - INTERVAL '30 days'",
     }
     return clauses.get(period, "1=1")
 
@@ -139,7 +140,8 @@ async def get_analytics_summary(
         ]
 
         # 5. Розбивка за закладами (локаціями)
-        loc_where = [f"o.{period_sql}", "o.status NOT IN ('rejected', 'cancelled')"]
+        loc_period_sql = _get_period_clause(period, prefix="o")
+        loc_where = [loc_period_sql, "o.status NOT IN ('rejected', 'cancelled')"]
         loc_params: list = []
         if target_location_id:
             loc_params.append(target_location_id)
@@ -215,10 +217,10 @@ async def get_analytics_top_products(
     Повертає найпопулярніші страви (топ) за вибраний період.
     """
     target_location_id = location_id
-    period_sql = _get_period_clause(period)
+    period_sql = _get_period_clause(period, prefix="o")
 
     where_parts = [
-        f"o.{period_sql}",
+        period_sql,
         "o.status NOT IN ('rejected', 'cancelled')",
     ]
     params: list = []

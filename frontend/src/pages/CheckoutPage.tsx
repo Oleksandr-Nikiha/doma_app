@@ -294,7 +294,16 @@ export function CheckoutPage() {
   return (
     <div className="mx-auto min-h-screen w-full max-w-lg pb-8 bg-[var(--tg-theme-bg-color)]">
       <WebHeader title="Оформлення" showBack onBack={() => navigate("/cart")} />
-      {isTelegramWebApp() && <ScreenTitle>Оформлення</ScreenTitle>}
+      {isTelegramWebApp() && (
+        <ScreenTitle
+          onBack={() => {
+            haptic("light");
+            navigate("/cart");
+          }}
+        >
+          Оформлення
+        </ScreenTitle>
+      )}
 
       <form onSubmit={handleSubmit} className="app-rise space-y-5 px-4">
         {/* Картка закладу */}

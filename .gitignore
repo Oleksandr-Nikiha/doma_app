@@ -27,6 +27,7 @@ yarn-error.log*
 .DS_Store
 *.swp
 CLAUDE.md
+Clauder.md
 .antigravityignore
 .gemini/
 error.log

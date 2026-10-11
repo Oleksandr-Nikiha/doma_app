@@ -7,7 +7,20 @@ export function isTelegramWebApp(): boolean {
   if (tg && typeof tg.initData === "string" && tg.initData.trim().length > 0) {
     return true;
   }
-  return isTMA();
+  // Перевірка наявності tgWebAppData у hash або search (Telegram Web / Desktop / Mobile)
+  if (
+    window.location.hash.includes("tgWebAppData") ||
+    window.location.search.includes("tgWebAppData") ||
+    window.location.hash.includes("tgWebAppVersion") ||
+    window.location.search.includes("tgWebAppVersion")
+  ) {
+    return true;
+  }
+  try {
+    return isTMA();
+  } catch {
+    return false;
+  }
 }
 
 export function getTelegramStartParam(): string | null {
@@ -98,6 +111,31 @@ export function getTelegramStartParam(): string | null {
   }
 
   return null;
+}
+
+const CONSUMED_START_PARAM_KEY = "doma_consumed_start_param";
+
+export function isStartParamConsumed(param?: string | null): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const target = param ?? getTelegramStartParam();
+    if (!target) return false;
+    return sessionStorage.getItem(CONSUMED_START_PARAM_KEY) === target;
+  } catch {
+    return false;
+  }
+}
+
+export function markStartParamConsumed(param?: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    const target = param ?? getTelegramStartParam();
+    if (target) {
+      sessionStorage.setItem(CONSUMED_START_PARAM_KEY, target);
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 

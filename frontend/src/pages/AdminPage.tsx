@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 
 import { hasAdminAuth, removeAdminToken } from "@/api/client";
-import { isTelegramWebApp, getTelegramStartParam } from "@/telegram/env";
+import {
+  isTelegramWebApp,
+  getTelegramStartParam,
+  isStartParamConsumed,
+  markStartParamConsumed,
+} from "@/telegram/env";
 import { useAdminMe, useLocations } from "@/api/queries";
 import { ErrorBox, Spinner } from "@/components/ui";
 import { AnalyticsTab } from "@/components/admin/AnalyticsTab";
@@ -15,7 +20,7 @@ import { DeliverySettingsTab } from "@/components/admin/DeliverySettingsTab";
 import { UsersTab } from "@/components/admin/UsersTab";
 import { ManagersTab } from "@/components/admin/ManagersTab";
 import { useBackButton } from "@/hooks/useBackButton";
-import { haptic } from "@/telegram/sdk";
+import { haptic, closeMiniApp } from "@/telegram/sdk";
 
 type AdminSection = "operations" | "management";
 type AdminTab =
@@ -31,17 +36,42 @@ type AdminTab =
 
 export function AdminPage() {
   const navigate = useNavigate();
-  useBackButton(() => navigate("/"));
+  useBackButton(() => {
+    if (isTelegramWebApp()) {
+      navigate("/");
+    }
+  });
 
   const { data: adminMe, isPending: mePending, error: meError } = useAdminMe();
   const { data: locations = [] } = useLocations();
 
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const rawOrderId = searchParams.get("order_id") || searchParams.get("edit_order");
   const startParam = getTelegramStartParam();
   const startOrderMatch = startParam?.match(/^(?:order_?)?(\d+)$/i);
-  const startOrderId = startOrderMatch ? startOrderMatch[1] : null;
-  const orderIdParam = rawOrderId || startOrderId;
+  const startOrderId =
+    startOrderMatch && !isStartParamConsumed(startParam ?? undefined) ? startOrderMatch[1] : null;
+
+  const [initialOrderId, setInitialOrderId] = useState<number | null>(() => {
+    const raw = rawOrderId || startOrderId;
+    return raw ? parseInt(raw, 10) : null;
+  });
+
+  const handleCloseEditingOrder = () => {
+    setInitialOrderId(null);
+    markStartParamConsumed();
+    if (searchParams.has("order_id") || searchParams.has("edit_order")) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("order_id");
+          next.delete("edit_order");
+          return next;
+        },
+        { replace: true }
+      );
+    }
+  };
 
   const [activeSection, setActiveSection] = useState<AdminSection>("operations");
   const [activeTab, setActiveTab] = useState<AdminTab>("orders");
@@ -50,11 +80,11 @@ export function AdminPage() {
   const isSuperAdmin = adminMe?.role === "admin";
 
   useEffect(() => {
-    if (orderIdParam) {
+    if (initialOrderId) {
       setActiveSection("operations");
       setActiveTab("orders");
     }
-  }, [orderIdParam]);
+  }, [initialOrderId]);
 
   useEffect(() => {
     if (
@@ -136,14 +166,16 @@ export function AdminPage() {
                 <p className="text-[10px] opacity-60">Панель керування</p>
               </div>
             </div>
-            <button
-              onClick={() => navigate("/")}
-              className="app-press rounded-xl px-2.5 py-1.5 text-xs font-bold border border-[var(--app-border)] bg-[var(--app-surface-2)] hover:bg-[var(--app-surface-3)] transition-colors flex items-center gap-1"
-              title="Перейти до меню ресторану"
-            >
-              <span>🍽️</span>
-              <span className="text-[11px]">Меню</span>
-            </button>
+            {isTelegramWebApp() && (
+              <button
+                onClick={() => navigate("/")}
+                className="app-press rounded-xl px-2.5 py-1.5 text-xs font-bold border border-[var(--app-border)] bg-[var(--app-surface-2)] hover:bg-[var(--app-surface-3)] transition-colors flex items-center gap-1"
+                title="Перейти до меню ресторану"
+              >
+                <span>🍽️</span>
+                <span className="text-[11px]">Меню</span>
+              </button>
+            )}
           </div>
 
           <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-2)] p-3 space-y-1">
@@ -287,13 +319,15 @@ export function AdminPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate("/")}
-              className="app-press rounded-xl px-3 py-1.5 text-xs font-bold border border-[var(--app-border)] bg-[var(--app-surface-2)] hover:bg-[var(--app-surface-3)] transition-colors flex items-center gap-1.5"
-            >
-              <span>🍽️</span>
-              <span>До меню ресторану</span>
-            </button>
+            {isTelegramWebApp() && (
+              <button
+                onClick={() => navigate("/")}
+                className="app-press rounded-xl px-3 py-1.5 text-xs font-bold border border-[var(--app-border)] bg-[var(--app-surface-2)] hover:bg-[var(--app-surface-3)] transition-colors flex items-center gap-1.5"
+              >
+                <span>🍽️</span>
+                <span>До меню ресторану</span>
+              </button>
+            )}
             <button
               onClick={handleLogout}
               className="rounded-xl px-3 py-1.5 text-xs font-medium text-rose-500 hover:bg-rose-500/10 transition-colors"
@@ -307,33 +341,49 @@ export function AdminPage() {
         <div className="md:hidden px-4 pt-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
+              {isTelegramWebApp() && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("light");
+                    navigate("/");
+                  }}
+                  className="app-press inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold border shadow-sm transition-all shrink-0"
+                  style={{
+                    background: "var(--app-surface-2)",
+                    borderColor: "var(--app-border)",
+                    color: "var(--tg-theme-button-color)",
+                  }}
+                  title="Повернутися до меню ресторану"
+                >
+                  <span>🍽️</span>
+                  <span>До меню</span>
+                </button>
+              )}
+              <h1 className="text-xl font-bold tracking-tight truncate">Адмін-панель</h1>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex flex-col items-end gap-0.5 text-right">
+                <span
+                  className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                  style={{ background: "var(--app-tint)", color: "var(--tg-theme-button-color)" }}
+                >
+                  {roleLabel}
+                </span>
+                {locationBadge && <span className="text-[10px] opacity-60">{locationBadge}</span>}
+              </div>
               <button
                 type="button"
                 onClick={() => {
                   haptic("light");
-                  navigate("/");
+                  handleLogout();
                 }}
-                className="app-press inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold border shadow-sm transition-all shrink-0"
-                style={{
-                  background: "var(--app-surface-2)",
-                  borderColor: "var(--app-border)",
-                  color: "var(--tg-theme-button-color)",
-                }}
-                title="Повернутися до меню ресторану"
+                className="app-press rounded-xl p-1.5 text-sm border border-rose-500/30 text-rose-500 hover:bg-rose-500/10 transition-colors"
+                title="Вийти з акаунта адміна"
+                aria-label="Вийти з акаунта адміна"
               >
-                <span>🍽️</span>
-                <span>До меню</span>
+                🚪
               </button>
-              <h1 className="text-xl font-bold tracking-tight truncate">Адмін-панель</h1>
-            </div>
-            <div className="flex flex-col items-end gap-0.5 text-right shrink-0">
-              <span
-                className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                style={{ background: "var(--app-tint)", color: "var(--tg-theme-button-color)" }}
-              >
-                {roleLabel}
-              </span>
-              {locationBadge && <span className="text-[10px] opacity-60">{locationBadge}</span>}
             </div>
           </div>
 
@@ -609,7 +659,8 @@ export function AdminPage() {
         {activeTab === "orders" && (
           <OrdersTab
             locationId={effectiveLocationId}
-            initialEditingOrderId={orderIdParam ? parseInt(orderIdParam, 10) : null}
+            initialEditingOrderId={initialOrderId}
+            onCloseEditingOrder={handleCloseEditingOrder}
           />
         )}
         {activeTab === "analytics" && isSuperAdmin && (
@@ -641,30 +692,46 @@ export function AdminPage() {
 
         {/* Кнопка повернення до меню ресторану внизу сторінки (мобільна) */}
         <div className="md:hidden mt-8 px-4 pb-6 space-y-2">
+          {isTelegramWebApp() && (
+            <button
+              type="button"
+              onClick={() => {
+                haptic("light");
+                navigate("/");
+              }}
+              className="app-press w-full flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold shadow-sm transition-all border"
+              style={{
+                background: "var(--app-surface)",
+                borderColor: "var(--app-border)",
+                color: "var(--tg-theme-button-color)",
+              }}
+            >
+              <span>🍽️</span>
+              <span>Повернутися до меню ресторану</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
               haptic("light");
-              navigate("/");
+              handleLogout();
             }}
-            className="app-press w-full flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold shadow-sm transition-all border"
-            style={{
-              background: "var(--app-surface)",
-              borderColor: "var(--app-border)",
-              color: "var(--tg-theme-button-color)",
-            }}
+            className="app-press w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold text-rose-500 hover:bg-rose-500/10 border border-rose-500/20 transition-colors"
           >
-            <span>🍽️</span>
-            <span>Повернутися до меню ресторану</span>
+            <span>🚪</span>
+            <span>Вийти з акаунта адміна</span>
           </button>
-          {!isTelegramWebApp() && (
+          {isTelegramWebApp() && (
             <button
               type="button"
-              onClick={handleLogout}
-              className="app-press w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold text-rose-500 hover:bg-rose-500/10 transition-colors"
+              onClick={() => {
+                haptic("light");
+                closeMiniApp();
+              }}
+              className="app-press w-full flex items-center justify-center gap-2 rounded-xl py-2 text-xs font-semibold text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 transition-colors"
             >
-              <span>🚪</span>
-              <span>Вийти з акаунта адміна</span>
+              <span>✕</span>
+              <span>Закрити застосунок</span>
             </button>
           )}
         </div>

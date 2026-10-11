@@ -4,28 +4,18 @@ import {
   useAdminVariantChoices,
   useUpdateAdminOrder,
   useNotifyAdminOrder,
+  useAdminProducts,
+  useAdminOptionGroups,
 } from "@/api/queries";
 import { Spinner, ErrorBox, formatPrice } from "@/components/ui";
 import { haptic, hapticNotify } from "@/telegram/sdk";
-
-interface OrderItemOptionDraft {
-  option_group_name: string;
-  option_name: string;
-  price_delta: number;
-  qty: number;
-}
-
-interface OrderItemDraft {
-  id?: number;
-  variant_id?: number | null;
-  product_name: string;
-  variant_label: string;
-  unit_price: number;
-  qty: number;
-  options: OrderItemOptionDraft[];
-}
-
-
+import { useBackButton } from "@/hooks/useBackButton";
+import { calculateItemOptionsWithFreeQuota } from "@/utils/productOptions";
+import {
+  AddOptionToItemModal,
+  type OrderItemDraft,
+  type OrderItemOptionDraft,
+} from "./AddOptionToItemModal";
 
 export function OrderEditModal({
   orderId,
@@ -34,8 +24,13 @@ export function OrderEditModal({
   orderId: number;
   onClose: () => void;
 }) {
+  useBackButton(onClose);
+
   const { data: order, isPending, error } = useAdminOrderDetail(orderId);
   const { data: variantChoices = [] } = useAdminVariantChoices();
+  const { data: adminProducts = [] } = useAdminProducts();
+  const { data: adminOptionGroups = [] } = useAdminOptionGroups();
+
   const updateOrder = useUpdateAdminOrder();
   const notifyOrder = useNotifyAdminOrder();
 
@@ -52,10 +47,6 @@ export function OrderEditModal({
   const [dishSearch, setDishSearch] = useState("");
 
   const [targetItemIdx, setTargetItemIdx] = useState<number | null>(null);
-  const [optName, setOptName] = useState("");
-  const [optGroup, setOptGroup] = useState("Додатки");
-  const [optPrice, setOptPrice] = useState("0");
-
   const [notified, setNotified] = useState(false);
 
   if (order && !isInitialized) {
@@ -69,9 +60,18 @@ export function OrderEditModal({
     const initialItems: OrderItemDraft[] = [];
     for (const g of order.groups) {
       for (const it of g.items) {
+        const choice = variantChoices.find((vc) => vc.variant_id === it.variant_id);
+        const prod = adminProducts.find(
+          (p) =>
+            p.id === choice?.product_id ||
+            (it.variant_id && p.variants.some((v) => v.id === it.variant_id)) ||
+            p.name.toLowerCase() === it.product_name.toLowerCase()
+        );
+
         initialItems.push({
           id: it.id,
           variant_id: it.variant_id,
+          product_id: prod?.id ?? choice?.product_id ?? null,
           product_name: it.product_name,
           variant_label: it.variant_label,
           unit_price: it.unit_price,
@@ -89,18 +89,146 @@ export function OrderEditModal({
     setIsInitialized(true);
   }
 
+  const getProductForDraft = (it: OrderItemDraft) => {
+    return adminProducts.find(
+      (p) =>
+        (it.product_id && p.id === it.product_id) ||
+        (it.variant_id && p.variants.some((v) => v.id === it.variant_id)) ||
+        p.name.toLowerCase() === it.product_name.toLowerCase()
+    );
+  };
+
+  const getOptionRulesForDraft = (it: OrderItemDraft) => {
+    const prod = getProductForDraft(it);
+    return prod?.option_groups ?? [];
+  };
+
   const calculatedTotal = useMemo(() => {
     return items.reduce((sum, it) => {
-      const optsTotal = it.options.reduce((oSum, o) => oSum + o.price_delta * o.qty, 0);
-      return sum + (it.unit_price + optsTotal) * it.qty;
+      const rules = getOptionRulesForDraft(it);
+      const calc = calculateItemOptionsWithFreeQuota(it.options, rules, it.unit_price, it.qty);
+      return sum + calc.itemSubtotal;
     }, 0);
-  }, [items]);
+  }, [items, adminProducts]);
+
+  const handleUpdateOptionQty = (
+    itemIdx: number,
+    groupName: string,
+    optName: string,
+    delta: number
+  ) => {
+    const next = [...items];
+    const targetItem = next[itemIdx];
+    const existingIdx = targetItem.options.findIndex(
+      (o) =>
+        o.option_group_name.trim().toLowerCase() === groupName.trim().toLowerCase() &&
+        o.option_name.trim().toLowerCase() === optName.trim().toLowerCase()
+    );
+
+    if (existingIdx >= 0) {
+      const current = targetItem.options[existingIdx];
+      const newQty = current.qty + delta;
+      if (newQty <= 0) {
+        targetItem.options = targetItem.options.filter((_, i) => i !== existingIdx);
+      } else {
+        targetItem.options[existingIdx] = { ...current, qty: newQty };
+      }
+      setItems(next);
+    }
+  };
+
+  const handleRemoveOption = (itemIdx: number, groupName: string, optName: string) => {
+    const next = [...items];
+    const targetItem = next[itemIdx];
+    targetItem.options = targetItem.options.filter(
+      (o) =>
+        !(
+          o.option_group_name.trim().toLowerCase() === groupName.trim().toLowerCase() &&
+          o.option_name.trim().toLowerCase() === optName.trim().toLowerCase()
+        )
+    );
+    setItems(next);
+  };
+
+  const handleAddOptionToItem = (
+    itemIdx: number,
+    groupName: string,
+    optName: string,
+    priceDelta: number
+  ) => {
+    const next = [...items];
+    const targetItem = next[itemIdx];
+    const existingIdx = targetItem.options.findIndex(
+      (o) =>
+        o.option_group_name.trim().toLowerCase() === groupName.trim().toLowerCase() &&
+        o.option_name.trim().toLowerCase() === optName.trim().toLowerCase()
+    );
+
+    if (existingIdx >= 0) {
+      targetItem.options[existingIdx].qty += 1;
+    } else {
+      targetItem.options.push({
+        option_group_name: groupName.trim() || "Додатки",
+        option_name: optName.trim(),
+        price_delta: priceDelta,
+        qty: 1,
+      });
+    }
+    setItems(next);
+  };
 
   const handleSave = () => {
     if (items.length === 0) {
       alert("Замовлення повинно містити щонайменше одну позицію!");
       return;
     }
+
+    const preparedItems = items.map((it) => {
+      const rules = getOptionRulesForDraft(it);
+      const calc = calculateItemOptionsWithFreeQuota(it.options, rules, it.unit_price, it.qty);
+
+      const preparedOptions: OrderItemOptionDraft[] = [];
+      for (const b of calc.breakdown) {
+        if (b.freeQty > 0 && b.paidQty === 0) {
+          preparedOptions.push({
+            option_group_name: b.option_group_name,
+            option_name: b.option_name,
+            price_delta: 0,
+            qty: b.freeQty,
+          });
+        } else if (b.freeQty > 0 && b.paidQty > 0) {
+          preparedOptions.push({
+            option_group_name: b.option_group_name,
+            option_name: b.option_name,
+            price_delta: 0,
+            qty: b.freeQty,
+          });
+          preparedOptions.push({
+            option_group_name: b.option_group_name,
+            option_name: b.option_name,
+            price_delta: b.price_delta,
+            qty: b.paidQty,
+          });
+        } else {
+          preparedOptions.push({
+            option_group_name: b.option_group_name,
+            option_name: b.option_name,
+            price_delta: b.price_delta,
+            qty: b.paidQty,
+          });
+        }
+      }
+
+      return {
+        variant_id: it.variant_id,
+        product_name: it.product_name,
+        variant_label: it.variant_label,
+        unit_price: it.unit_price,
+        qty: it.qty,
+        options: preparedOptions,
+      };
+    });
+
     haptic("medium");
     updateOrder.mutate(
       {
@@ -112,7 +240,7 @@ export function OrderEditModal({
           contact_name: contactName,
           contact_phone: contactPhone,
           comment: comment || null,
-          items,
+          items: preparedItems,
         },
       },
       {
@@ -120,7 +248,7 @@ export function OrderEditModal({
           hapticNotify("success");
           onClose();
         },
-      },
+      }
     );
   };
 
@@ -201,7 +329,7 @@ export function OrderEditModal({
               {order.created_at}
             </p>
           </div>
-          <button onClick={onClose} className="rounded-full p-1 opacity-50 hover:opacity-100">
+          <button onClick={onClose} className="rounded-full p-1 opacity-50 hover:opacity-100 transition-opacity">
             ✕
           </button>
         </div>
@@ -326,8 +454,13 @@ export function OrderEditModal({
 
           <div className="space-y-2.5">
             {items.map((it, idx) => {
-              const optsSum = it.options.reduce((s, o) => s + o.price_delta * o.qty, 0);
-              const itemTotal = (it.unit_price + optsSum) * it.qty;
+              const rules = getOptionRulesForDraft(it);
+              const calc = calculateItemOptionsWithFreeQuota(
+                it.options,
+                rules,
+                it.unit_price,
+                it.qty
+              );
 
               return (
                 <div
@@ -372,8 +505,8 @@ export function OrderEditModal({
                         </button>
                       </div>
 
-                      <span className="font-bold min-w-[60px] text-right">
-                        {formatPrice(itemTotal)}
+                      <span className="font-bold min-w-[65px] text-right">
+                        {formatPrice(calc.itemSubtotal)}
                       </span>
 
                       <button
@@ -390,30 +523,85 @@ export function OrderEditModal({
                   </div>
 
                   {/* Додатки до цієї страви */}
-                  {it.options.length > 0 && (
+                  {calc.breakdown.length > 0 && (
                     <div
-                      className="space-y-1 pl-2 border-l-2"
+                      className="space-y-1.5 pl-2.5 border-l-2 py-0.5"
                       style={{ borderColor: "var(--tg-theme-button-color)" }}
                     >
-                      {it.options.map((opt, oIdx) => (
+                      {calc.breakdown.map((b, bIdx) => (
                         <div
-                          key={oIdx}
-                          className="flex items-center justify-between text-[11px] opacity-75"
+                          key={bIdx}
+                          className="flex items-center justify-between text-[11px] opacity-80"
                         >
-                          <span>
-                            ↳ {opt.option_name} {opt.qty > 1 ? `×${opt.qty}` : ""} (+
-                            {formatPrice(opt.price_delta * opt.qty)})
-                          </span>
-                          <button
-                            onClick={() => {
-                              const next = [...items];
-                              next[idx].options = next[idx].options.filter((_, i) => i !== oIdx);
-                              setItems(next);
-                            }}
-                            className="text-red-500 opacity-50 hover:opacity-100 px-1"
-                          >
-                            ✕
-                          </button>
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <span className="truncate">
+                              ↳ <b>{b.option_name}</b> {b.qty > 1 ? `×${b.qty}` : ""}
+                              {b.freeQty > 0 && b.paidQty === 0 && (
+                                <span className="ml-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                                  (включено, 0 ₴)
+                                </span>
+                              )}
+                              {b.freeQty > 0 && b.paidQty > 0 && (
+                                <span className="ml-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                                  ({b.freeQty} включено, {b.paidQty} платно)
+                                </span>
+                              )}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="font-semibold text-right min-w-[45px]">
+                              {b.effectiveCost > 0 ? `+${formatPrice(b.effectiveCost)}` : "0 ₴"}
+                            </span>
+
+                            <div className="flex items-center gap-1 rounded bg-black/5 dark:bg-white/10 px-1 py-0.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  haptic("light");
+                                  handleUpdateOptionQty(
+                                    idx,
+                                    b.option_group_name,
+                                    b.option_name,
+                                    -1
+                                  );
+                                }}
+                                className="px-1 font-bold text-xs hover:text-red-500"
+                                title="Зменшити кількість"
+                              >
+                                -
+                              </button>
+                              <span className="font-bold text-[10px] px-0.5">{b.qty}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  haptic("light");
+                                  handleUpdateOptionQty(
+                                    idx,
+                                    b.option_group_name,
+                                    b.option_name,
+                                    1
+                                  );
+                                }}
+                                className="px-1 font-bold text-xs hover:text-emerald-500"
+                                title="Збільшити кількість"
+                              >
+                                +
+                              </button>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptic("light");
+                                handleRemoveOption(idx, b.option_group_name, b.option_name);
+                              }}
+                              className="text-red-500 opacity-60 hover:opacity-100 px-1"
+                              title="Видалити додаток"
+                            >
+                              ✕
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -423,12 +611,10 @@ export function OrderEditModal({
                     onClick={() => {
                       haptic("light");
                       setTargetItemIdx(idx);
-                      setOptName("");
-                      setOptPrice("0");
                     }}
-                    className="text-[11px] font-semibold opacity-60 hover:opacity-100 text-blue-500"
+                    className="text-[11px] font-semibold opacity-75 hover:opacity-100 text-blue-500 inline-flex items-center gap-1"
                   >
-                    + Додати опцію / соус до страви
+                    <span>+ Додати опцію / соус до страви</span>
                   </button>
                 </div>
               );
@@ -511,6 +697,7 @@ export function OrderEditModal({
                         ...items,
                         {
                           variant_id: vc.variant_id,
+                          product_id: vc.product_id,
                           product_name: vc.product_name,
                           variant_label: vc.variant_label,
                           unit_price: vc.price,
@@ -539,92 +726,21 @@ export function OrderEditModal({
           </div>
         )}
 
-        {/* Модалка додавання опції */}
-        {targetItemIdx !== null && (
-          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-4 overscroll-contain">
-            <div
-              className="w-full rounded-2xl p-4 max-w-xs space-y-3 overscroll-contain shadow-2xl"
-              style={{ background: "var(--tg-theme-bg-color, #ffffff)", border: "1px solid var(--app-border)" }}
-            >
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold">Додати опцію / додаток</h4>
-                <button
-                  onClick={() => setTargetItemIdx(null)}
-                  className="opacity-50 hover:opacity-100"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="space-y-2 text-xs">
-                <div>
-                  <label className="block mb-1 font-semibold opacity-70">Назва групи:</label>
-                  <input
-                    type="text"
-                    value={optGroup}
-                    onChange={(e) => setOptGroup(e.target.value)}
-                    className="w-full rounded-xl p-2 outline-none"
-                    style={{ background: "var(--app-surface-2)" }}
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 font-semibold opacity-70">
-                    Назва додатку / соусу:
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Наприклад: Сирний бортик, Соус"
-                    value={optName}
-                    onChange={(e) => setOptName(e.target.value)}
-                    className="w-full rounded-xl p-2 outline-none"
-                    style={{ background: "var(--app-surface-2)" }}
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 font-semibold opacity-70">Доплата (₴):</label>
-                  <input
-                    type="number"
-                    value={optPrice}
-                    onChange={(e) => setOptPrice(e.target.value)}
-                    className="w-full rounded-xl p-2 outline-none"
-                    style={{ background: "var(--app-surface-2)" }}
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  onClick={() => setTargetItemIdx(null)}
-                  className="app-press flex-1 rounded-xl py-2 text-xs font-semibold"
-                  style={{ background: "var(--app-surface-2)" }}
-                >
-                  Скасувати
-                </button>
-                <button
-                  onClick={() => {
-                    if (!optName.trim()) return;
-                    haptic("light");
-                    const next = [...items];
-                    next[targetItemIdx].options.push({
-                      option_group_name: optGroup.trim() || "Додатки",
-                      option_name: optName.trim(),
-                      price_delta: parseFloat(optPrice) || 0,
-                      qty: 1,
-                    });
-                    setItems(next);
-                    setTargetItemIdx(null);
-                  }}
-                  className="app-press flex-1 rounded-xl py-2 text-xs font-semibold"
-                  style={{
-                    background: "var(--tg-theme-button-color)",
-                    color: "var(--tg-theme-button-text-color)",
-                  }}
-                >
-                  Додати
-                </button>
-              </div>
-            </div>
-          </div>
+        {/* Модалка додавання опції: прив'язані, з меню або власні */}
+        {targetItemIdx !== null && items[targetItemIdx] && (
+          <AddOptionToItemModal
+            item={items[targetItemIdx]}
+            productId={
+              items[targetItemIdx].product_id ??
+              getProductForDraft(items[targetItemIdx])?.id ??
+              null
+            }
+            adminOptionGroups={adminOptionGroups}
+            onAddOption={(groupName, optName, priceDelta) => {
+              handleAddOptionToItem(targetItemIdx, groupName, optName, priceDelta);
+            }}
+            onClose={() => setTargetItemIdx(null)}
+          />
         )}
       </div>
     </div>

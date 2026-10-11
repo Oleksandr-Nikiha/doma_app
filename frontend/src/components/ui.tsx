@@ -109,8 +109,33 @@ export function EmptyState({ icon, title, hint }: { icon: string; title: string;
 }
 
 /** Заголовок екрана */
-export function ScreenTitle({ children }: { children: ReactNode }) {
-  return <h1 className="px-4 pb-2 pt-4 text-2xl font-extrabold tracking-tight">{children}</h1>;
+export function ScreenTitle({
+  children,
+  onBack,
+}: {
+  children: ReactNode;
+  onBack?: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 px-4 pb-2 pt-4">
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="app-press flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base font-bold transition-transform active:scale-95 shadow-sm border"
+          style={{
+            background: "var(--app-surface-2)",
+            borderColor: "var(--app-border)",
+            color: "var(--tg-theme-text-color)",
+          }}
+          aria-label="Назад"
+        >
+          ←
+        </button>
+      )}
+      <h1 className="text-2xl font-extrabold tracking-tight truncate flex-1">{children}</h1>
+    </div>
+  );
 }
 
 /**
