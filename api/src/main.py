@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Doma Mini App API", lifespan=lifespan)
 
 # Mini App віддається з іншого origin, ніж API (у dev — Vite на :5173,
-# у проді — домен за nginx), тож CORS обов'язковий. Заголовок
+# у проді — домен за caddy), тож CORS обов'язковий. Заголовок
 # X-Telegram-Init-Data кастомний, тому allow_headers мусить його покривати.
 _settings = get_settings()
 app.add_middleware(

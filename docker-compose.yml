@@ -2,7 +2,7 @@
 #     docker compose up -d --build
 #
 # Postgres не піднімається тут — використовується зовнішній сервер із .env.
-# TLS термінує зовнішній reverse-proxy або тунель; nginx слухає 80 (див. nginx/nginx.conf).
+# TLS термінує зовнішній reverse-proxy або тунель; caddy слухає 80 (див. caddy/Caddyfile).
 
 services:
   redis:
@@ -36,7 +36,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    # Назовні api не публікуємо — доступ лише крізь nginx
+    # Назовні api не публікуємо — доступ лише крізь caddy
 
   bot:
     build:
@@ -48,10 +48,10 @@ services:
       api:
         condition: service_healthy
 
-  nginx:
+  caddy:
     build:
       context: .
-      dockerfile: nginx/Dockerfile
+      dockerfile: caddy/Dockerfile
       args:
         # Фронтенд ходить у той самий origin, що і статика, тож відносний шлях.
         VITE_API_BASE_URL: /api
@@ -61,9 +61,14 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
 
 volumes:
   redis_data:
   directus_uploads:
     external: true
+  caddy_data:
+  caddy_config:
 

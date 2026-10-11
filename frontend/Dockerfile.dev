@@ -1,5 +1,5 @@
 # Dev-образ фронтенду: Vite-сервер із HMR.
-# Прод збирається інакше — див. nginx/Dockerfile (multi-stage).
+# Прод збирається інакше — див. caddy/Dockerfile (multi-stage).
 #
 # Vite 8 вимагає Node ^20.19 || >=22.12, тому саме 22.
 FROM node:22-alpine

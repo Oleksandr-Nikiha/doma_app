@@ -1,6 +1,6 @@
-# Прод-образ Mini App: збирає React-фронтенд і віддає його через nginx.
-# Контекст збірки — корінь проєкту (щоб дістати і frontend/, і nginx/):
-#     docker build -f nginx/Dockerfile .
+# Прод-образ Mini App: збирає React-фронтенд і віддає його через Caddy.
+# Контекст збірки — корінь проєкту (щоб дістати і frontend/, і caddy/):
+#     docker build -f caddy/Dockerfile .
 #
 # УВАГА: стадія build запрацює лише після того, як з'явиться frontend/package.json.
 
@@ -22,16 +22,16 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 RUN npm run build
 
-# --- Стадія 2: віддача статики ---
-FROM nginx:1.27-alpine
+# --- Стадія 2: віддача статики та проксі ---
+FROM caddy:2-alpine
 
-RUN rm /etc/nginx/conf.d/default.conf
-COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY caddy/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/dist /srv
 
-EXPOSE 80
+EXPOSE 80 443
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
     CMD wget -qO- http://localhost/index.html > /dev/null || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+

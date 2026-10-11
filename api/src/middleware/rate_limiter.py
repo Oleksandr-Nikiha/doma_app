@@ -23,7 +23,7 @@ async def rate_limiter(request: Request) -> None:
     if client is None:
         return
 
-    # Отримання IP клієнта з урахуванням проксі (nginx)
+    # Отримання IP клієнта з урахуванням проксі (caddy)
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         client_ip = forwarded.split(",")[0].strip()

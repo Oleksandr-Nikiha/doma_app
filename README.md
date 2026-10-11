@@ -84,7 +84,7 @@
 - **Безпека контейнерів та оркестрація (Docker):**
   - Запуск сервісів `api` та `bot` від непривілейованого системного користувача `appuser` (non-root)
   - Вбудований Docker Healthcheck для FastAPI (`/api/health`)
-  - Коректна залежність запуску в `docker-compose.yml`: `bot` та `nginx` очікують стану `service_healthy` від `api`
+  - Коректна залежність запуску в `docker-compose.yml`: `bot` та `caddy` очікують стану `service_healthy` від `api`
 - **Інтеграція з Directus CMS та медіа-сховище:**
   - Керування каталогом та зображеннями через headless CMS Directus
   - Локальне збереження фотографій у томі `directus_uploads` (захист від недоступності зовнішніх сайтів)
@@ -101,6 +101,7 @@
 Нативна кнопка «Назад», тактильний відгук (Haptic), підтримка світлої й темної тем Telegram.
 
 **Контроль доступу та безпека:**
+
 - **Клієнтське меню та замовлення:** доступні **виключно** з додатку Telegram (iOS, Android, Desktop) або Telegram Web фрейму.
 - **Адмін-панель (`/admin`):** доступна з десктопних браузерів за прямим посиланням (`https://nikiga-ax.duckdns.org/admin`). Будь-які неавторизовані запити до інших сторінок поза Telegram автоматично редиректяться в адмінку, а кнопки «До меню» в адмінці приховуються.
 - **Захист API:** ендпоінти каталогу (`/api/categories`, `/api/products`), локацій та доставки захищені залежністю `require_telegram_or_staff` (вимагають підпис `initData` або токен персоналу).
@@ -120,7 +121,7 @@ Telegram client
       └── Mini App (WebView)
              │  HTTPS, заголовок X-Telegram-Init-Data
              ▼
-          nginx ──── /        ─► статика React (SPA)
+          caddy ──── /        ─► статика React (SPA)
             │   └─── /api/    ─► FastAPI
             │                      │
             ▼                      ▼
@@ -138,7 +139,7 @@ Telegram client
  Бот | aiogram 3
  Фронтенд | React 19 + TypeScript + Vite 8, TailwindCSS 4, TanStack Query, `@telegram-apps/sdk-react`
  Сховище | PostgreSQL, Redis
- Інфраструктура | Docker Compose, nginx
+ Інфраструктура | Docker Compose, Caddy
 
 ---
 
@@ -152,7 +153,7 @@ frontend/   React + TS + Vite — клієнтський Mini App
 │   ├── src/components/admin/  модульні вкладки та модальні вікна веб-адмінки
 │   └── src/utils/             спільні утиліти обчислення вартості та опцій страв
 db/         SQL-міграції (0001–0010) та початковий сид каталогу обох закладів
-nginx/      Прод-образ: multi-stage збірка фронтенду + віддача статики + проксі /api
+caddy/      Прод-образ: multi-stage збірка фронтенду + віддача статики + проксі /api
 scripts/    Локальні dev-утиліти (не відстежуються в git)
 ```
 
@@ -332,8 +333,8 @@ curl -s -X POST localhost:8010/api/cart/items \
 ruff check api bot                                    # лінт (конфіг — ruff.toml)
 python -m compileall -q api/src bot/src
 docker compose -f docker-compose.dev.yml config -q    # валідність compose
-docker run --rm -v "$PWD/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
-  nginx:1.27-alpine nginx -t                          # синтаксис nginx
+docker run --rm -v "$PWD/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+  caddy:2-alpine caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile # синтаксис caddy
 ```
 
 Фронтенд:
@@ -342,7 +343,7 @@ docker run --rm -v "$PWD/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
 cd frontend && npm ci && npx tsc --noEmit && npx vite build
 ```
 
-CI додатково збирає образи `api`, `bot` і `nginx` (останній разом із фронтендом)
+CI додатково збирає образи `api`, `bot` і `caddy` (останній разом із фронтендом)
 та перевіряє, що в репозиторій не потрапив `.env`, схожий на справжній `BOT_TOKEN`
 чи підписаний `initData`.
 
@@ -354,21 +355,26 @@ CI додатково збирає образи `api`, `bot` і `nginx` (ост�
 docker compose up -d --build
 ```
 
-Стек: `nginx` (порт 80), `api`, `bot`, `redis`. Фронтенд збирається всередині
-образу nginx на етапі build.
+Стек: `caddy` (порт 80), `api`, `bot`, `redis`. Фронтенд збирається всередині
+образу caddy на етапі build.
 
-**TLS тут не термінується** — Telegram вимагає HTTPS, тож перед nginx має стояти
-зовнішній reverse-proxy, certbot або тунель. Приклад HTTPS-блоку закоментований
-у [nginx/nginx.conf](nginx/nginx.conf).
+За замовчуванням Caddy слухає порт 80 (HTTP) або автоматично керує TLS при
+вказанні домену через змінну `APP_DOMAIN` (див. [caddy/Caddyfile](caddy/Caddyfile)).
 
 ### Публікація для Telegram
 
 Telegram відкриває Mini App лише за HTTPS-URL. Потрібні домен і сертифікат;
 далі reverse-proxy на хості віддає застосунок і API з одного origin:
 
-```nginx
-location /api/ { proxy_pass http://127.0.0.1:8010; }   # API
-location /     { root /var/www/doma-app; try_files $uri $uri/ /index.html; }
+```caddy
+handle /api/* {
+    reverse_proxy 127.0.0.1:8010
+}
+handle {
+    root * /var/www/doma-app
+    try_files {path} /index.html
+    file_server
+}
 ```
 
 Статику можна зібрати локально (`npm --prefix frontend run build`) і розкласти

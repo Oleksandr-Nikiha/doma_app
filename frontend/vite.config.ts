@@ -5,7 +5,7 @@ import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  // Публічний домен, через який Telegram відкриває Mini App (nginx + TLS на хості)
+  // Публічний домен, через який Telegram відкриває Mini App (caddy + TLS на хості)
   const publicHost = env.VITE_PUBLIC_HOST || "";
 
   return {
@@ -27,8 +27,8 @@ export default defineConfig(({ mode }) => {
       // без цього запити з домену повертають "Blocked request"
       allowedHosts: publicHost ? [publicHost] : [],
 
-      // API на тому самому шляху /api і локально, і через nginx:
-      // тут його проксює сам Vite, у проді — nginx
+      // API на тому самому шляху /api і локально, і через caddy:
+      // тут його проксює сам Vite, у проді — caddy
       proxy: {
         "/api": {
           target: "http://api:8000",   // ім'я сервісу в docker-мережі

@@ -65,7 +65,7 @@ services:
       VITE_DEV_INIT_DATA: ${VITE_DEV_INIT_DATA:-}
       VITE_PUBLIC_HOST: ${VITE_PUBLIC_HOST:-}
     ports:
-      # Тільки локально: назовні Mini App віддає nginx зі зібраної статики
+      # Тільки локально: назовні Mini App віддає caddy зі зібраної статики
       # (scripts/deploy_frontend.sh). Dev-сервер публікувати не можна — він
       # віддає вихідні тексти з підставленими значеннями VITE_*-змінних.
       - "5173:5173"

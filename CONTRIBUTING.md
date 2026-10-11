@@ -42,8 +42,8 @@ ruff check api bot                                    # лінт
 python -m compileall -q api/src bot/src               # синтаксис
 docker compose -f docker-compose.dev.yml config -q    # валідність compose
 docker compose -f docker-compose.yml config -q
-docker run --rm -v "$PWD/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
-  nginx:1.27-alpine nginx -t                          # синтаксис nginx
+docker run --rm -v "$PWD/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+  caddy:2-alpine caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile # синтаксис caddy
 cd frontend && npm ci && npx tsc --noEmit && npx vite build # типізація та збірка фронтенду
 ```
 

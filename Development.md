@@ -92,8 +92,8 @@ MVP включає лише 4 можливості:
 
 **Інфраструктура:**
 
-- Docker Compose: `bot`, `api`, `postgres`, `redis`, `frontend` (nginx)
-- Nginx — HTTPS, роутинг `/api` → FastAPI, `/` → статика
+- Docker Compose: `bot`, `api`, `postgres`, `redis`, `frontend` (caddy)
+- Caddy — HTTPS, роутинг `/api` → FastAPI, `/` → статика
 - Cloudflare Tunnel / ngrok — для локальної розробки (BotFather вимагає HTTPS URL)
 
 ---
@@ -244,7 +244,7 @@ GET    /api/locations                                                     ← к
    - Ручне тестування в Telegram (iOS/Android/Desktop)
 
 5. **Деплой staging**
-   - Docker Compose на сервері, Nginx + HTTPS, домен
+   - Docker Compose на сервері, Caddy + HTTPS, домен
    - Оновлення посилання в BotFather на прод-домен
 
 ---
