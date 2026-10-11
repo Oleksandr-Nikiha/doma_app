@@ -281,7 +281,7 @@ async def update_admin_order(
             total_calculated_price = 0.0
             for item in data.items:
                 options_price = sum(opt.price_delta * opt.qty for opt in item.options)
-                item_subtotal = round((item.unit_price + options_price) * item.qty, 2)
+                item_subtotal = round(item.unit_price * item.qty + options_price, 2)
                 total_calculated_price += item_subtotal
 
                 item_db = await conn.fetchrow(

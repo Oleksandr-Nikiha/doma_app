@@ -108,3 +108,13 @@ class TestBuildOptionsKey:
         )
         assert key_extra_sauce == "1:5:2"
         assert key_extra_sauce != key_single
+
+    def test_dict_options_key_compatibility(self):
+        """Сумісність зі словниками (використовується в repeat_order)."""
+        dict_opts = [
+            {"group_id": 2, "variant_id": 10, "qty": 2},
+            {"group_id": 1, "variant_id": 5, "qty": 4},
+        ]
+        key = build_options_key(dict_opts, item_qty=2)
+        assert key == "1:5:2|2:10:1"
+

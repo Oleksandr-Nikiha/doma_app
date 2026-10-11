@@ -9,12 +9,22 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   api:
     build:
@@ -32,11 +42,21 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8010:8000"   # 8000 на хості зайнятий portainer
+      - "127.0.0.1:8010:8000"   # 8000 на хості зайнятий portainer
     volumes:
       - ./api/src:/app/src   # hot-reload: правки коду одразу підхоплюються
       - directus_uploads:/directus/uploads
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
 
   bot:
     build:
@@ -51,6 +71,16 @@ services:
     volumes:
       - ./bot/src:/app/src
     command: watchfiles --filter python "python -u -m src.main" src
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
 
   frontend:
     build:
@@ -76,12 +106,22 @@ services:
       - ./frontend:/app
     # Залежності ставляться при старті, якщо їх ще немає на хості.
     command: sh -c "[ -d node_modules/vite ] || npm install; npm run dev -- --host 0.0.0.0"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
 
   directus:
     image: directus/directus:latest
     restart: unless-stopped
     ports:
-      - "${DIRECTUS_PORT:-8055}:8055"
+      - "127.0.0.1:${DIRECTUS_PORT:-8055}:8055"
     environment:
       KEY: ${DIRECTUS_KEY}
       SECRET: ${DIRECTUS_SECRET}
@@ -100,6 +140,16 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
 
 volumes:
   directus_uploads:

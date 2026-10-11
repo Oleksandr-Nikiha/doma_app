@@ -1,4 +1,4 @@
-# Caddyfile для Mini App: статика зібраного React + проксі /api у FastAPI.
+# Caddyfile для Mini App: статика зібраного React + проксі /api у FastAPI + Directus CMS.
 #
 # За замовчуванням слухає порт 80 (HTTP). Якщо задано змінну оточення APP_DOMAIN
 # (наприклад, APP_DOMAIN=app.example.com), Caddy автоматично отримає та оновить
@@ -17,14 +17,34 @@
 		Content-Security-Policy "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org;"
 	}
 
-	# Обмеження розміру запитів (аналог client_max_body_size 2m)
-	request_body {
-		max_size 2MB
+	# Directus CMS (якщо активовано профіль cms)
+	redir /directus /directus/
+	handle_path /directus/* {
+		request_body {
+			max_size 30MB
+		}
+		reverse_proxy directus:8055 {
+			header_up Host {host}
+			header_up X-Forwarded-Prefix /directus
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 60s
+			}
+		}
 	}
 
 	# Проксі API у контейнер FastAPI
 	@api path /api /api/*
 	handle @api {
+		# Обмеження розміру клієнтських запитів API
+		request_body {
+			max_size 2MB
+		}
+
+		# Довготривале кешування для роздачі медіа страв
+		@uploads path /api/uploads/*
+		header @uploads Cache-Control "public, max-age=2592000, immutable"
+
 		reverse_proxy api:8000 {
 			header_up X-Forwarded-For {remote_host}
 			transport http {
@@ -49,4 +69,3 @@
 		file_server
 	}
 }
-

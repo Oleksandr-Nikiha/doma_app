@@ -306,6 +306,7 @@ export interface AdminProduct {
   location_id?: number | null;
   location_name?: string | null;
   description: string | null;
+  image?: string | null;
   image_url: string | null;
   sort_order: number;
   is_available: boolean;
@@ -317,6 +318,7 @@ export interface ProductCreatePayload {
   name: string;
   category_id: number;
   description?: string | null;
+  image?: string | null;
   image_url?: string | null;
   sort_order?: number;
   is_available?: boolean;
@@ -327,6 +329,7 @@ export interface ProductUpdatePayload {
   name?: string;
   category_id?: number;
   description?: string | null;
+  image?: string | null;
   image_url?: string | null;
   sort_order?: number;
   is_available?: boolean;

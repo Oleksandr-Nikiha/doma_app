@@ -110,17 +110,63 @@ app.include_router(delivery_addresses.router)
 app.include_router(admin.router)
 app.include_router(admin_auth.router)
 
+class CachedStaticFiles(StaticFiles):
+    """Роздача файлів із Cache-Control заголовком для браузерів та Telegram WebView."""
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=2592000, immutable"
+        return response
+
+
 # Роздача збережених фотографій страв
 _uploads_dir = os.environ.get("UPLOADS_DIR", "/directus/uploads")
 if not os.path.isdir(_uploads_dir):
     _uploads_dir = str(Path(__file__).resolve().parent.parent.parent / "uploads")
 os.makedirs(_uploads_dir, exist_ok=True)
-app.mount("/api/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
-
+app.mount("/api/uploads", CachedStaticFiles(directory=_uploads_dir), name="uploads")
 
 
 @app.get("/api/health")
 async def health():
     """Простий healthcheck — не звертається до БД, лише підтверджує, що процес живий."""
     return {"status": "ok"}
+
+
+@app.get("/api/health/ready")
+async def health_ready():
+    """Детальна перевірка готовності бекенду, підключення до PostgreSQL та Redis."""
+    from fastapi.responses import JSONResponse
+
+    from src.db.redis import get_redis
+
+    db_ok = False
+    redis_ok = False
+    try:
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute("SELECT 1")
+        db_ok = True
+    except Exception as exc:
+        logger.warning("Health check DB error: %s", exc)
+
+    try:
+        r = get_redis()
+        if r is not None:
+            await r.ping()
+            redis_ok = True
+    except Exception as exc:
+        logger.warning("Health check Redis error: %s", exc)
+
+    is_healthy = db_ok and (redis_ok or not _settings.catalog_cache_enabled)
+    status_code = 200 if is_healthy else 503
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "ready" if is_healthy else "degraded",
+            "database": "connected" if db_ok else "disconnected",
+            "redis": "connected" if redis_ok else "disconnected",
+        },
+    )
 

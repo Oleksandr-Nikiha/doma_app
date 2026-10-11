@@ -10,7 +10,7 @@ from src.config import get_settings
 from src.db.cart_repo import get_or_create_cart_id
 from src.db.connection import get_pool
 from src.middleware.rate_limiter import rate_limiter
-from src.routers.cart import _fetch_cart, options_cost
+from src.routers.cart import _fetch_cart, build_options_key, options_cost
 from src.schemas.order import (
     OrderCreateIn,
     OrderGroupOut,
@@ -779,13 +779,7 @@ async def repeat_order(
                 unavailable_items.append(f"{p_name} (опції більше недоступні)")
                 continue
 
-            ordered_opts = sorted(
-                resolved_options,
-                key=lambda o: (o["group_id"], o["variant_id"]),
-            )
-            options_key = "|".join(
-                f"{o['group_id']}:{o['variant_id']}:{o['qty']}" for o in ordered_opts
-            )
+            options_key = build_options_key(resolved_options, item_qty=item["qty"])
 
             cart_item_id = await conn.fetchval(
                 """

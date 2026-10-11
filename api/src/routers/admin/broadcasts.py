@@ -126,7 +126,7 @@ async def _get_segment_recipients(conn: asyncpg.Connection, segment: str) -> lis
 
 @router.get("/broadcasts/recipients-count", response_model=BroadcastRecipientsCountOut)
 async def get_broadcast_recipients_count(
-    segment: str = Query("all", regex="^(all|active_30d|inactive|top_orders)$"),
+    segment: str = Query("all", pattern="^(all|active_30d|inactive|top_orders)$"),
     admin: asyncpg.Record = Depends(get_current_admin),
     pool: asyncpg.Pool = Depends(get_pool),
 ):

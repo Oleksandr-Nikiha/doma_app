@@ -39,12 +39,19 @@ def build_options_key(options, item_qty: int = 1) -> str:
     """
     if not options:
         return ""
-    ordered = sorted(options, key=lambda o: (o.group_id, o.variant_id))
+
+    def _get(obj, key):
+        return getattr(obj, key) if hasattr(obj, key) else obj[key]
+
+    ordered = sorted(options, key=lambda o: (_get(o, "group_id"), _get(o, "variant_id")))
     safe_item_qty = max(1, item_qty)
     parts = []
     for o in ordered:
-        unit_qty = (o.qty // safe_item_qty) if (o.qty % safe_item_qty == 0) else o.qty
-        parts.append(f"{o.group_id}:{o.variant_id}:{unit_qty}")
+        gid = _get(o, "group_id")
+        vid = _get(o, "variant_id")
+        qty = _get(o, "qty")
+        unit_qty = (qty // safe_item_qty) if (qty % safe_item_qty == 0) else qty
+        parts.append(f"{gid}:{vid}:{unit_qty}")
     return "|".join(parts)
 
 

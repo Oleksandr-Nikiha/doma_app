@@ -86,6 +86,7 @@ class ProductCreateIn(BaseModel):
     category_id: int
     description: str | None = None
     image_url: str | None = None
+    image: str | None = None
     sort_order: int = 0
     is_available: bool = True
     variants: list[VariantCreateIn] = []
@@ -96,6 +97,7 @@ class ProductUpdateIn(BaseModel):
     category_id: int | None = None
     description: str | None = None
     image_url: str | None = None
+    image: str | None = None
     sort_order: int | None = None
     is_available: bool | None = None
 
@@ -195,6 +197,7 @@ class ProductAdminOut(BaseModel):
     location_id: int | None = None
     location_name: str | None = None
     description: str | None = None
+    image: str | None = None
     image_url: str | None = None
     sort_order: int
     is_available: bool

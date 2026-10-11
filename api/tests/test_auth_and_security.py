@@ -248,3 +248,17 @@ class TestSecurityVulnerabilityFixes:
         )
         assert response.status_code == 403
         assert "Потрібні права головного адміністратора" in response.json()["detail"]
+
+    async def test_healthcheck_endpoints(self, async_client):
+        """Перевірка базового та readiness healthcheck ендпоінтів."""
+        resp_basic = await async_client.get("/api/health")
+        assert resp_basic.status_code == 200
+        assert resp_basic.json() == {"status": "ok"}
+
+        resp_ready = await async_client.get("/api/health/ready")
+        assert resp_ready.status_code in (200, 503)
+        data = resp_ready.json()
+        assert "status" in data
+        assert "database" in data
+        assert "redis" in data
+

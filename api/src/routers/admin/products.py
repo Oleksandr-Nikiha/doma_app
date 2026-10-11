@@ -34,7 +34,7 @@ async def list_admin_products(
             """
             SELECT p.id, p.name, p.category_id, c.name AS category_name,
                    c.location_id, l.name AS location_name,
-                   p.description, p.image_url, p.sort_order, p.is_available
+                   p.description, p.image::text AS image, p.image_url, p.sort_order, p.is_available
             FROM products p
             JOIN categories c ON c.id = p.category_id
             LEFT JOIN locations l ON l.id = c.location_id
@@ -125,14 +125,16 @@ async def create_product(
         p_row = await conn.fetchrow(
             """
             INSERT INTO products (
-                category_id, name, description, image_url, sort_order, is_available
+                category_id, name, description, image, image_url, sort_order, is_available
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id, category_id, name, description, image_url, sort_order, is_available
+            VALUES ($1, $2, $3, $4::uuid, $5, $6, $7)
+            RETURNING id, category_id, name, description,
+                      image::text AS image, image_url, sort_order, is_available
             """,
             data.category_id,
             data.name,
             data.description,
+            data.image,
             data.image_url,
             data.sort_order,
             data.is_available,
@@ -378,7 +380,10 @@ async def update_product(
         params = [product_id]
         for field, val in data.model_dump(exclude_unset=True).items():
             params.append(val)
-            updates.append(f"{field} = ${len(params)}")
+            if field == "image":
+                updates.append(f"{field} = ${len(params)}::uuid")
+            else:
+                updates.append(f"{field} = ${len(params)}")
 
         if updates:
             await conn.execute(
@@ -390,7 +395,7 @@ async def update_product(
             """
             SELECT p.id, p.name, p.category_id, c.name AS category_name,
                    c.location_id, l.name AS location_name,
-                   p.description, p.image_url, p.sort_order, p.is_available
+                   p.description, p.image::text AS image, p.image_url, p.sort_order, p.is_available
             FROM products p
             JOIN categories c ON c.id = p.category_id
             LEFT JOIN locations l ON l.id = c.location_id

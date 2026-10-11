@@ -28,7 +28,7 @@ def _get_period_clause(period: str, prefix: str = "") -> str:
 
 @router.get("/analytics/summary", response_model=AnalyticsSummaryOut)
 async def get_analytics_summary(
-    period: str = Query("7d", regex="^(today|7d|30d|all)$"),
+    period: str = Query("7d", pattern="^(today|7d|30d|all)$"),
     location_id: int | None = Query(None),
     admin: asyncpg.Record = Depends(get_current_admin),
     pool: asyncpg.Pool = Depends(get_pool),
@@ -207,7 +207,7 @@ async def get_analytics_summary(
 
 @router.get("/analytics/top-products", response_model=list[AnalyticsTopProductOut])
 async def get_analytics_top_products(
-    period: str = Query("7d", regex="^(today|7d|30d|all)$"),
+    period: str = Query("7d", pattern="^(today|7d|30d|all)$"),
     limit: int = Query(10, ge=1, le=50),
     location_id: int | None = Query(None),
     admin: asyncpg.Record = Depends(get_current_admin),
