@@ -120,3 +120,4 @@ async def fetch_bot_username(bot_token: str) -> str | None:
     except Exception as exc:
         logger.warning("Не вдалося отримати username бота через Telegram API: %s", exc)
     return None
+
