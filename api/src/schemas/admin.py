@@ -350,7 +350,7 @@ class AdminOrderGroupOut(BaseModel):
 
 class AdminOrderListItemOut(BaseModel):
     id: int
-    telegram_id: int
+    telegram_id: int | None = None
     status: str
     fulfillment_type: str
     delivery_address: str | None = None
@@ -366,11 +366,12 @@ class AdminOrderListItemOut(BaseModel):
     location_name: str | None = None
     user_is_blocked: bool = False
     user_admin_note: str | None = None
+    source: str = "telegram"
 
 
 class AdminOrderDetailOut(BaseModel):
     id: int
-    telegram_id: int
+    telegram_id: int | None = None
     status: str
     fulfillment_type: str
     delivery_address: str | None = None
@@ -383,6 +384,7 @@ class AdminOrderDetailOut(BaseModel):
     created_at: str
     user_is_blocked: bool = False
     user_admin_note: str | None = None
+    source: str = "telegram"
     groups: list[AdminOrderGroupOut] = []
 
 

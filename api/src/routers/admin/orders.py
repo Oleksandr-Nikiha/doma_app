@@ -38,8 +38,9 @@ async def list_admin_orders(
                o.contact_name, o.contact_phone, o.payment_method, o.scheduled_time,
                o.comment, o.total_price::float AS total_price,
                to_char(o.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
-               u.is_blocked AS user_is_blocked, u.admin_note AS user_admin_note,
+               COALESCE(u.is_blocked, false) AS user_is_blocked, u.admin_note AS user_admin_note,
                og.location_id, loc.name AS location_name,
+               COALESCE(o.source, 'telegram') AS source,
                COALESCE(
                    (SELECT string_agg(oi.product_name || ' ×' || oi.qty, ', ')
                     FROM order_items oi
@@ -47,7 +48,7 @@ async def list_admin_orders(
                     WHERE g.order_id = o.id), ''
                ) AS items_summary
         FROM orders o
-        JOIN users u ON u.telegram_id = o.telegram_id
+        LEFT JOIN users u ON u.telegram_id = o.telegram_id
         LEFT JOIN order_groups og ON og.order_id = o.id
         LEFT JOIN locations loc ON loc.id = og.location_id
         WHERE ($1::text IS NULL OR o.status = $1)
@@ -75,9 +76,11 @@ async def get_admin_order(
                    o.contact_name, o.contact_phone, o.payment_method, o.scheduled_time,
                    o.comment, o.total_price::float AS total_price,
                    to_char(o.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
-                   u.is_blocked AS user_is_blocked, u.admin_note AS user_admin_note
+                   COALESCE(u.is_blocked, false) AS user_is_blocked,
+                   u.admin_note AS user_admin_note,
+                   COALESCE(o.source, 'telegram') AS source
             FROM orders o
-            JOIN users u ON u.telegram_id = o.telegram_id
+            LEFT JOIN users u ON u.telegram_id = o.telegram_id
             WHERE o.id = $1
             """,
             order_id,

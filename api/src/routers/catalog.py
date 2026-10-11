@@ -1,7 +1,7 @@
 import asyncpg
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
-from src.auth.deps import admin_token_header, require_telegram_or_staff
+from src.auth.deps import admin_token_header
 from src.db.connection import get_pool
 from src.middleware.rate_limiter import rate_limiter
 from src.schemas.catalog import (
@@ -15,18 +15,23 @@ from src.services.cache import get_cached_json, set_cached_json
 router = APIRouter(
     prefix="/api",
     tags=["catalog"],
-    dependencies=[Depends(rate_limiter), Depends(require_telegram_or_staff)],
+    dependencies=[Depends(rate_limiter)],
 )
 
 
 @router.get("/categories", response_model=list[CategoryOut])
 async def list_categories(
+    location_id: int | None = Query(None, description="Фільтр закладу"),
     bypass_cache: bool = Query(False, description="Отримати свіжі дані повз кеш (тільки персонал)"),
     x_bypass_cache: str | None = Header(None, alias="X-Bypass-Cache"),
     admin_token: str | None = Depends(admin_token_header),
     pool: asyncpg.Pool = Depends(get_pool),
 ):
-    cache_key = "catalog:categories"
+    cache_key = (
+        f"catalog:categories:loc_{location_id}"
+        if location_id is not None
+        else "catalog:categories"
+    )
     should_bypass = bool(admin_token) and (
         bypass_cache or (x_bypass_cache in ("1", "true", "True"))
     )
@@ -44,6 +49,7 @@ async def list_categories(
         JOIN locations l ON l.id = c.location_id
         LEFT JOIN categories p_cat ON p_cat.id = c.parent_id
         WHERE c.is_visible = true
+          AND ($1::int IS NULL OR c.location_id = $1)
           AND (
               c.parent_id IS NULL
               OR EXISTS (
@@ -60,7 +66,8 @@ async def list_categories(
             c.parent_id NULLS FIRST,
             c.sort_order,
             c.id
-        """
+        """,
+        location_id,
     )
     result = [CategoryOut(**dict(row)) for row in rows]
 

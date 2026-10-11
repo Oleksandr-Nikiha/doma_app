@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="uk" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Doma Croissants — Перша пекарня задоволення у Вишгороді | Свіжі круасани, кава та піца</title>
+    
+    <!-- Основні SEO мета-теги -->
+    <meta
+      name="description"
+      content="Doma Croissants — справжня майстерня смаку у Вишгороді. Великі хрусткі круасани, авторська кава та бенто-піци. Швидка доставка по місту від 250 ₴ безкоштовно або самовивіз на просп. Шевченка, 2Д."
+    />
+    <meta
+      name="keywords"
+      content="круасани вишгород, дома круасани, дома піца, свіжа випічка, кава вишгород, доставка круасанів, пекарня вишгород, бенто-піца, doma croissants"
+    />
+    <meta name="author" content="Doma Croissants" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://croissants.doma.ua/" />
+
+    <!-- PWA & Mobile Web App налаштування -->
+    <meta name="theme-color" content="#2C1E14" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Doma Croissants" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Фавіконки -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+
+    <!-- Open Graph (для прев'ю в Telegram, Viber, Instagram, Facebook) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="uk_UA" />
+    <meta property="og:site_name" content="Doma Croissants" />
+    <meta property="og:url" content="https://croissants.doma.ua/" />
+    <meta property="og:title" content="Doma Croissants — Перша пекарня задоволення у Вишгороді" />
+    <meta
+      property="og:description"
+      content="Великі хрусткі круасани, ароматна кава та гарячі бенто-піци. Безкоштовна доставка по Вишгороду від 250 ₴!"
+    />
+    <meta
+      property="og:image"
+      content="https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=1200&h=630&q=85"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Хрусткі свіжоспечені круасани Doma Croissants" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Doma Croissants — Перша пекарня задоволення у Вишгороді" />
+    <meta
+      name="twitter:description"
+      content="Великі хрусткі круасани, авторська кава та бенто-піци. Доставка та самовивіз у Вишгороді."
+    />
+    <meta
+      name="twitter:image"
+      content="https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=1200&h=630&q=85"
+    />
+
+    <!-- Шрифти Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+
+    <!-- Структуровані дані Schema.org (JSON-LD) для пошуковиків -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Bakery",
+      "name": "Doma Croissants (Дома Круасани)",
+      "image": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=1200&q=80",
+      "@id": "https://croissants.doma.ua",
+      "url": "https://croissants.doma.ua",
+      "telephone": "+380931127733",
+      "priceRange": "₴₴",
+      "servesCuisine": "Пекарня, Круасани, Кава, Десерти, Бенто-піца",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "просп. Шевченка, 2Д",
+        "addressLocality": "Вишгород",
+        "addressRegion": "Київська область",
+        "postalCode": "07301",
+        "addressCountry": "UA"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 50.5847,
+        "longitude": 30.4908
+      },
+      "openingHoursSpecification": [
+        {
+          "@type": "OpeningHoursSpecification",
+          "dayOfWeek": [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday"
+          ],
+          "opens": "08:00",
+          "closes": "20:00"
+        }
+      ],
+      "hasMenu": "https://croissants.doma.ua/#menu"
+    }
+    </script>
+  </head>
+  <body class="bg-[#FAF7F2] text-[#2C241E] antialiased selection:bg-[#E8C288] selection:text-[#381F0D]">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

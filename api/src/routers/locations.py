@@ -1,7 +1,6 @@
 import asyncpg
 from fastapi import APIRouter, Depends, Header, Query
 
-from src.auth.deps import require_telegram_or_staff
 from src.db.connection import get_pool
 from src.middleware.rate_limiter import rate_limiter
 from src.schemas.location import LocationOut
@@ -10,7 +9,7 @@ from src.services.cache import get_cached_json, set_cached_json
 router = APIRouter(
     prefix="/api",
     tags=["locations"],
-    dependencies=[Depends(rate_limiter), Depends(require_telegram_or_staff)],
+    dependencies=[Depends(rate_limiter)],
 )
 
 

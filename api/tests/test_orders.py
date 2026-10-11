@@ -454,3 +454,67 @@ class TestOrderHistoryAndDetailsApi:
         )
         assert opt2.option_group_name == "Бортик"
 
+    async def test_create_and_get_web_order_success(self, async_client, mock_db_conn):
+        """Тестування створення та отримання замовлення з веб-сайту закладу."""
+        # 1. Мокаємо перевірку локації (Doma Croissants, id=2)
+        mock_db_conn.fetchrow.side_effect = [
+            # loc_row
+            {
+                "id": 2,
+                "name": "Doma Croissants",
+                "is_delivery_enabled": True,
+                "delivery_start_time": "10:30",
+                "delivery_end_time": "21:30",
+            },
+            # order_row (INSERT orders)
+            {"id": 301, "created_at": datetime.now(UTC)},
+            # group_row (INSERT order_groups)
+            {"id": 401},
+            # item_row (INSERT order_items)
+            {"id": 501},
+        ]
+
+        # 2. Мокаємо v_rows (variant)
+        mock_db_conn.fetch.side_effect = [
+            # v_rows
+            [
+                {
+                    "variant_id": 10,
+                    "price": 120.0,
+                    "variant_label": "Стандартний",
+                    "pv_avail": True,
+                    "product_id": 5,
+                    "product_name": "Круасан Фісташковий",
+                    "p_avail": True,
+                    "location_id": 2,
+                }
+            ]
+        ]
+
+        payload = {
+            "location_id": 2,
+            "fulfillment_type": "pickup",
+            "contact_name": "Марія",
+            "contact_phone": "0931234567",
+            "payment_method": "cash",
+            "source": "web_croissants",
+            "items": [
+                {
+                    "variant_id": 10,
+                    "qty": 2,
+                    "option_variant_ids": [],
+                }
+            ],
+        }
+
+        response = await async_client.post("/api/orders/web", json=payload)
+        assert response.status_code == 201
+        data = response.json()
+        assert data["id"] == 301
+        assert data["contact_name"] == "Марія"
+        assert data["contact_phone"] == "+380931234567"
+        assert data["total_price"] == 240.0
+        assert data["source"] == "web_croissants"
+        assert data["groups"][0]["location_name"] == "Doma Croissants"
+
+

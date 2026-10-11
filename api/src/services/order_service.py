@@ -139,20 +139,32 @@ class OrderService:
 
     @staticmethod
     async def fetch_order_by_id(
-        conn: asyncpg.Connection, order_id: int, telegram_id: int
+        conn: asyncpg.Connection, order_id: int, telegram_id: int | None = None
     ) -> OrderOut | None:
         """Вибірка деталей замовлення разом із групами, позиціями та модифікаторами."""
-        order_row = await conn.fetchrow(
-            """
-            SELECT id, telegram_id, status, fulfillment_type, delivery_address,
-                   contact_name, contact_phone, payment_method, scheduled_time,
-                   comment, total_price, created_at
-            FROM orders
-            WHERE id = $1 AND telegram_id = $2
-            """,
-            order_id,
-            telegram_id,
-        )
+        if telegram_id is not None:
+            order_row = await conn.fetchrow(
+                """
+                SELECT id, telegram_id, status, fulfillment_type, delivery_address,
+                       contact_name, contact_phone, payment_method, scheduled_time,
+                       comment, total_price, created_at, COALESCE(source, 'telegram') AS source
+                FROM orders
+                WHERE id = $1 AND telegram_id = $2
+                """,
+                order_id,
+                telegram_id,
+            )
+        else:
+            order_row = await conn.fetchrow(
+                """
+                SELECT id, telegram_id, status, fulfillment_type, delivery_address,
+                       contact_name, contact_phone, payment_method, scheduled_time,
+                       comment, total_price, created_at, COALESCE(source, 'telegram') AS source
+                FROM orders
+                WHERE id = $1
+                """,
+                order_id,
+            )
         if not order_row:
             return None
 
@@ -228,6 +240,7 @@ class OrderService:
             comment=order_row["comment"],
             total_price=float(order_row["total_price"]),
             created_at=order_row["created_at"],
+            source=order_row.get("source") or "telegram",
             groups=[
                 OrderGroupOut(
                     id=g["id"],

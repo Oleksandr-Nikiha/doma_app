@@ -65,9 +65,41 @@ class OrderGroupOut(BaseModel):
     items: list[OrderItemOut] = []
 
 
+class WebOrderItemIn(BaseModel):
+    variant_id: int
+    qty: int = Field(..., ge=1, le=50)
+    option_variant_ids: list[int] = Field(default_factory=list)
+
+
+class WebOrderCreateIn(BaseModel):
+    location_id: int = 2
+    fulfillment_type: Literal["delivery", "pickup"]
+    delivery_address: str | None = None
+    contact_name: str = Field(..., min_length=1, max_length=100)
+    contact_phone: str = Field(..., min_length=5, max_length=30)
+    payment_method: Literal["cash", "card"]
+    scheduled_time: str | None = Field(None, max_length=50)
+    comment: str | None = Field(None, max_length=500)
+    source: str = "web_croissants"
+    items: list[WebOrderItemIn] = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def validate_fulfillment(self) -> "WebOrderCreateIn":
+        if self.fulfillment_type == "delivery" and (
+            not self.delivery_address or not self.delivery_address.strip()
+        ):
+            raise ValueError("Адреса доставки обов'язкова для кур'єрської доставки")
+        return self
+
+    @field_validator("contact_phone")
+    @classmethod
+    def validate_contact_phone(cls, v: str) -> str:
+        return normalize_phone(v)
+
+
 class OrderOut(BaseModel):
     id: int
-    telegram_id: int
+    telegram_id: int | None = None
     status: str
     fulfillment_type: str
     delivery_address: str | None = None
@@ -78,6 +110,7 @@ class OrderOut(BaseModel):
     comment: str | None = None
     total_price: float
     created_at: datetime
+    source: str = "telegram"
     groups: list[OrderGroupOut] = []
 
 
