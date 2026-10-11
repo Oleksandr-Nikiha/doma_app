@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 # --- Права поточного користувача ---
 
@@ -312,8 +312,12 @@ class AdminOrderUpdateIn(BaseModel):
 
 
 class AdminOrderItemOptionOut(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: int
-    option_group_name: str
+    option_group_name: str = Field(
+        ..., validation_alias=AliasChoices("option_group_name", "group_name")
+    )
     option_name: str
     price_delta: float
     qty: int

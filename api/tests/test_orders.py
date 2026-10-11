@@ -358,3 +358,99 @@ class TestOrderHistoryAndDetailsApi:
         response = await async_client.get("/api/orders/9999")
         assert response.status_code == 404
         assert "Замовлення не знайдено" in response.json()["detail"]
+
+    async def test_get_order_by_id_with_options_serializes_correctly(
+        self, async_client, mock_db_conn
+    ):
+        """
+        Перевірка що деталі замовлення з опціями серіалізуються без помилки 500 (option_group_name).
+        """
+        mock_db_conn.fetchrow.return_value = {
+            "id": 105,
+            "telegram_id": 123456789,
+            "status": "pending_moderation",
+            "fulfillment_type": "delivery",
+            "delivery_address": "вул. Франка, 10",
+            "contact_name": "Олександр",
+            "contact_phone": "+380931112233",
+            "payment_method": "cash",
+            "scheduled_time": None,
+            "comment": None,
+            "total_price": 250.0,
+            "created_at": datetime.now(UTC),
+        }
+
+        mock_db_conn.fetch.side_effect = [
+            # groups
+            [
+                {
+                    "id": 50,
+                    "location_id": 1,
+                    "location_name": "Doma Pizza",
+                    "status": "pending",
+                    "subtotal": 250.0,
+                }
+            ],
+            # items
+            [
+                {
+                    "id": 10,
+                    "order_group_id": 50,
+                    "variant_id": 1,
+                    "product_name": "Піца 4 Сири",
+                    "variant_label": "30см",
+                    "unit_price": 230.0,
+                    "qty": 1,
+                    "subtotal": 250.0,
+                }
+            ],
+            # options
+            [
+                {
+                    "id": 15,
+                    "order_item_id": 10,
+                    "option_group_name": "Соуси",
+                    "option_name": "Сирний соус",
+                    "price_delta": 20.0,
+                    "qty": 1,
+                }
+            ],
+        ]
+
+        response = await async_client.get("/api/orders/105")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == 105
+        assert len(data["groups"]) == 1
+        item = data["groups"][0]["items"][0]
+        assert item["product_name"] == "Піца 4 Сири"
+        assert len(item["options"]) == 1
+        assert item["options"][0]["option_group_name"] == "Соуси"
+        assert item["options"][0]["option_name"] == "Сирний соус"
+
+    def test_order_item_option_schema_accepts_group_name_alias(self):
+        """Схема OrderItemOptionOut безпомилково приймає як option_group_name, так і group_name."""
+        from src.schemas.order import OrderItemOptionOut
+
+        # 1. За стандартним полем option_group_name
+        opt1 = OrderItemOptionOut(
+            id=1,
+            option_group_name="Бортик",
+            option_name="Сирний",
+            price_delta=30.0,
+            qty=1,
+        )
+        assert opt1.option_group_name == "Бортик"
+
+        # 2. За аліасом group_name (якщо прийшло зі старого коду чи словника)
+        opt2 = OrderItemOptionOut.model_validate(
+            {
+                "id": 2,
+                "group_name": "Бортик",
+                "option_name": "Сирний",
+                "price_delta": 30.0,
+                "qty": 1,
+            }
+        )
+        assert opt2.option_group_name == "Бортик"
+

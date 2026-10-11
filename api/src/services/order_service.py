@@ -193,7 +193,7 @@ class OrderService:
             opts_by_item.setdefault(r["order_item_id"], []).append(
                 OrderItemOptionOut(
                     id=r["id"],
-                    group_name=r["option_group_name"],
+                    option_group_name=r["option_group_name"],
                     option_name=r["option_name"],
                     price_delta=float(r["price_delta"]),
                     qty=r["qty"],

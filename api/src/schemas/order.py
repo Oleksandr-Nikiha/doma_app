@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from src.schemas.user import normalize_phone
 
@@ -34,8 +34,12 @@ class OrderCreateIn(BaseModel):
 
 
 class OrderItemOptionOut(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: int
-    option_group_name: str
+    option_group_name: str = Field(
+        ..., validation_alias=AliasChoices("option_group_name", "group_name")
+    )
     option_name: str
     price_delta: float
     qty: int

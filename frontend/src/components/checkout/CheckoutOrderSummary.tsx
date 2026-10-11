@@ -45,3 +45,4 @@ export function CheckoutOrderSummary({ items, subtotal }: CheckoutOrderSummaryPr
     </div>
   );
 }
+

@@ -11,8 +11,11 @@ async def connect_db() -> None:
     settings = get_settings()
     _pool = await asyncpg.create_pool(
         dsn=settings.database_url,
-        min_size=1,
-        max_size=10,
+        min_size=2,
+        max_size=20,
+        timeout=10.0,
+        command_timeout=15.0,
+        max_inactive_connection_lifetime=300.0,
     )
 
 
