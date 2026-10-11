@@ -27,10 +27,11 @@ yarn-error.log*
 .DS_Store
 *.swp
 CLAUDE.md
-Clauder.md
 .antigravityignore
 .gemini/
 error.log
+RECOMMENDATIONS.md
+SECURITY_AND_REFACTORING_REPORT.md
 # --- Згенеровані бекапи та експорти (дампи БД) ---
 backups/
 exports/
