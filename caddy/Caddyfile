@@ -10,10 +10,11 @@
 
 	# Захисні заголовки
 	# УВАГА: Telegram відкриває Mini App у WebView, а на Desktop — в iframe.
-	# Тому X-Frame-Options: DENY тут ставити НЕ можна — застосунок не завантажиться!
+	# Дозволяємо відображення у фреймах лише всередині Telegram для захисту від клікджекінгу (SEC-10).
 	header {
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
+		Content-Security-Policy "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org;"
 	}
 
 	# Обмеження розміру запитів (аналог client_max_body_size 2m)
@@ -25,6 +26,7 @@
 	@api path /api /api/*
 	handle @api {
 		reverse_proxy api:8000 {
+			header_up X-Forwarded-For {remote_host}
 			transport http {
 				dial_timeout 5s
 				response_header_timeout 30s

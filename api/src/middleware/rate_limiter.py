@@ -26,7 +26,8 @@ async def rate_limiter(request: Request) -> None:
     # Отримання IP клієнта з урахуванням проксі (caddy)
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        client_ip = forwarded.split(",")[0].strip()
+        # Останній IP у списку додається найнадійнішим проксі (caddy)
+        client_ip = forwarded.split(",")[-1].strip()
     elif request.client and request.client.host:
         client_ip = request.client.host
     else:

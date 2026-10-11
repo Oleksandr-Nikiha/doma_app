@@ -6,17 +6,17 @@ class OptionSelectionIn(BaseModel):
     variant_id: int
     # Кілька порцій однієї опції: два кетчупи — це qty = 2, а не два рядки.
     # Первинний ключ cart_item_options не дав би вставити пару двічі.
-    qty: int = Field(1, gt=0)
+    qty: int = Field(1, gt=0, le=50)
 
 
 class CartItemIn(BaseModel):
     variant_id: int
-    qty: int = Field(..., gt=0)
+    qty: int = Field(..., gt=0, le=50)
     options: list[OptionSelectionIn] = []
 
 
 class CartItemUpdateIn(BaseModel):
-    qty: int | None = Field(None, gt=0)
+    qty: int | None = Field(None, gt=0, le=50)
     variant_id: int | None = None
     options: list[OptionSelectionIn] | None = None
 

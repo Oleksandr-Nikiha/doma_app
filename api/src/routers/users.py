@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from src.auth.deps import get_current_user, get_init_data
 from src.config import get_settings
 from src.db.connection import get_pool
-from src.routers.admin_auth import _get_bot_username
+from src.middleware.rate_limiter import rate_limiter
 from src.schemas.user import RegisterIn, UserOut, UserUpdateIn
 
-router = APIRouter(prefix="/api", tags=["Users"])
+router = APIRouter(prefix="/api", tags=["Users"], dependencies=[Depends(rate_limiter)])
 
 
 def _user_to_out(row: asyncpg.Record | dict, bot_token: str | None = None) -> UserOut:
@@ -21,7 +21,9 @@ def _user_to_out(row: asyncpg.Record | dict, bot_token: str | None = None) -> Us
     if "is_phone_verified" not in d or d["is_phone_verified"] is None:
         d["is_phone_verified"] = False
     if bot_token:
-        d["bot_username"] = _get_bot_username(bot_token)
+        # Для сумісності з синхронним контекстом відображення
+        settings = get_settings()
+        d["bot_username"] = settings.bot_username or "ncoffee_app_tst_bot"
     return UserOut(**d)
 
 
@@ -53,20 +55,39 @@ async def register_user(
     )
     full_name = payload.full_name or " ".join(filter(None, [first_name, last_name or ""]))
 
-    query = """
-        INSERT INTO users (telegram_id, full_name, first_name, last_name, phone, delivery_address)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (telegram_id) DO UPDATE 
-        SET full_name = EXCLUDED.full_name,
-            first_name = EXCLUDED.first_name,
-            last_name = EXCLUDED.last_name,
-            phone = EXCLUDED.phone,
-            delivery_address = EXCLUDED.delivery_address,
-            updated_at = now()
-        RETURNING *
-    """
-
     async with pool.acquire() as conn:
+        # Захист SEC-03: верифікований номер не можна підміняти через повторну реєстрацію
+        existing_user = await conn.fetchrow(
+            "SELECT is_phone_verified, phone FROM users WHERE telegram_id = $1",
+            telegram_id,
+        )
+        if (
+            existing_user
+            and existing_user["is_phone_verified"]
+            and payload.phone.strip() != existing_user["phone"]
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Верифікований номер телефону не можна змінювати. "
+                    "Зверніться до адміністратора закладу."
+                ),
+            )
+
+        query = """
+            INSERT INTO users (
+                telegram_id, full_name, first_name, last_name, phone, delivery_address
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (telegram_id) DO UPDATE 
+            SET full_name = EXCLUDED.full_name,
+                first_name = EXCLUDED.first_name,
+                last_name = EXCLUDED.last_name,
+                phone = EXCLUDED.phone,
+                delivery_address = EXCLUDED.delivery_address,
+                updated_at = now()
+            RETURNING *
+        """
         row = await conn.fetchrow(
             query,
             telegram_id,

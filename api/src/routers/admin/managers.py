@@ -1,7 +1,7 @@
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from src.auth.deps import get_current_staff
+from src.auth.deps import get_current_admin, get_current_staff
 from src.db.connection import get_pool
 from src.schemas.admin import (
     ManagerCreateIn,
@@ -21,7 +21,7 @@ async def list_managers(
         rows = await conn.fetch(
             """
             SELECT m.id, m.telegram_id, u.full_name, u.phone, m.role,
-                   m.location_id, l.name AS location_name, m.is_active
+                    m.location_id, l.name AS location_name, m.is_active
             FROM managers m
             JOIN users u ON u.telegram_id = m.telegram_id
             LEFT JOIN locations l ON l.id = m.location_id
@@ -35,14 +35,9 @@ async def list_managers(
 async def create_manager(
     data: ManagerCreateIn,
     pool: asyncpg.Pool = Depends(get_pool),
-    staff: asyncpg.Record = Depends(get_current_staff),
+    admin: asyncpg.Record = Depends(get_current_admin),
 ):
-    """Призначення користувача менеджером або адміном."""
-    if staff["role"] != "admin" and data.role == "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Тільки головний адміністратор може призначати роль 'admin'.",
-        )
+    """Призначення користувача менеджером або адміном (тільки для головного адміністратора)."""
 
     async with pool.acquire() as conn:
         user = await conn.fetchrow(
@@ -99,9 +94,9 @@ async def update_manager(
     manager_id: int,
     data: ManagerUpdateIn,
     pool: asyncpg.Pool = Depends(get_pool),
-    staff: asyncpg.Record = Depends(get_current_staff),
+    admin: asyncpg.Record = Depends(get_current_admin),
 ):
-    """Оновлення ролі, закладу або статусу активності менеджера."""
+    """Оновлення менеджера (тільки для головного адміністратора)."""
     async with pool.acquire() as conn:
         existing = await conn.fetchrow(
             "SELECT id, telegram_id, role FROM managers WHERE id = $1", manager_id
@@ -109,19 +104,7 @@ async def update_manager(
         if not existing:
             raise HTTPException(status_code=404, detail="Менеджера не знайдено")
 
-        if existing["role"] == "admin" and staff["role"] != "admin":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Менеджер не може змінювати головного адміністратора.",
-            )
-
-        if data.role == "admin" and staff["role"] != "admin":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Тільки головний адміністратор може призначати роль 'admin'.",
-            )
-
-        if existing["telegram_id"] == staff["telegram_id"] and data.is_active is False:
+        if existing["telegram_id"] == admin["telegram_id"] and data.is_active is False:
             raise HTTPException(status_code=400, detail="Не можна деактивувати власний акаунт")
 
         updates = []
@@ -163,9 +146,9 @@ async def update_manager(
 async def delete_manager(
     manager_id: int,
     pool: asyncpg.Pool = Depends(get_pool),
-    staff: asyncpg.Record = Depends(get_current_staff),
+    admin: asyncpg.Record = Depends(get_current_admin),
 ):
-    """Видалення менеджера зі штату."""
+    """Видалення менеджера зі штату (тільки для головного адміністратора)."""
     async with pool.acquire() as conn:
         existing = await conn.fetchrow(
             "SELECT telegram_id, role FROM managers WHERE id = $1", manager_id
@@ -173,13 +156,7 @@ async def delete_manager(
         if not existing:
             raise HTTPException(status_code=404, detail="Менеджера не знайдено")
 
-        if existing["role"] == "admin" and staff["role"] != "admin":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Менеджер не може видаляти головного адміністратора.",
-            )
-
-        if existing["telegram_id"] == staff["telegram_id"]:
+        if existing["telegram_id"] == admin["telegram_id"]:
             raise HTTPException(status_code=400, detail="Не можна видалити власний акаунт")
 
         await conn.execute("DELETE FROM managers WHERE id = $1", manager_id)

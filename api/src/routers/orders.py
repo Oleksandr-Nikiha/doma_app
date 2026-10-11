@@ -1,10 +1,6 @@
-import asyncio
 import html
-import json
 import logging
 import re
-import urllib.error
-import urllib.request
 from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -16,6 +12,7 @@ from src.auth.deps import get_current_user
 from src.config import get_settings
 from src.db.cart_repo import get_or_create_cart_id
 from src.db.connection import get_pool
+from src.middleware.rate_limiter import rate_limiter
 from src.routers.cart import _fetch_cart, options_cost
 from src.schemas.order import (
     OrderCreateIn,
@@ -26,10 +23,11 @@ from src.schemas.order import (
     RepeatOrderIn,
     RepeatOrderOut,
 )
+from src.services.telegram_client import send_telegram_message
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/orders", tags=["Orders"])
+router = APIRouter(prefix="/api/orders", tags=["Orders"], dependencies=[Depends(rate_limiter)])
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
@@ -146,25 +144,6 @@ def _validate_scheduled_time(
         )
 
 
-def _send_telegram_notification_sync(token: str, payload: dict[str, Any]) -> None:
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            resp.read()
-    except urllib.error.HTTPError as e:
-        err_msg = e.read().decode("utf-8", errors="ignore")
-        logger.error("Telegram API HTTP %s: %s", e.code, err_msg)
-    except Exception as e:
-        logger.error("Не вдалося відправити повідомлення в Telegram: %s", e)
-
-
 async def send_order_to_manager(order_id: int, order_data: dict[str, Any], settings) -> None:
     if not settings.manager_chat_id or not settings.bot_token:
         logger.info("MANAGER_CHAT_ID або BOT_TOKEN не налаштовані, сповіщення пропущено")
@@ -221,6 +200,20 @@ async def send_order_to_manager(order_id: int, order_data: dict[str, Any], setti
         f"\n⚠️ <b>Примітка про клієнта:</b> {html.escape(str(user_note))}" if user_note else ""
     )
 
+    tg_id = order_data.get("telegram_id")
+    is_phone_verified = order_data.get("is_phone_verified", False)
+    phone_badge = (
+        "✅ Телефон верифіковано в TG"
+        if is_phone_verified
+        else "⚠️ <b>НЕ ВЕРИФІКОВАНО!</b> Перед приготуванням зателефонуйте для усного підтвердження!"
+    )
+    user_tg_line = (
+        f"\n📱 <b>Telegram ID:</b> <code>{tg_id}</code> (<a href=\"tg://user?id={tg_id}\">Профіль</a>)\n"
+        f"🔒 <b>Верифікація контакту:</b> {phone_badge}"
+        if tg_id
+        else ""
+    )
+
     bot_username = getattr(settings, "bot_username", "ncoffee_app_tst_bot") or "ncoffee_app_tst_bot"
     mini_app_url = getattr(settings, "mini_app_url", "") or "https://nikiga-ax.duckdns.org"
     app_link = f"https://t.me/{bot_username}?startapp=order_{order_id}"
@@ -229,7 +222,7 @@ async def send_order_to_manager(order_id: int, order_data: dict[str, Any], setti
     text = (
         f"📦 <b>Нове замовлення #{order_id}</b>\n"
         f"📍 <b>Заклад:</b> {loc_name}\n"
-        f"👤 <b>Клієнт:</b> {c_name} ({c_phone}){user_note_line}\n"
+        f"👤 <b>Клієнт:</b> {c_name} ({c_phone}){user_tg_line}{user_note_line}\n"
         f"{fulfillment_label}\n"
         f"{time_label}\n"
         f"💰 <b>Оплата:</b> {payment_label}"
@@ -267,14 +260,13 @@ async def send_order_to_manager(order_id: int, order_data: dict[str, Any], setti
         ]
     }
 
-    payload = {
-        "chat_id": settings.manager_chat_id,
-        "text": text,
-        "parse_mode": "HTML",
-        "reply_markup": reply_markup,
-    }
-
-    await asyncio.to_thread(_send_telegram_notification_sync, settings.bot_token, payload)
+    await send_telegram_message(
+        bot_token=settings.bot_token,
+        chat_id=settings.manager_chat_id,
+        text=text,
+        parse_mode="HTML",
+        reply_markup=reply_markup,
+    )
 
 
 async def _fetch_order_by_id(conn, order_id: int, telegram_id: int) -> OrderOut | None:
@@ -732,6 +724,8 @@ async def create_order(
         "total_price": total_order_price,
         "items": calculated_items,
         "admin_note": user.get("admin_note"),
+        "telegram_id": telegram_id,
+        "is_phone_verified": bool(user.get("is_phone_verified")),
     }
     background_tasks.add_task(send_order_to_manager, order_id, order_notification_data, settings)
 
@@ -945,13 +939,11 @@ async def cancel_order(
             f"<i>Замовлення автоматично позначено як скасоване.</i>"
         )
         background_tasks.add_task(
-            _send_telegram_notification_sync,
-            settings.bot_token,
-            {
-                "chat_id": settings.manager_chat_id,
-                "text": manager_msg,
-                "parse_mode": "HTML",
-            },
+            send_telegram_message,
+            bot_token=settings.bot_token,
+            chat_id=settings.manager_chat_id,
+            text=manager_msg,
+            parse_mode="HTML",
         )
 
     return updated

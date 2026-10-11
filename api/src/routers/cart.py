@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from src.auth.deps import get_current_user
 from src.db.cart_repo import get_or_create_cart_id
 from src.db.connection import get_pool
+from src.middleware.rate_limiter import rate_limiter
 from src.schemas.cart import (
     CartItemIn,
     CartItemOptionOut,
@@ -12,7 +13,7 @@ from src.schemas.cart import (
     CartOut,
 )
 
-router = APIRouter(prefix="/api/cart", tags=["Cart"])
+router = APIRouter(prefix="/api/cart", tags=["Cart"], dependencies=[Depends(rate_limiter)])
 
 
 def options_cost(unit_prices: list[float], free_count: int) -> float:
@@ -243,6 +244,21 @@ async def add_item_to_cart(
         options_key = build_options_key(payload.options)
 
         cart_id = await get_or_create_cart_id(conn, user["telegram_id"])
+
+        existing_qty = await conn.fetchval(
+            """
+            SELECT qty FROM cart_items
+            WHERE cart_id = $1 AND variant_id = $2 AND options_key = $3
+            """,
+            cart_id,
+            payload.variant_id,
+            options_key,
+        )
+        if existing_qty and (existing_qty + payload.qty) > 50:
+            raise HTTPException(
+                status_code=400,
+                detail="Максимальна кількість однієї страви в кошику — 50 шт.",
+            )
 
         upsert_query = """
             INSERT INTO cart_items (cart_id, variant_id, qty, options_key)

@@ -1,0 +1,360 @@
+from datetime import UTC, datetime
+
+from src.auth.deps import get_current_user
+from src.main import app
+
+
+class TestOrderCreationApi:
+    """Тестування створення замовлення (POST /api/orders) та бізнес-правил."""
+
+    async def test_blocked_user_cannot_create_order_raises_403(self, async_client):
+        """Заблокований користувач не може створювати замовлення."""
+        blocked_user = {
+            "id": 1,
+            "telegram_id": 123456789,
+            "full_name": "Заблокований Юзер",
+            "is_blocked": True,
+        }
+        app.dependency_overrides[get_current_user] = lambda: blocked_user
+
+        payload = {
+            "fulfillment_type": "delivery",
+            "delivery_address": "вул. Центральна, 1",
+            "contact_name": "Іван",
+            "contact_phone": "0931112233",
+            "payment_method": "cash",
+        }
+        response = await async_client.post("/api/orders", json=payload)
+        assert response.status_code == 403
+        assert "акаунт заблоковано" in response.json()["detail"]
+
+    async def test_empty_cart_raises_400(self, async_client, mock_db_conn):
+        """Спроба замовлення з порожнім кошиком викликає 400."""
+        mock_db_conn.fetch.return_value = []  # Порожній кошик
+
+        payload = {
+            "fulfillment_type": "delivery",
+            "delivery_address": "вул. Центральна, 1",
+            "contact_name": "Іван",
+            "contact_phone": "0931112233",
+            "payment_method": "cash",
+        }
+        response = await async_client.post("/api/orders", json=payload)
+        assert response.status_code == 400
+        assert "Кошик порожній" in response.json()["detail"]
+
+    async def test_multi_location_cart_without_target_location_raises_400(
+        self, async_client, mock_db_conn
+    ):
+        """Кошик зі стравами двох різних закладів вимагає окремого оформлення."""
+        cart_rows = [
+            {
+                "id": 1,
+                "variant_id": 10,
+                "qty": 1,
+                "product_name": "Піца",
+                "p_avail": True,
+                "variant_label": "30см",
+                "price": 200.0,
+                "pv_avail": True,
+                "location_id": 1,
+                "location_name": "Doma Pizza",
+                "is_delivery_enabled": True,
+                "delivery_start_time": "10:30",
+                "delivery_end_time": "21:30",
+            },
+            {
+                "id": 2,
+                "variant_id": 20,
+                "qty": 1,
+                "product_name": "Круасан",
+                "p_avail": True,
+                "variant_label": "Класичний",
+                "price": 80.0,
+                "pv_avail": True,
+                "location_id": 2,
+                "location_name": "Doma Croissants",
+                "is_delivery_enabled": True,
+                "delivery_start_time": "10:30",
+                "delivery_end_time": "21:30",
+            },
+        ]
+        mock_db_conn.fetch.return_value = cart_rows
+
+        payload = {
+            "fulfillment_type": "delivery",
+            "delivery_address": "вул. Центральна, 1",
+            "contact_name": "Іван",
+            "contact_phone": "0931112233",
+            "payment_method": "cash",
+        }
+        response = await async_client.post("/api/orders", json=payload)
+        assert response.status_code == 400
+        assert "страви з різних закладів" in response.json()["detail"]
+
+    async def test_disabled_delivery_raises_400(self, async_client, mock_db_conn):
+        """Якщо доставку закладу тимчасово вимкнено через навантаження."""
+        cart_rows = [
+            {
+                "id": 1,
+                "variant_id": 10,
+                "qty": 1,
+                "product_name": "Піца",
+                "p_avail": True,
+                "variant_label": "30см",
+                "price": 200.0,
+                "pv_avail": True,
+                "location_id": 1,
+                "location_name": "Doma Pizza",
+                "is_delivery_enabled": False,  # Доставка призупинена!
+                "delivery_start_time": "10:30",
+                "delivery_end_time": "21:30",
+            }
+        ]
+        mock_db_conn.fetch.return_value = cart_rows
+
+        payload = {
+            "fulfillment_type": "delivery",
+            "delivery_address": "вул. Центральна, 1",
+            "contact_name": "Іван",
+            "contact_phone": "0931112233",
+            "payment_method": "cash",
+        }
+        response = await async_client.post("/api/orders", json=payload)
+        assert response.status_code == 400
+        assert "тимчасово призупинена" in response.json()["detail"]
+
+    async def test_unavailable_product_raises_409(self, async_client, mock_db_conn):
+        """Страва пішла в стоп-лист під час оформлення замовлення."""
+        cart_rows = [
+            {
+                "id": 1,
+                "variant_id": 10,
+                "qty": 1,
+                "product_name": "Піца Карбонара",
+                "p_avail": False,  # Недоступна!
+                "variant_label": "30см",
+                "price": 250.0,
+                "pv_avail": True,
+                "location_id": 1,
+                "location_name": "Doma Pizza",
+                "is_delivery_enabled": True,
+                "delivery_start_time": "10:30",
+                "delivery_end_time": "21:30",
+            }
+        ]
+        mock_db_conn.fetch.return_value = cart_rows
+
+        payload = {
+            "fulfillment_type": "delivery",
+            "delivery_address": "вул. Центральна, 1",
+            "contact_name": "Іван",
+            "contact_phone": "0931112233",
+            "payment_method": "cash",
+        }
+        response = await async_client.post("/api/orders", json=payload)
+        assert response.status_code == 409
+        assert "наразі недоступна для замовлення" in response.json()["detail"]
+
+    async def test_qr_payment_restriction_for_non_pizza(self, async_client, mock_db_conn):
+        """Оплата по QR-коду дозволена лише для піцерії."""
+        cart_rows = [
+            {
+                "id": 1,
+                "variant_id": 10,
+                "qty": 1,
+                "product_name": "Круасан з лососем",
+                "p_avail": True,
+                "variant_label": "Класичний",
+                "price": 180.0,
+                "pv_avail": True,
+                "location_id": 2,
+                "location_name": "Doma Croissants",
+                "is_delivery_enabled": True,
+                "delivery_start_time": "10:30",
+                "delivery_end_time": "21:30",
+            }
+        ]
+        mock_db_conn.fetch.return_value = cart_rows
+
+        payload = {
+            "fulfillment_type": "delivery",
+            "delivery_address": "вул. Центральна, 1",
+            "contact_name": "Іван",
+            "contact_phone": "0931112233",
+            "payment_method": "qr",
+        }
+        response = await async_client.post("/api/orders", json=payload)
+        assert response.status_code == 400
+        assert "доступна виключно для піцерії" in response.json()["detail"]
+
+    async def test_idempotent_duplicate_order_returns_existing_order(
+        self, async_client, mock_db_conn
+    ):
+        """Повторний клік/запит протягом 20 секунд повертає вже створене замовлення (SEC-2)."""
+        cart_rows = [
+            {
+                "id": 1,
+                "variant_id": 10,
+                "qty": 1,
+                "product_name": "Піца 4 Сири",
+                "p_avail": True,
+                "variant_label": "30см",
+                "price": 280.0,
+                "pv_avail": True,
+                "location_id": 1,
+                "location_name": "Doma Pizza",
+                "is_delivery_enabled": True,
+                "delivery_start_time": "10:30",
+                "delivery_end_time": "21:30",
+            }
+        ]
+        # 1. cart_items_sql
+        # 2. options_sql (empty)
+        # 3. recent_order_id знайшов існуюче замовлення #555!
+        group_row = {
+            "id": 1,
+            "location_id": 1,
+            "location_name": "Doma Pizza",
+            "status": "pending",
+            "subtotal": 280.0,
+        }
+        mock_db_conn.fetch.side_effect = [
+            cart_rows,    # cart items
+            [],           # options
+            [group_row],  # groups in _fetch_order_by_id
+            [],           # items in _fetch_order_by_id
+            [],           # options in _fetch_order_by_id
+        ]
+        mock_db_conn.fetchval.return_value = 555  # recent_order_id знайдено
+
+        mock_db_conn.fetchrow.return_value = {
+            "id": 555,
+            "telegram_id": 123456789,
+            "status": "pending_moderation",
+            "fulfillment_type": "delivery",
+            "delivery_address": "вул. Київська, 10",
+            "contact_name": "Іван",
+            "contact_phone": "+380931112233",
+            "payment_method": "cash",
+            "scheduled_time": None,
+            "comment": None,
+            "total_price": 280.0,
+            "created_at": datetime.now(UTC),
+        }
+
+        payload = {
+            "fulfillment_type": "delivery",
+            "delivery_address": "вул. Київська, 10",
+            "contact_name": "Іван",
+            "contact_phone": "0931112233",
+            "payment_method": "cash",
+        }
+        response = await async_client.post("/api/orders", json=payload)
+        assert response.status_code == 201
+        data = response.json()
+        assert data["id"] == 555
+        assert data["status"] == "pending_moderation"
+        assert data["total_price"] == 280.0
+
+    async def test_successful_order_creation(self, async_client, mock_db_conn):
+        """Успішне створення замовлення зі статусом pending_moderation."""
+        cart_rows = [
+            {
+                "id": 1,
+                "variant_id": 10,
+                "qty": 1,
+                "product_name": "Піца Пепероні",
+                "p_avail": True,
+                "variant_label": "30см",
+                "price": 250.0,
+                "pv_avail": True,
+                "location_id": 1,
+                "location_name": "Doma Pizza",
+                "is_delivery_enabled": True,
+                "delivery_start_time": "10:30",
+                "delivery_end_time": "21:30",
+            }
+        ]
+        mock_db_conn.fetch.side_effect = [
+            cart_rows,  # cart_items_sql
+            [],         # options_sql
+        ]
+        # recent_order_id = None (нове замовлення)
+        mock_db_conn.fetchval.return_value = None
+
+        mock_db_conn.fetchrow.side_effect = [
+            # 1. order_insert_sql
+            {"id": 777, "created_at": datetime.now(UTC)},
+            # 2. group_insert_sql
+            {"id": 88},
+            # 3. item_insert_sql
+            {"id": 999},
+        ]
+
+        payload = {
+            "fulfillment_type": "delivery",
+            "delivery_address": "вул. Набережна, 1",
+            "contact_name": "Олександр",
+            "contact_phone": "0931112233",
+            "payment_method": "cash",
+        }
+        response = await async_client.post("/api/orders", json=payload)
+        assert response.status_code == 201
+        data = response.json()
+        assert data["id"] == 777
+        assert data["status"] == "pending_moderation"
+        assert data["total_price"] == 250.0
+        assert len(data["groups"]) == 1
+        assert data["groups"][0]["location_id"] == 1
+        assert len(data["groups"][0]["items"]) == 1
+        assert data["groups"][0]["items"][0]["product_name"] == "Піца Пепероні"
+
+
+class TestOrderHistoryAndDetailsApi:
+    """Тестування перегляду історії та деталей замовлення."""
+
+    async def test_get_user_orders_list(self, async_client, mock_db_conn):
+        mock_db_conn.fetch.side_effect = [
+            [
+                {
+                    "id": 100,
+                    "telegram_id": 123456789,
+                    "status": "confirmed",
+                    "fulfillment_type": "pickup",
+                    "delivery_address": None,
+                    "contact_name": "Іван",
+                    "contact_phone": "+380931112233",
+                    "payment_method": "card",
+                    "scheduled_time": None,
+                    "comment": None,
+                    "total_price": 300.0,
+                    "created_at": datetime.now(UTC),
+                }
+            ],
+            [
+                {
+                    "id": 1,
+                    "order_id": 100,
+                    "location_id": 1,
+                    "location_name": "Doma Pizza",
+                    "status": "confirmed",
+                    "subtotal": 300.0,
+                }
+            ],
+            [],  # items
+            [],  # options
+        ]
+
+        response = await async_client.get("/api/orders")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == 100
+        assert data[0]["status"] == "confirmed"
+
+    async def test_get_order_by_id_not_found_raises_404(self, async_client, mock_db_conn):
+        mock_db_conn.fetchrow.return_value = None
+        response = await async_client.get("/api/orders/9999")
+        assert response.status_code == 404
+        assert "Замовлення не знайдено" in response.json()["detail"]

@@ -1,10 +1,37 @@
-# Прод/staging-стек.
+# Прод-стек для самостійного розгортання застосунку (standalone production).
 #     docker compose up -d --build
 #
-# Postgres не піднімається тут — використовується зовнішній сервер із .env.
-# TLS термінує зовнішній reverse-proxy або тунель; caddy слухає 80 (див. caddy/Caddyfile).
+# Стек містить повний набір сервісів:
+#   - postgres: реляційна база даних PostgreSQL 16
+#   - redis: кеш каталогу та rate limiting
+#   - migrator: транзакційний автораннер міграцій БД (schema_migrations)
+#   - api: FastAPI REST API
+#   - bot: Telegram-бот (aiogram)
+#   - caddy: зворотний проксі, роздача React SPA та автоматичний HTTPS/TLS
+#   - directus (профіль cms): CMS для медіа та контенту (опціонально)
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-doma_app_db}
+      POSTGRES_USER: ${POSTGRES_USER:-doma_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-doma_secure_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -15,6 +42,28 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  migrator:
+    build:
+      context: .
+      dockerfile: scripts/Dockerfile.migrator
+    restart: "no"
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-doma_user}:${POSTGRES_PASSWORD:-doma_secure_password}@postgres:5432/${POSTGRES_DB:-doma_app_db}}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   api:
     build:
@@ -23,12 +72,18 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-doma_user}:${POSTGRES_PASSWORD:-doma_secure_password}@postgres:5432/${POSTGRES_DB:-doma_app_db}}
       REDIS_URL: redis://redis:6379/0
+      API_DEBUG: ${API_DEBUG:-false}
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
     volumes:
-      - directus_uploads:/directus/uploads
+      - uploads_data:/directus/uploads
     expose:
       - "8000"
     healthcheck:
@@ -36,7 +91,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    # Назовні api не публікуємо — доступ лише крізь caddy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "5"
 
   bot:
     build:
@@ -44,31 +103,75 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-doma_user}:${POSTGRES_PASSWORD:-doma_secure_password}@postgres:5432/${POSTGRES_DB:-doma_app_db}}
     depends_on:
+      postgres:
+        condition: service_healthy
       api:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "5"
 
   caddy:
     build:
       context: .
       dockerfile: caddy/Dockerfile
       args:
-        # Фронтенд ходить у той самий origin, що і статика, тож відносний шлях.
         VITE_API_BASE_URL: /api
     restart: unless-stopped
+    env_file: .env
     ports:
       - "80:80"
+      - "443:443"
     depends_on:
       api:
         condition: service_healthy
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "5"
+
+  directus:
+    profiles: ["cms"]
+    image: directus/directus:latest
+    restart: unless-stopped
+    ports:
+      - "${DIRECTUS_PORT:-8055}:8055"
+    environment:
+      KEY: ${DIRECTUS_KEY}
+      SECRET: ${DIRECTUS_SECRET}
+      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+      DB_CLIENT: pg
+      DB_CONNECTION_STRING: postgresql://${POSTGRES_USER:-doma_user}:${POSTGRES_PASSWORD:-doma_secure_password}@postgres:5432/${POSTGRES_DB:-doma_app_db}
+      DB_SEARCH_PATH: directus,public
+      CACHE_ENABLED: ${DIRECTUS_CACHE_ENABLED:-false}
+      CACHE_STORE: redis
+      REDIS: redis://redis:6379/1
+      PUBLIC_URL: ${DIRECTUS_PUBLIC_URL:-http://localhost:8055}
+    volumes:
+      - uploads_data:/directus/uploads
+      - directus_extensions:/directus/extensions
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
+  postgres_data:
   redis_data:
-  directus_uploads:
-    external: true
+  uploads_data:
   caddy_data:
   caddy_config:
-
+  directus_extensions:

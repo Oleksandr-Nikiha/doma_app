@@ -26,4 +26,7 @@ frontend/dist/
 *.md
 !README.md
 scripts/
+!scripts/migrate.py
+!scripts/Dockerfile.migrator
 db/
+!db/migrations/

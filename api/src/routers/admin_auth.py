@@ -1,8 +1,6 @@
-import json
 import logging
 import secrets
 import string
-import urllib.request
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -12,15 +10,21 @@ from pydantic import BaseModel
 
 from src.config import get_settings
 from src.db.connection import get_pool
+from src.middleware.rate_limiter import rate_limiter
+from src.services.telegram_client import fetch_bot_username
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/admin/auth", tags=["admin-auth"])
+router = APIRouter(
+    prefix="/api/admin/auth",
+    tags=["admin-auth"],
+    dependencies=[Depends(rate_limiter)],
+)
 
 _cached_bot_username: str | None = None
 
 
-def _get_bot_username(bot_token: str) -> str:
+async def _get_bot_username(bot_token: str) -> str:
     global _cached_bot_username
     if _cached_bot_username:
         return _cached_bot_username
@@ -32,13 +36,10 @@ def _get_bot_username(bot_token: str) -> str:
     except Exception:
         pass
     try:
-        url = f"https://api.telegram.org/bot{bot_token}/getMe"
-        req = urllib.request.Request(url, headers={"User-Agent": "FastAPI"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode())
-            if data.get("ok") and "username" in data["result"]:
-                _cached_bot_username = data["result"]["username"]
-                return _cached_bot_username
+        username = await fetch_bot_username(bot_token)
+        if username:
+            _cached_bot_username = username
+            return _cached_bot_username
     except Exception as e:
         logger.warning("Не вдалося автоматично визначити username бота: %s", e)
     return "ncoffee_app_tst_bot"
@@ -83,7 +84,7 @@ async def create_auth_session(
             expires_at,
         )
 
-    bot_username = _get_bot_username(settings.bot_token)
+    bot_username = await _get_bot_username(settings.bot_token)
     bot_url = f"https://t.me/{bot_username}?start=admin_{code}"
     tg_url = f"tg://resolve?domain={bot_username}&start=admin_{code}"
 
@@ -112,14 +113,23 @@ async def check_auth_session(
             session_id,
         )
 
-    if not row:
-        raise HTTPException(status_code=404, detail="Сесію не знайдено")
+        if not row:
+            raise HTTPException(status_code=404, detail="Сесію не знайдено")
 
-    now = datetime.now(UTC)
-    if row["expires_at"] < now and row["status"] == "pending":
-        return AuthStatusOut(status="expired", error="Час дії сесії вичерпано")
+        now = datetime.now(UTC)
+        if row["expires_at"] < now and row["status"] == "pending":
+            return AuthStatusOut(status="expired", error="Час дії сесії вичерпано")
+
+        token = row["token"] if row["status"] == "approved" else None
+
+        # Захист: маркуємо схвалену сесію як 'consumed' після першого зчитування токена
+        if row["status"] == "approved":
+            await conn.execute(
+                "UPDATE admin_auth_sessions SET status = 'consumed' WHERE id = $1",
+                session_id,
+            )
 
     return AuthStatusOut(
         status=row["status"],
-        token=row["token"] if row["status"] == "approved" else None,
+        token=token,
     )

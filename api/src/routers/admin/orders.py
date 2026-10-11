@@ -1,7 +1,5 @@
 import html
-import json
 import logging
-import urllib.request
 
 import asyncpg
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -17,23 +15,11 @@ from src.schemas.admin import (
     AdminOrderListItemOut,
     AdminOrderUpdateIn,
 )
+from src.services.telegram_client import send_telegram_message
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-def _send_tg_order_notification(token: str, payload: dict) -> None:
-    try:
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            resp.read()
-    except Exception as e:
-        logger.error("Не вдалося відправити повідомлення в Telegram: %s", e)
 
 
 @router.get("/orders", response_model=list[AdminOrderListItemOut])
@@ -397,13 +383,11 @@ async def update_admin_order(
 
             if client_text:
                 background_tasks.add_task(
-                    _send_tg_order_notification,
-                    settings.bot_token,
-                    {
-                        "chat_id": existing_tg_id,
-                        "text": client_text,
-                        "parse_mode": "HTML",
-                    },
+                    send_telegram_message,
+                    bot_token=settings.bot_token,
+                    chat_id=existing_tg_id,
+                    text=client_text,
+                    parse_mode="HTML",
                 )
 
     return await get_admin_order(order_id, pool, staff)
@@ -450,15 +434,11 @@ async def notify_order_updated(
         f"💵 <b>Разом до сплати: {order.total_price:.2f} ₴</b>"
     )
 
-    payload = {
-        "chat_id": order.telegram_id,
-        "text": text,
-        "parse_mode": "HTML",
-    }
-
     background_tasks.add_task(
-        _send_tg_order_notification,
-        settings.bot_token,
-        payload,
+        send_telegram_message,
+        bot_token=settings.bot_token,
+        chat_id=order.telegram_id,
+        text=text,
+        parse_mode="HTML",
     )
     return {"status": "ok", "message": "Сповіщення надіслано клієнту"}

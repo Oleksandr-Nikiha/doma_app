@@ -50,6 +50,9 @@ async def lifespan(app: FastAPI):
     cleanup_task.cancel()
     with suppress(asyncio.CancelledError):
         await cleanup_task
+    from src.services.telegram_client import close_telegram_client
+
+    await close_telegram_client()
     await disconnect_redis()
     await disconnect_db()
 

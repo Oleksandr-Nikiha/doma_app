@@ -1,8 +1,5 @@
 import asyncio
-import json
 import logging
-import urllib.error
-import urllib.request
 
 import asyncpg
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -15,63 +12,11 @@ from src.schemas.admin import (
     BroadcastOut,
     BroadcastRecipientsCountOut,
 )
+from src.services.telegram_client import send_telegram_message, send_telegram_photo
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-def _send_single_telegram_broadcast(
-    token: str,
-    chat_id: int,
-    text: str,
-    image_url: str | None,
-    reply_markup: dict | None,
-) -> bool:
-    data: dict = {
-        "chat_id": chat_id,
-        "parse_mode": "HTML",
-    }
-    if image_url:
-        url = f"https://api.telegram.org/bot{token}/sendPhoto"
-        data["photo"] = image_url
-        data["caption"] = text
-    else:
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        data["text"] = text
-
-    if reply_markup:
-        data["reply_markup"] = reply_markup
-
-    raw_body = json.dumps(data).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=raw_body,
-        headers={"Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            resp.read()
-        return True
-    except urllib.error.HTTPError as err:
-        # Якщо сталася помилка через HTML-теги, робимо fallback на звичайний текст
-        if err.code == 400 and "parse_mode" in data:
-            data.pop("parse_mode", None)
-            fallback_req = urllib.request.Request(
-                url,
-                data=json.dumps(data).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-            )
-            try:
-                with urllib.request.urlopen(fallback_req, timeout=8) as resp:
-                    resp.read()
-                return True
-            except Exception:
-                pass
-        logger.warning("Не вдалося надіслати розсилку chat_id=%s: %s", chat_id, err)
-        return False
-    except Exception as e:
-        logger.warning("Помилка надсилання розсилки chat_id=%s: %s", chat_id, e)
-        return False
 
 
 async def _send_broadcast_worker(
@@ -96,14 +41,24 @@ async def _send_broadcast_worker(
         }
 
     for tid in recipients:
-        success = await asyncio.to_thread(
-            _send_single_telegram_broadcast,
-            bot_token,
-            tid,
-            text,
-            image_url,
-            reply_markup,
-        )
+        if image_url:
+            success = await send_telegram_photo(
+                bot_token=bot_token,
+                chat_id=tid,
+                photo_url=image_url,
+                caption=text,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+        else:
+            success = await send_telegram_message(
+                bot_token=bot_token,
+                chat_id=tid,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+
         if success:
             sent_count += 1
         else:
@@ -194,6 +149,14 @@ async def create_broadcast(
     """
     Створює розсилку та запускає відправку клієнтам у фоні.
     """
+    if payload.button_url:
+        clean_url = payload.button_url.strip().lower()
+        if not (clean_url.startswith("https://") or clean_url.startswith("http://") or clean_url.startswith("tg://")):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Посилання кнопки має починатися з https://, http:// або tg://",
+            )
+
     async with pool.acquire() as conn:
         recipients = await _get_segment_recipients(conn, payload.segment)
         if not recipients:

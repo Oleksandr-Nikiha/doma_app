@@ -212,6 +212,10 @@ docker compose -f docker-compose.dev.yml restart frontend
 
 Змінна | Обов'язкова | Опис
 --- | --- | ---
+`APP_DOMAIN` | для проду | Публічний домен для Caddy (автоматичний SSL)
+`POSTGRES_DB` | для проду | Назва бази даних PostgreSQL (типово `doma_app_db`)
+`POSTGRES_USER` | для проду | Користувач PostgreSQL (типово `doma_user`)
+`POSTGRES_PASSWORD` | для проду | Пароль до бази даних PostgreSQL
 `DATABASE_URL` | так | DSN PostgreSQL, напр. `postgresql://user:pass@host:5432/doma_app_db`
 `BOT_TOKEN` | так | Токен від BotFather; ним же валідується `initData`
 `MINI_APP_URL` | так | HTTPS-URL Mini App для кнопки в боті
@@ -222,11 +226,62 @@ docker compose -f docker-compose.dev.yml restart frontend
 `RATE_LIMIT_ENABLED` | ні | Захист публічних ендпоінтів від спаму через Redis (типово `true`)
 `RATE_LIMIT_REQUESTS` | ні | Ліміт кількості запитів у вікні (типово `120`)
 `RATE_LIMIT_WINDOW_SECONDS` | ні | Вікно підрахунку запитів у секундах (типово `60`)
-`CORS_ORIGINS` | ні | Origins через кому; типово Vite на `:5173`
-`API_DEBUG` | ні | Типово `false`
+`CORS_ORIGINS` | ні | Origins через кому; типово Vite на `:5173` або прод-домен
+`API_DEBUG` | ні | Режим налагодження (типово `false`)
 `VITE_API_BASE_URL` | ні | Базовий URL API для фронтенду (типово `/api`)
 `VITE_PUBLIC_HOST` | ні | Публічний хост/домен тунелю для `allowedHosts` у Vite dev-сервері
 `VITE_DEV_INIT_DATA` | ні | Підписаний тестовий `initData` для розробки у браузері поза Telegram
+
+---
+
+### 🚀 Розгортання та міграція у Production (Standalone)
+
+Для розгортання застосунку в окремому прод-середовищі (VPS / виділений сервер) реалізовано автономний стек `docker-compose.yml`, який піднімає:
+
+- **`postgres`** (PostgreSQL 16 з persistent томом `postgres_data`)
+- **`redis`** (кешування каталогу та rate limiting)
+- **`migrator`** (транзакційний автораннер міграцій `schema_migrations`)
+- **`api`** (FastAPI від не-root `appuser` з healthcheck)
+- **`bot`** (aiogram-бот)
+- **`caddy`** (зворотний проксі, роздача React SPA та автоматичний HTTPS/TLS на портах 80 і 443)
+
+#### Швидкий сценарій міграції з dev на новий прод-сервер
+
+1. **Експорт даних з dev-середовища:**
+
+   ```bash
+   ./scripts/export_dev_data.sh
+   # Створює архів exports/doma_prod_migration_YYYYMMDD_HHMMSS.tar.gz (дамп БД + фотографії)
+   ```
+
+2. **Передача на прод-сервер:**
+
+   ```bash
+   scp exports/doma_prod_migration_*.tar.gz user@your-prod-server:/home/user/doma_app/
+   ```
+
+3. **Ініціалізація та запуск на прод-сервері:**
+
+   ```bash
+   cp .env.prod.example .env
+   # Заповніть реальні значення APP_DOMAIN, POSTGRES_PASSWORD, BOT_TOKEN, MANAGER_CHAT_ID
+
+   # Імпорт дампу БД та синхронізація медіа-файлів:
+   ./scripts/import_prod_data.sh doma_prod_migration_*.tar.gz
+
+   # Призначення вашого акаунта адміністратором (для входу в /admin):
+   python3 scripts/create_admin.py <TELEGRAM_ID> "Ім'я"
+
+   # Збірка та запуск прод-стеку:
+   ./scripts/deploy_prod.sh
+   ```
+
+4. **Автоматичні щоденні бекапи БД (cron):**
+
+   ```bash
+   # Додати в crontab (crontab -e):
+   0 3 * * * /home/user/doma_app/scripts/backup_prod_db.sh >> /var/log/doma_backup.log 2>&1
+   ```
 
 ---
 
@@ -332,6 +387,7 @@ curl -s -X POST localhost:8010/api/cart/items \
 ```bash
 ruff check api bot                                    # лінт (конфіг — ruff.toml)
 python -m compileall -q api/src bot/src
+pytest                                                # запуск 89 автотестів (pytest.ini)
 docker compose -f docker-compose.dev.yml config -q    # валідність compose
 docker run --rm -v "$PWD/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
   caddy:2-alpine caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile # синтаксис caddy

@@ -1,7 +1,7 @@
 import asyncpg
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
-from src.auth.deps import require_telegram_or_staff
+from src.auth.deps import admin_token_header, require_telegram_or_staff
 from src.db.connection import get_pool
 from src.middleware.rate_limiter import rate_limiter
 from src.schemas.catalog import (
@@ -21,12 +21,15 @@ router = APIRouter(
 
 @router.get("/categories", response_model=list[CategoryOut])
 async def list_categories(
-    bypass_cache: bool = Query(False, description="Отримати свіжі дані повз кеш"),
+    bypass_cache: bool = Query(False, description="Отримати свіжі дані повз кеш (тільки персонал)"),
     x_bypass_cache: str | None = Header(None, alias="X-Bypass-Cache"),
+    admin_token: str | None = Depends(admin_token_header),
     pool: asyncpg.Pool = Depends(get_pool),
 ):
     cache_key = "catalog:categories"
-    should_bypass = bypass_cache or (x_bypass_cache in ("1", "true", "True"))
+    should_bypass = bool(admin_token) and (
+        bypass_cache or (x_bypass_cache in ("1", "true", "True"))
+    )
 
     if not should_bypass:
         cached = await get_cached_json(cache_key)
@@ -70,12 +73,15 @@ async def list_categories(
 @router.get("/categories/{category_id}/products", response_model=list[ProductListItemOut])
 async def list_products_by_category(
     category_id: int,
-    bypass_cache: bool = Query(False, description="Отримати свіжі дані повз кеш"),
+    bypass_cache: bool = Query(False, description="Отримати свіжі дані повз кеш (тільки персонал)"),
     x_bypass_cache: str | None = Header(None, alias="X-Bypass-Cache"),
+    admin_token: str | None = Depends(admin_token_header),
     pool: asyncpg.Pool = Depends(get_pool),
 ):
     cache_key = f"catalog:category:{category_id}:products"
-    should_bypass = bypass_cache or (x_bypass_cache in ("1", "true", "True"))
+    should_bypass = bool(admin_token) and (
+        bypass_cache or (x_bypass_cache in ("1", "true", "True"))
+    )
 
     if not should_bypass:
         cached = await get_cached_json(cache_key)
@@ -115,12 +121,15 @@ async def list_products_by_category(
 @router.get("/products/{product_id}", response_model=ProductDetailOut)
 async def get_product(
     product_id: int,
-    bypass_cache: bool = Query(False, description="Отримати свіжі дані повз кеш"),
+    bypass_cache: bool = Query(False, description="Отримати свіжі дані повз кеш (тільки персонал)"),
     x_bypass_cache: str | None = Header(None, alias="X-Bypass-Cache"),
+    admin_token: str | None = Depends(admin_token_header),
     pool: asyncpg.Pool = Depends(get_pool),
 ):
     cache_key = f"catalog:product:{product_id}"
-    should_bypass = bypass_cache or (x_bypass_cache in ("1", "true", "True"))
+    should_bypass = bool(admin_token) and (
+        bypass_cache or (x_bypass_cache in ("1", "true", "True"))
+    )
 
     if not should_bypass:
         cached = await get_cached_json(cache_key)
