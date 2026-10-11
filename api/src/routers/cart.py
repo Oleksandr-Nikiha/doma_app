@@ -29,17 +29,23 @@ def options_cost(unit_prices: list[float], free_count: int) -> float:
     return round(sum(chargeable), 2)
 
 
-def build_options_key(options) -> str:
+def build_options_key(options, item_qty: int = 1) -> str:
     """
     Відбиток вибору опцій для унікального ключа позиції кошика.
-
-    Рахує саме бекенд: якби ключ формував клієнт, інший порядок тих самих
-    опцій дав би інший рядок, і в кошику з'явилися б два однакові товари.
-    Кількість — обов'язкова частина ключа: без неї «1 кетчуп» і «2 кетчупи»
-    злилися б в одну позицію, і кількість соусів поїхала б.
+    Нормалізується на одиницю страви (unit_qty = option.qty // item_qty), щоб:
+    - 1 страва з 1 соусом мала такий самий options_key, як і 2 страви з 2 соусами.
+    - При зміні кількості страв (+ / -) у кошику options_key залишався стабільним.
+    - Запобігти появі дублікатів однакових позицій у кошику (SEC-08).
     """
+    if not options:
+        return ""
     ordered = sorted(options, key=lambda o: (o.group_id, o.variant_id))
-    return "|".join(f"{o.group_id}:{o.variant_id}:{o.qty}" for o in ordered)
+    safe_item_qty = max(1, item_qty)
+    parts = []
+    for o in ordered:
+        unit_qty = (o.qty // safe_item_qty) if (o.qty % safe_item_qty == 0) else o.qty
+        parts.append(f"{o.group_id}:{o.variant_id}:{unit_qty}")
+    return "|".join(parts)
 
 
 async def _fetch_cart(
@@ -241,7 +247,7 @@ async def add_item_to_cart(
                     )
 
         sorted_opts = sorted(payload.options, key=lambda x: (x.group_id, x.variant_id))
-        options_key = build_options_key(payload.options)
+        options_key = build_options_key(payload.options, item_qty=payload.qty)
 
         cart_id = await get_or_create_cart_id(conn, user["telegram_id"])
 
@@ -411,7 +417,7 @@ async def update_cart_item(
                         )
 
             sorted_opts = sorted(payload.options, key=lambda x: (x.group_id, x.variant_id))
-            options_key = build_options_key(payload.options)
+            options_key = build_options_key(payload.options, item_qty=payload.qty)
             cart_id = item["cart_id"]
 
             # Перевіряємо, чи є в кошику інша позиція з таким же варіантом і опціями
@@ -542,9 +548,12 @@ async def update_cart_item(
                                 ],
                             )
 
-                            # Перераховуємо options_key
+                            # Перераховуємо options_key (нормалізований на 1 порцію)
                             ordered = sorted(scaled_options, key=lambda o: (o[0], o[1]))
-                            new_key = "|".join(f"{g}:{v}:{q}" for g, v, q in ordered)
+                            new_key = "|".join(
+                                f"{g}:{v}:{s_qty // new_qty if s_qty % new_qty == 0 else s_qty}"
+                                for g, v, s_qty in ordered
+                            )
 
                             await conn.execute(
                                 "UPDATE cart_items SET qty = $1, options_key = $2 WHERE id = $3",

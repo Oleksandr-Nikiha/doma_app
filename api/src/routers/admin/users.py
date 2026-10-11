@@ -1,7 +1,7 @@
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from src.auth.deps import get_current_staff
+from src.auth.deps import get_current_admin
 from src.db.connection import get_pool
 from src.schemas.admin import (
     AdminUserOut,
@@ -15,7 +15,7 @@ async def list_admin_users(
     query: str = Query("", description="Пошук за номером телефону або ПІБ"),
     limit: int = Query(50, ge=1, le=100),
     pool: asyncpg.Pool = Depends(get_pool),
-    staff: asyncpg.Record = Depends(get_current_staff),
+    admin: asyncpg.Record = Depends(get_current_admin),
 ):
     """Пошук клієнтів за номером телефону або ПІБ."""
     clean_q = query.strip()
@@ -46,7 +46,7 @@ async def update_admin_user(
     user_id: int,
     data: AdminUserUpdateIn,
     pool: asyncpg.Pool = Depends(get_pool),
-    staff: asyncpg.Record = Depends(get_current_staff),
+    admin: asyncpg.Record = Depends(get_current_admin),
 ):
     """Оновлення статусу блокування, верифікації телефону та примітки про клієнта."""
     updates = []
@@ -96,21 +96,15 @@ async def update_admin_user(
 async def delete_admin_user(
     user_id: int,
     pool: asyncpg.Pool = Depends(get_pool),
-    staff: asyncpg.Record = Depends(get_current_staff),
+    admin: asyncpg.Record = Depends(get_current_admin),
 ):
     """Видалення користувача (тільки для ролі admin)."""
-    if staff["role"] != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Видалення клієнтів дозволено лише головному адміністратору",
-        )
-
     async with pool.acquire() as conn:
         existing = await conn.fetchrow("SELECT id, telegram_id FROM users WHERE id = $1", user_id)
         if not existing:
             raise HTTPException(status_code=404, detail="Користувача не знайдено")
 
-        if existing["telegram_id"] == staff["telegram_id"]:
+        if existing["telegram_id"] == admin["telegram_id"]:
             raise HTTPException(status_code=400, detail="Не можна видалити власний акаунт")
 
         await conn.execute("DELETE FROM managers WHERE telegram_id = $1", existing["telegram_id"])

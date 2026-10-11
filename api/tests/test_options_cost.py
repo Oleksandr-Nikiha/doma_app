@@ -89,3 +89,22 @@ class TestBuildOptionsKey:
 
         key = build_options_key([opt_v20, opt_v15])
         assert key == "3:15:1|3:20:1"
+
+    def test_normalized_unit_quantities_sec_08(self):
+        """Захист SEC-08: нормалізація options_key на 1 одиницю страви запобігає дублюванню."""
+        # 1 піца з 1 соусом
+        key_single = build_options_key([OptionStub(group_id=1, variant_id=5, qty=1)], item_qty=1)
+        # 2 піци з 2 соусами (по 1 на кожну піцу)
+        key_double = build_options_key([OptionStub(group_id=1, variant_id=5, qty=2)], item_qty=2)
+        # 3 піци з 3 соусами
+        key_triple = build_options_key([OptionStub(group_id=1, variant_id=5, qty=3)], item_qty=3)
+
+        assert key_single == "1:5:1"
+        assert key_single == key_double == key_triple
+
+        # Але 1 піца з 2 соусами має інший ключ
+        key_extra_sauce = build_options_key(
+            [OptionStub(group_id=1, variant_id=5, qty=2)], item_qty=1
+        )
+        assert key_extra_sauce == "1:5:2"
+        assert key_extra_sauce != key_single

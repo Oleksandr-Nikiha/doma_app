@@ -74,6 +74,15 @@ async def create_auth_session(
     expires_at = datetime.now(UTC) + timedelta(minutes=10)
 
     async with pool.acquire() as conn:
+        # Автоматичне фонове очищення прострочених та використаних сесій (SEC-11)
+        await conn.execute(
+            """
+            DELETE FROM admin_auth_sessions
+            WHERE expires_at < now() - INTERVAL '1 hour'
+               OR (status = 'consumed' AND created_at < now() - INTERVAL '1 day')
+            """
+        )
+
         await conn.execute(
             """
             INSERT INTO admin_auth_sessions (id, code, status, expires_at)

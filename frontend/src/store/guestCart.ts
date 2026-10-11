@@ -86,16 +86,20 @@ export function saveGuestCart(cart: Cart): void {
   }
 }
 
-function buildOptionsKey(options: OptionSelection[]): string {
+function buildOptionsKey(options: OptionSelection[], itemQty: number = 1): string {
+  const safeQty = Math.max(1, itemQty);
   return [...options]
     .sort((a, b) => a.group_id - b.group_id || a.variant_id - b.variant_id)
-    .map((o) => `${o.group_id}:${o.variant_id}:${o.qty}`)
+    .map((o) => {
+      const unitQty = o.qty % safeQty === 0 ? Math.floor(o.qty / safeQty) : o.qty;
+      return `${o.group_id}:${o.variant_id}:${unitQty}`;
+    })
     .join("|");
 }
 
 export function addGuestItem(payload: AddGuestCartPayload): Cart {
   const cart = getGuestCart();
-  const optionsKey = buildOptionsKey(payload.options);
+  const optionsKey = buildOptionsKey(payload.options, payload.qty);
 
   // Шукаємо, чи є вже такий самий товар із такими ж опціями
   const existingIdx = cart.items.findIndex(
@@ -104,6 +108,7 @@ export function addGuestItem(payload: AddGuestCartPayload): Cart {
       it.variant_label === payload.variant_label &&
       buildOptionsKey(
         it.options.map((o) => ({ group_id: o.group_id, variant_id: o.variant_id, qty: o.qty })),
+        it.qty,
       ) === optionsKey,
   );
 
@@ -185,6 +190,7 @@ export function updateGuestItem(itemId: number, payload: UpdateGuestCartPayload)
 
   const optionsKey = buildOptionsKey(
     newOptions.map((o) => ({ group_id: o.group_id, variant_id: o.variant_id, qty: o.qty })),
+    newQty,
   );
 
   // Перевіряємо, чи є інша позиція з таким же товаром і опціями для злиття
@@ -195,6 +201,7 @@ export function updateGuestItem(itemId: number, payload: UpdateGuestCartPayload)
       it.variant_label === newVariantLabel &&
       buildOptionsKey(
         it.options.map((o) => ({ group_id: o.group_id, variant_id: o.variant_id, qty: o.qty })),
+        it.qty,
       ) === optionsKey,
   );
 

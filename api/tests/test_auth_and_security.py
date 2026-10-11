@@ -208,3 +208,43 @@ class TestSecurityVulnerabilityFixes:
         with patch("httpx.AsyncClient.post", return_value=mock_resp):
             ok = await send_telegram_message("test_token", 123456, "Привіт!")
             assert ok is True
+
+    async def test_create_auth_session_purges_expired_sessions_sec_11(
+        self, async_client, mock_db_conn
+    ):
+        """Захист SEC-11: нова сесія автоматично очищує застарілі сесії з БД."""
+        response = await async_client.post("/api/admin/auth/session")
+        assert response.status_code == 200
+        assert "code" in response.json()
+        assert "session_id" in response.json()
+
+        # Перевіряємо, що було виконано DELETE з очищенням
+        executed_sqls = [call[0][0] for call in mock_db_conn.execute.call_args_list]
+        delete_calls = [sql for sql in executed_sqls if "DELETE FROM admin_auth_sessions" in sql]
+        assert len(delete_calls) >= 1
+        assert "expires_at < now()" in delete_calls[0]
+
+    async def test_admin_users_requires_admin_role_sec_12(
+        self, async_client, mock_db_conn, test_bot_token
+    ):
+        """Захист SEC-12: доступ до /api/admin/users заборонено менеджеру (403)."""
+        manager_token = create_admin_token(telegram_id=123456789, secret_key=test_bot_token)
+
+        # Користувач є персоналом із роллю 'manager', а не 'admin'
+        mock_db_conn.fetchrow.return_value = {
+            "id": 10,
+            "telegram_id": 123456789,
+            "role": "manager",
+            "location_id": 1,
+            "is_active": True,
+            "location_name": "Центр",
+            "full_name": "Тестовий Менеджер",
+            "phone": "+380501112233",
+        }
+
+        response = await async_client.get(
+            "/api/admin/users",
+            headers={"X-Admin-Token": manager_token},
+        )
+        assert response.status_code == 403
+        assert "Потрібні права головного адміністратора" in response.json()["detail"]

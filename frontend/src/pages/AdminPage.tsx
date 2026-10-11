@@ -215,9 +215,10 @@ export function AdminPage() {
 
           <nav className="space-y-1">
             <p className="text-[9px] font-bold uppercase tracking-wider opacity-40 px-2 mb-1.5">
-              Меню та страви
+              Операції закладу
             </p>
             {[
+              { tab: "orders" as AdminTab, label: "Замовлення", icon: "📦" },
               { tab: "catalog" as AdminTab, label: "Меню та категорії", icon: "🍕" },
               { tab: "options" as AdminTab, label: "Модифікатори та соуси", icon: "🥫" },
               { tab: "stoplist" as AdminTab, label: "Стоп-лист", icon: "⛔" },
@@ -245,43 +246,40 @@ export function AdminPage() {
               </button>
             ))}
 
-            <p className="text-[9px] font-bold uppercase tracking-wider opacity-40 px-2 pt-3 mb-1.5">
-              {isSuperAdmin ? "Керування та аналітика" : "Керування"}
-            </p>
-            {[
-              { tab: "orders" as AdminTab, label: "Замовлення", icon: "📦" },
-              ...(isSuperAdmin
-                ? [
-                    { tab: "analytics" as AdminTab, label: "Аналітика", icon: "📊" },
-                    { tab: "broadcasts" as AdminTab, label: "Розсилки", icon: "📢" },
-                  ]
-                : []),
-              { tab: "users" as AdminTab, label: "Клієнти", icon: "👥" },
-              ...(isSuperAdmin
-                ? [{ tab: "managers" as AdminTab, label: "Штат і ролі", icon: "👔" }]
-                : []),
-            ].map((item) => (
-              <button
-                key={item.tab}
-                onClick={() => {
-                  setActiveSection(item.tab === "orders" ? "operations" : "management");
-                  setActiveTab(item.tab);
-                }}
-                className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all text-left ${
-                  activeTab === item.tab
-                    ? "shadow-sm font-bold"
-                    : "opacity-70 hover:opacity-100 hover:bg-[var(--app-surface-2)]"
-                }`}
-                style={
-                  activeTab === item.tab
-                    ? { background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }
-                    : undefined
-                }
-              >
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
+            {isSuperAdmin && (
+              <>
+                <p className="text-[9px] font-bold uppercase tracking-wider opacity-40 px-2 pt-3 mb-1.5">
+                  Керування та аналітика
+                </p>
+                {[
+                  { tab: "analytics" as AdminTab, label: "Аналітика", icon: "📊" },
+                  { tab: "broadcasts" as AdminTab, label: "Розсилки", icon: "📢" },
+                  { tab: "users" as AdminTab, label: "Клієнти", icon: "👥" },
+                  { tab: "managers" as AdminTab, label: "Штат і ролі", icon: "👔" },
+                ].map((item) => (
+                  <button
+                    key={item.tab}
+                    onClick={() => {
+                      setActiveSection("management");
+                      setActiveTab(item.tab);
+                    }}
+                    className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all text-left ${
+                      activeTab === item.tab && activeSection === "management"
+                        ? "shadow-sm font-bold"
+                        : "opacity-70 hover:opacity-100 hover:bg-[var(--app-surface-2)]"
+                    }`}
+                    style={
+                      activeTab === item.tab && activeSection === "management"
+                        ? { background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }
+                        : undefined
+                    }
+                  >
+                    <span>{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </>
+            )}
           </nav>
         </div>
 
@@ -387,54 +385,52 @@ export function AdminPage() {
             </div>
           </div>
 
-        {/* 1. Глобальний перемикач на 2 розділи: Заклад (Менеджер) vs Керування (Штат і Клієнти) */}
-        <div
-          className="mt-3 grid grid-cols-2 gap-1 rounded-xl p-1 text-xs font-semibold"
-          style={{ background: "var(--app-surface-2)" }}
-        >
-          <button
-            onClick={() => {
-              haptic("light");
-              setActiveSection("operations");
-              if (activeTab === "users" || activeTab === "managers") {
-                setActiveTab("orders");
-              }
-            }}
-            className={`app-press rounded-lg py-2 text-center transition-all ${
-              activeSection === "operations" ? "shadow-sm font-bold" : "opacity-65"
-            }`}
-            style={
-              activeSection === "operations"
-                ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
-                : undefined
-            }
+        {/* 1. Глобальний перемикач на 2 розділи (тільки для головного адміна) */}
+        {isSuperAdmin && (
+          <div
+            className="mt-3 grid grid-cols-2 gap-1 rounded-xl p-1 text-xs font-semibold"
+            style={{ background: "var(--app-surface-2)" }}
           >
-            🍕 Заклад (Операційний)
-          </button>
-          <button
-            onClick={() => {
-              haptic("light");
-              setActiveSection("management");
-              if (isSuperAdmin) {
+            <button
+              onClick={() => {
+                haptic("light");
+                setActiveSection("operations");
+                if (activeTab === "users" || activeTab === "managers" || activeTab === "analytics" || activeTab === "broadcasts") {
+                  setActiveTab("orders");
+                }
+              }}
+              className={`app-press rounded-lg py-2 text-center transition-all ${
+                activeSection === "operations" ? "shadow-sm font-bold" : "opacity-65"
+              }`}
+              style={
+                activeSection === "operations"
+                  ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
+                  : undefined
+              }
+            >
+              🍕 Заклад (Операційний)
+            </button>
+            <button
+              onClick={() => {
+                haptic("light");
+                setActiveSection("management");
                 if (activeTab !== "users" && activeTab !== "managers" && activeTab !== "analytics" && activeTab !== "broadcasts") {
                   setActiveTab("analytics");
                 }
-              } else {
-                setActiveTab("users");
+              }}
+              className={`app-press rounded-lg py-2 text-center transition-all ${
+                activeSection === "management" ? "shadow-sm font-bold" : "opacity-65"
+              }`}
+              style={
+                activeSection === "management"
+                  ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
+                  : undefined
               }
-            }}
-            className={`app-press rounded-lg py-2 text-center transition-all ${
-              activeSection === "management" ? "shadow-sm font-bold" : "opacity-65"
-            }`}
-            style={
-              activeSection === "management"
-                ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
-                : undefined
-            }
-          >
-            {isSuperAdmin ? "📊 Керування та аналітика" : "👥 Клієнти"}
-          </button>
-        </div>
+            >
+              📊 Керування та аналітика
+            </button>
+          </div>
+        )}
 
         {/* 2. Підвкладки розділу "Заклад" */}
         {activeSection === "operations" && (
@@ -525,48 +521,44 @@ export function AdminPage() {
           </div>
         )}
 
-        {/* 2. Підвкладки розділу "Керування та аналітика" */}
-        {activeSection === "management" && (
+        {/* 2. Підвкладки розділу "Керування та аналітика" (тільки для головного адміна) */}
+        {activeSection === "management" && isSuperAdmin && (
           <div
             className="mt-2 flex rounded-xl p-1 text-xs font-medium gap-1 overflow-x-auto no-scrollbar"
             style={{ background: "var(--app-surface-2)" }}
           >
-            {isSuperAdmin && (
-              <>
-                <button
-                  onClick={() => {
-                    haptic("light");
-                    setActiveTab("analytics");
-                  }}
-                  className={`app-press flex-1 min-w-[75px] rounded-lg py-2 text-center transition-all ${
-                    activeTab === "analytics" ? "shadow-sm font-bold" : "opacity-70"
-                  }`}
-                  style={
-                    activeTab === "analytics"
-                      ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
-                      : undefined
-                  }
-                >
-                  📊 Аналітика
-                </button>
-                <button
-                  onClick={() => {
-                    haptic("light");
-                    setActiveTab("broadcasts");
-                  }}
-                  className={`app-press flex-1 min-w-[75px] rounded-lg py-2 text-center transition-all ${
-                    activeTab === "broadcasts" ? "shadow-sm font-bold" : "opacity-70"
-                  }`}
-                  style={
-                    activeTab === "broadcasts"
-                      ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
-                      : undefined
-                  }
-                >
-                  📢 Розсилки
-                </button>
-              </>
-            )}
+            <button
+              onClick={() => {
+                haptic("light");
+                setActiveTab("analytics");
+              }}
+              className={`app-press flex-1 min-w-[75px] rounded-lg py-2 text-center transition-all ${
+                activeTab === "analytics" ? "shadow-sm font-bold" : "opacity-70"
+              }`}
+              style={
+                activeTab === "analytics"
+                  ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
+                  : undefined
+              }
+            >
+              📊 Аналітика
+            </button>
+            <button
+              onClick={() => {
+                haptic("light");
+                setActiveTab("broadcasts");
+              }}
+              className={`app-press flex-1 min-w-[75px] rounded-lg py-2 text-center transition-all ${
+                activeTab === "broadcasts" ? "shadow-sm font-bold" : "opacity-70"
+              }`}
+              style={
+                activeTab === "broadcasts"
+                  ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
+                  : undefined
+              }
+            >
+              📢 Розсилки
+            </button>
             <button
               onClick={() => {
                 haptic("light");
@@ -583,24 +575,22 @@ export function AdminPage() {
             >
               👤 Клієнти
             </button>
-            {isSuperAdmin && (
-              <button
-                onClick={() => {
-                  haptic("light");
-                  setActiveTab("managers");
-                }}
-                className={`app-press flex-1 min-w-[75px] rounded-lg py-2 text-center transition-all ${
-                  activeTab === "managers" ? "shadow-sm font-bold" : "opacity-70"
-                }`}
-                style={
-                  activeTab === "managers"
-                    ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
-                    : undefined
-                }
-              >
-                👥 Штат
-              </button>
-            )}
+            <button
+              onClick={() => {
+                haptic("light");
+                setActiveTab("managers");
+              }}
+              className={`app-press flex-1 min-w-[75px] rounded-lg py-2 text-center transition-all ${
+                activeTab === "managers" ? "shadow-sm font-bold" : "opacity-70"
+              }`}
+              style={
+                activeTab === "managers"
+                  ? { background: "var(--tg-theme-bg-color)", color: "var(--tg-theme-text-color)" }
+                  : undefined
+              }
+            >
+              👥 Штат
+            </button>
           </div>
         )}
 
@@ -683,7 +673,7 @@ export function AdminPage() {
             isSuperAdmin={adminMe.role === "admin"}
           />
         )}
-        {activeTab === "users" && (
+        {activeTab === "users" && isSuperAdmin && (
           <UsersTab locations={locations} isSuperAdmin={isSuperAdmin} />
         )}
         {activeTab === "managers" && isSuperAdmin && (
