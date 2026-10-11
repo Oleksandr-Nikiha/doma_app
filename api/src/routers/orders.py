@@ -1,9 +1,6 @@
 import html
 import logging
-import re
-from datetime import date, datetime, timedelta
 from typing import Any
-from zoneinfo import ZoneInfo
 
 import asyncpg
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -23,14 +20,21 @@ from src.schemas.order import (
     RepeatOrderIn,
     RepeatOrderOut,
 )
+from src.services.order_notifier import OrderNotifier
+from src.services.order_service import KYIV_TZ, OrderService
 from src.services.telegram_client import send_telegram_message
+
+__all__ = [
+    "KYIV_TZ",
+    "router",
+    "_validate_scheduled_time",
+    "send_order_to_manager",
+    "_fetch_order_by_id",
+]
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/orders", tags=["Orders"], dependencies=[Depends(rate_limiter)])
-
-KYIV_TZ = ZoneInfo("Europe/Kyiv")
-
 
 def _validate_scheduled_time(
     scheduled_str: str,
@@ -39,331 +43,21 @@ def _validate_scheduled_time(
     target_location_name: str,
     fulfillment_type: str,
 ) -> None:
-    """
-    Валідує обраний час/дату замовлення:
-    - Дата не може бути в минулому
-    - Час не може бути в минулому
-    - Час не може бути меншим ніж поточний час + 30 хв
-    - Час повинен вкладатися в робочі години закладу
-    - Працює як для доставки, так і для самовивозу
-    """
-    now_kyiv = datetime.now(KYIV_TZ)
-    today_kyiv = now_kyiv.date()
-    min_allowed_dt = now_kyiv + timedelta(minutes=30)
-
-    scheduled_dt: datetime | None = None
-    clean = scheduled_str.strip()
-
-    # 1. YYYY-MM-DD HH:MM або YYYY-MM-DDTHH:MM
-    iso_match = re.match(r"^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}:\d{2})$", clean)
-    if iso_match:
-        try:
-            d_obj = date.fromisoformat(iso_match.group(1))
-            h, m = map(int, iso_match.group(2).split(":"))
-            scheduled_dt = datetime(d_obj.year, d_obj.month, d_obj.day, h, m, tzinfo=KYIV_TZ)
-        except Exception:
-            pass
-
-    # 2. 'Завтра, HH:MM' або 'Завтра HH:MM'
-    if not scheduled_dt:
-        tomorrow_match = re.match(r"^Завтра[, ]+(\d{1,2}:\d{2})$", clean, re.IGNORECASE)
-        if tomorrow_match:
-            try:
-                t_str = tomorrow_match.group(1)
-                h, m = map(int, t_str.split(":"))
-                d_obj = today_kyiv + timedelta(days=1)
-                scheduled_dt = datetime(d_obj.year, d_obj.month, d_obj.day, h, m, tzinfo=KYIV_TZ)
-            except Exception:
-                pass
-
-    # 3. 'Сьогодні, HH:MM' або 'Сьогодні HH:MM'
-    if not scheduled_dt:
-        today_match = re.match(r"^Сьогодні[, ]+(\d{1,2}:\d{2})$", clean, re.IGNORECASE)
-        if today_match:
-            try:
-                t_str = today_match.group(1)
-                h, m = map(int, t_str.split(":"))
-                d_obj = today_kyiv
-                scheduled_dt = datetime(d_obj.year, d_obj.month, d_obj.day, h, m, tzinfo=KYIV_TZ)
-            except Exception:
-                pass
-
-    # 4. 'HH:MM' (вважається замовленням на сьогодні)
-    if not scheduled_dt:
-        time_match = re.match(r"^(\d{1,2}):(\d{2})$", clean)
-        if time_match:
-            try:
-                h, m = int(time_match.group(1)), int(time_match.group(2))
-                scheduled_dt = datetime(
-                    today_kyiv.year, today_kyiv.month, today_kyiv.day, h, m, tzinfo=KYIV_TZ
-                )
-            except Exception:
-                pass
-
-    if not scheduled_dt:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Некоректний формат бажаного часу замовлення.",
-        )
-
-    # 1) Дата не може бути в минулому
-    if scheduled_dt.date() < today_kyiv:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Дата замовлення не може бути в минулому.",
-        )
-
-    # 2) Час не може бути в минулому
-    if scheduled_dt < now_kyiv:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Час замовлення не може бути меншим ніж поточний.",
-        )
-
-    # 3) Час не може бути меншим ніж "зараз + 30 хв"
-    if scheduled_dt < min_allowed_dt:
-        min_time_str = min_allowed_dt.strftime("%H:%M")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Час замовлення має бути не меншим ніж поточний час + 30 хв "
-                f"(найраніший доступний час: {min_time_str})."
-            ),
-        )
-
-    # 4) Перевірка робочих годин
-    val_time_str = scheduled_dt.strftime("%H:%M")
-    if not (delivery_start_time <= val_time_str <= delivery_end_time):
-        type_label = "доставки" if fulfillment_type == "delivery" else "самовивозу"
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Час {type_label} для «{target_location_name}» можливий лише з "
-                f"{delivery_start_time} до {delivery_end_time}."
-            ),
-        )
+    return OrderService.validate_scheduled_time(
+        scheduled_str=scheduled_str,
+        delivery_start_time=delivery_start_time,
+        delivery_end_time=delivery_end_time,
+        target_location_name=target_location_name,
+        fulfillment_type=fulfillment_type,
+    )
 
 
 async def send_order_to_manager(order_id: int, order_data: dict[str, Any], settings) -> None:
-    if not settings.manager_chat_id or not settings.bot_token:
-        logger.info("MANAGER_CHAT_ID або BOT_TOKEN не налаштовані, сповіщення пропущено")
-        return
-
-    items_text_list = []
-    for item in order_data["items"]:
-        opts_str = ""
-        if item["options"]:
-            opts = ", ".join(
-                f"{html.escape(str(o['name']))}" + (f" ×{o['qty']}" if o["qty"] > 1 else "")
-                for o in item["options"]
-            )
-            opts_str = f"\n   <i>↳ {opts}</i>"
-        p_name = html.escape(str(item["product_name"]))
-        v_label = html.escape(str(item["variant_label"]))
-        items_text_list.append(
-            f"• <b>{p_name}</b> ({v_label}) × {item['qty']} — {item['subtotal']:.2f} ₴{opts_str}"
-        )
-    items_block = "\n".join(items_text_list)
-
-    loc_name = html.escape(str(order_data["location_name"]))
-    c_name = html.escape(str(order_data["contact_name"]))
-    c_phone = html.escape(str(order_data["contact_phone"]))
-
-    fulfillment_label = (
-        f"🛵 Доставка: <code>{html.escape(str(order_data['delivery_address'] or ''))}</code>"
-        if order_data["fulfillment_type"] == "delivery"
-        else "🛍️ Самовивіз"
-    )
-    scheduled_time = order_data.get("scheduled_time")
-    time_label = (
-        f"⏰ <b>Час:</b> На {html.escape(str(scheduled_time))}"
-        if scheduled_time
-        else "⏰ <b>Час:</b> Якнайшвидше"
-    )
-
-    if order_data["payment_method"] == "cash":
-        payment_label = "💵 Готівка"
-    elif order_data["payment_method"] == "card":
-        payment_label = "💳 Картка (термінал)"
-    elif order_data["payment_method"] == "qr":
-        payment_label = "📱 QR-код (у чеку, при доставці)"
-    else:
-        payment_label = html.escape(str(order_data["payment_method"]))
-
-    comment_line = (
-        f"\n💬 <b>Коментар:</b> {html.escape(str(order_data['comment']))}"
-        if order_data.get("comment")
-        else ""
-    )
-    user_note = order_data.get("admin_note")
-    user_note_line = (
-        f"\n⚠️ <b>Примітка про клієнта:</b> {html.escape(str(user_note))}" if user_note else ""
-    )
-
-    tg_id = order_data.get("telegram_id")
-    is_phone_verified = order_data.get("is_phone_verified", False)
-    phone_badge = (
-        "✅ Телефон верифіковано в TG"
-        if is_phone_verified
-        else "⚠️ <b>НЕ ВЕРИФІКОВАНО!</b> Перед приготуванням зателефонуйте для усного підтвердження!"
-    )
-    user_tg_line = (
-        f"\n📱 <b>Telegram ID:</b> <code>{tg_id}</code> (<a href=\"tg://user?id={tg_id}\">Профіль</a>)\n"
-        f"🔒 <b>Верифікація контакту:</b> {phone_badge}"
-        if tg_id
-        else ""
-    )
-
-    bot_username = getattr(settings, "bot_username", "ncoffee_app_tst_bot") or "ncoffee_app_tst_bot"
-    mini_app_url = getattr(settings, "mini_app_url", "") or "https://nikiga-ax.duckdns.org"
-    app_link = f"https://t.me/{bot_username}?startapp=order_{order_id}"
-    web_admin_link = f"{mini_app_url.rstrip('/')}/admin?order_id={order_id}"
-
-    text = (
-        f"📦 <b>Нове замовлення #{order_id}</b>\n"
-        f"📍 <b>Заклад:</b> {loc_name}\n"
-        f"👤 <b>Клієнт:</b> {c_name} ({c_phone}){user_tg_line}{user_note_line}\n"
-        f"{fulfillment_label}\n"
-        f"{time_label}\n"
-        f"💰 <b>Оплата:</b> {payment_label}"
-        f"{comment_line}\n\n"
-        f"📋 <b>Страви:</b>\n{items_block}\n\n"
-        f"💵 <b>Разом до сплати: {order_data['total_price']:.2f} ₴</b>\n\n"
-        f"🔗 <a href=\"{app_link}\">Відкрити у додатку</a> | "
-        f"<a href=\"{web_admin_link}\">Веб-панель</a>"
-    )
-
-    reply_markup = {
-        "inline_keyboard": [
-            [
-                {
-                    "text": "✅ Підтвердити",
-                    "callback_data": f"order:confirm:{order_id}",
-                },
-                {
-                    "text": "❌ Відхилити",
-                    "callback_data": f"order:reject:{order_id}",
-                },
-            ],
-            [
-                {
-                    "text": "⏱ Змінити час",
-                    "callback_data": f"order:time_menu:{order_id}",
-                }
-            ],
-            [
-                {
-                    "text": "✏️ Редагувати замовлення",
-                    "url": app_link,
-                }
-            ],
-        ]
-    }
-
-    await send_telegram_message(
-        bot_token=settings.bot_token,
-        chat_id=settings.manager_chat_id,
-        text=text,
-        parse_mode="HTML",
-        reply_markup=reply_markup,
-    )
+    await OrderNotifier.send_manager_notification(order_id, order_data, settings)
 
 
 async def _fetch_order_by_id(conn, order_id: int, telegram_id: int) -> OrderOut | None:
-    order_row = await conn.fetchrow(
-        """
-        SELECT id, telegram_id, status, fulfillment_type, delivery_address,
-               contact_name, contact_phone, payment_method, scheduled_time,
-               comment, total_price, created_at
-        FROM orders
-        WHERE id = $1 AND telegram_id = $2
-        """,
-        order_id,
-        telegram_id,
-    )
-    if not order_row:
-        return None
-    groups_rows = await conn.fetch(
-        """
-        SELECT og.id, og.location_id, loc.name AS location_name, og.status, og.subtotal
-        FROM order_groups og
-        JOIN locations loc ON loc.id = og.location_id
-        WHERE og.order_id = $1
-        ORDER BY og.id
-        """,
-        order_id,
-    )
-    items_rows = await conn.fetch(
-        """
-        SELECT id, order_group_id, variant_id, product_name, variant_label,
-               unit_price, qty, subtotal
-        FROM order_items
-        WHERE order_group_id = ANY($1::int[])
-        ORDER BY id
-        """,
-        [g["id"] for g in groups_rows],
-    )
-    options_rows = await conn.fetch(
-        """
-        SELECT id, order_item_id, option_group_name, option_name, price_delta, qty
-        FROM order_item_options
-        WHERE order_item_id = ANY($1::int[])
-        ORDER BY id
-        """,
-        [i["id"] for i in items_rows],
-    )
-
-    opts_by_item: dict[int, list[OrderItemOptionOut]] = {}
-    for r in options_rows:
-        opts_by_item.setdefault(r["order_item_id"], []).append(
-            OrderItemOptionOut(
-                id=r["id"],
-                option_group_name=r["option_group_name"],
-                option_name=r["option_name"],
-                price_delta=float(r["price_delta"]),
-                qty=r["qty"],
-            )
-        )
-    items_by_group: dict[int, list[OrderItemOut]] = {}
-    for r in items_rows:
-        items_by_group.setdefault(r["order_group_id"], []).append(
-            OrderItemOut(
-                id=r["id"],
-                variant_id=r["variant_id"],
-                product_name=r["product_name"],
-                variant_label=r["variant_label"],
-                unit_price=float(r["unit_price"]),
-                qty=r["qty"],
-                subtotal=float(r["subtotal"]),
-                options=opts_by_item.get(r["id"], []),
-            )
-        )
-    groups: list[OrderGroupOut] = [
-        OrderGroupOut(
-            id=g["id"],
-            location_id=g["location_id"],
-            location_name=g["location_name"],
-            status=g["status"],
-            subtotal=float(g["subtotal"]),
-            items=items_by_group.get(g["id"], []),
-        )
-        for g in groups_rows
-    ]
-    return OrderOut(
-        id=order_row["id"],
-        telegram_id=order_row["telegram_id"],
-        status=order_row["status"],
-        fulfillment_type=order_row["fulfillment_type"],
-        delivery_address=order_row["delivery_address"],
-        contact_name=order_row["contact_name"],
-        contact_phone=order_row["contact_phone"],
-        payment_method=order_row["payment_method"],
-        scheduled_time=order_row["scheduled_time"],
-        comment=order_row["comment"],
-        total_price=float(order_row["total_price"]),
-        created_at=order_row["created_at"],
-        groups=groups,
-    )
+    return await OrderService.fetch_order_by_id(conn, order_id, telegram_id)
 
 
 @router.post("", response_model=OrderOut, status_code=status.HTTP_201_CREATED)

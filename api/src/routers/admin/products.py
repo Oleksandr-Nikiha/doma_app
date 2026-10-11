@@ -48,12 +48,18 @@ async def list_admin_products(
             target_loc,
         )
 
+        product_ids = [p["id"] for p in products]
+        if not product_ids:
+            return []
+
         variants = await conn.fetch(
             """
             SELECT id, product_id, label, price, weight, sort_order, is_available
             FROM product_variants
+            WHERE product_id = ANY($1::int[])
             ORDER BY sort_order, id
-            """
+            """,
+            product_ids,
         )
 
         pogs = await conn.fetch(
@@ -62,8 +68,10 @@ async def list_admin_products(
                    pog.min_select, pog.max_select, pog.free_count, pog.sort_order
             FROM product_option_groups pog
             JOIN option_groups g ON g.id = pog.group_id
+            WHERE pog.product_id = ANY($1::int[])
             ORDER BY pog.sort_order, pog.group_id
-            """
+            """,
+            product_ids,
         )
 
     # Групуємо варіанти по product_id

@@ -3,9 +3,17 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { ApiError } from "@/api/client";
 import { useCart, useCreateOrder, useLocations, useMe } from "@/api/queries";
-import { ErrorBox, ScreenTitle, SegmentedControl, Spinner, formatPrice } from "@/components/ui";
+import { ErrorBox, ScreenTitle, Spinner, formatPrice } from "@/components/ui";
 import { WebHeader } from "@/components/WebHeader";
-import { AddressSelector } from "@/components/delivery/AddressSelector";
+import {
+  CheckoutOrderSummary,
+  ContactSection,
+  DeliveryAddressSection,
+  FulfillmentSelector,
+  PaymentMethodSelector,
+  TimeSelector,
+  type AddressSource,
+} from "@/components/checkout";
 import { useBackButton } from "@/hooks/useBackButton";
 import { isTelegramWebApp } from "@/telegram/env";
 import { haptic, hapticNotify } from "@/telegram/sdk";
@@ -85,7 +93,6 @@ export function CheckoutPage() {
 
   const isTodayClosedForScheduled = scheduledDate === todayStr && effectiveMinTime > locEndTime;
 
-  type AddressSource = "main" | "additional" | "custom";
   const [addressSource, setAddressSource] = useState<AddressSource>(() => {
     if (user?.delivery_address) return "main";
     if (user?.additional_address) return "additional";
@@ -108,6 +115,7 @@ export function CheckoutPage() {
       }
     }
   }, [user, userAddressesLoaded]);
+
   const [contactName, setContactName] = useState(user?.full_name ?? "");
   const [contactPhone, setContactPhone] = useState(user?.phone ?? "");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "qr">("cash");
@@ -319,409 +327,61 @@ export function CheckoutPage() {
         )}
 
         {/* Спосіб отримання */}
-        <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wider opacity-60">
-            Спосіб отримання
-          </label>
-          <SegmentedControl
-            value={fulfillmentType}
-            onChange={(val) => {
-              haptic("light");
-              setFulfillmentType(val);
-            }}
-            options={[
-              { value: "delivery", label: "Доставка", icon: "🛵", disabled: !isDeliveryEnabled },
-              { value: "pickup", label: "Самовивіз", icon: "🛍️" },
-            ]}
-          />
+        <FulfillmentSelector
+          fulfillmentType={fulfillmentType}
+          onChange={setFulfillmentType}
+          isDeliveryEnabled={isDeliveryEnabled}
+        />
 
-          {/* Попередження про високе навантаження */}
-          {!isDeliveryEnabled && (
-            <div
-              className="mt-2.5 rounded-xl p-3 text-xs leading-relaxed flex items-start gap-2 border"
-              style={{
-                background: "color-mix(in srgb, #ef4444 10%, transparent)",
-                color: "#ef4444",
-                borderColor: "color-mix(in srgb, #ef4444 30%, transparent)",
-              }}
-            >
-              <span className="text-sm">⚠️</span>
-              <div>
-                <p className="font-semibold">Доставка тимчасово вимкнена</p>
-                <p className="mt-0.5 opacity-90">
-                  Через високе навантаження кухні та кур'єрів заклад наразі приймає замовлення лише на <b>самовивіз</b>.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Час отримання: Якнайшвидше або На певний час */}
-        <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wider opacity-60">
-            Час {fulfillmentType === "delivery" ? "доставки" : "самовивозу"}
-          </label>
-          <SegmentedControl
-            value={timeMode}
-            onChange={(val) => {
-              haptic("light");
-              setTimeMode(val);
-            }}
-            options={[
-              { value: "asap", label: "Якнайшвидше", icon: "⚡" },
-              { value: "scheduled", label: "На певний час", icon: "⏰" },
-            ]}
-          />
-
-          {timeMode === "scheduled" && (
-            <div className="mt-2.5 space-y-3">
-              {/* Вибір дати */}
-              <div>
-                <label className="mb-1.5 block text-[11px] font-semibold opacity-70">
-                  📅 Дата {fulfillmentType === "delivery" ? "доставки" : "самовивозу"}:
-                </label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      haptic("light");
-                      setScheduledDate(todayStr);
-                    }}
-                    disabled={isTodayClosedForScheduled}
-                    className={`app-press flex-1 rounded-xl py-2 px-3 text-xs font-semibold border transition ${
-                      scheduledDate === todayStr
-                        ? "border-blue-500 bg-blue-500/15 text-blue-500 font-bold"
-                        : "border-[var(--app-border)] opacity-70 hover:opacity-100"
-                    } ${isTodayClosedForScheduled ? "opacity-30 cursor-not-allowed line-through" : ""}`}
-                  >
-                    Сьогодні
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      haptic("light");
-                      setScheduledDate(tomorrowStr);
-                    }}
-                    className={`app-press flex-1 rounded-xl py-2 px-3 text-xs font-semibold border transition ${
-                      scheduledDate === tomorrowStr
-                        ? "border-blue-500 bg-blue-500/15 text-blue-500 font-bold"
-                        : "border-[var(--app-border)] opacity-70 hover:opacity-100"
-                    }`}
-                  >
-                    Завтра
-                  </button>
-                  <input
-                    type="date"
-                    min={todayStr}
-                    value={scheduledDate}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        haptic("light");
-                        setScheduledDate(e.target.value);
-                      }
-                    }}
-                    className="rounded-xl border border-[var(--app-border)] p-2 text-xs font-semibold outline-none cursor-pointer"
-                    style={{ background: "var(--app-surface-2)" }}
-                    title="Обрати іншу дату"
-                  />
-                </div>
-              </div>
-
-              {isTodayClosedForScheduled && (
-                <div
-                  className="rounded-xl p-3 text-xs leading-relaxed flex items-start gap-2 border"
-                  style={{
-                    background: "color-mix(in srgb, #f59e0b 10%, transparent)",
-                    color: "#d97706",
-                    borderColor: "color-mix(in srgb, #f59e0b 30%, transparent)",
-                  }}
-                >
-                  <span className="text-sm">⚠️</span>
-                  <div>
-                    <p className="font-semibold">Прийом замовлень на сьогодні завершено</p>
-                    <p className="mt-0.5 opacity-90">
-                      З урахуванням часу приготування (30 хв) заклад вже зачиняється о {locEndTime}. Будь ласка, оберіть дату «Завтра» або спосіб «Якнайшвидше».
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Вибір часу */}
-              <div className="space-y-1.5">
-                <label className="block text-[11px] font-semibold opacity-70">
-                  ⏰ Час (години роботи: {locStartTime} – {locEndTime}):
-                </label>
-                <input
-                  type="time"
-                  value={scheduledTime}
-                  min={effectiveMinTime}
-                  max={locEndTime}
-                  onChange={(e) => setScheduledTime(e.target.value)}
-                  required
-                  className="w-full max-w-xs rounded-xl border border-[var(--app-border)] p-3 text-sm font-semibold outline-none transition focus:ring-2 focus:ring-blue-500"
-                  style={{ background: "var(--app-surface-2)", color: "var(--tg-theme-text-color)" }}
-                />
-                <p className="text-[11px] opacity-60">
-                  {scheduledDate === todayStr ? (
-                    <span>Найраніший час: <b>{effectiveMinTime}</b> (зараз + 30 хв)</span>
-                  ) : (
-                    <span>Робочі години: з {locStartTime} до {locEndTime}</span>
-                  )}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Час отримання */}
+        <TimeSelector
+          fulfillmentType={fulfillmentType}
+          timeMode={timeMode}
+          onTimeModeChange={setTimeMode}
+          scheduledDate={scheduledDate}
+          onScheduledDateChange={setScheduledDate}
+          scheduledTime={scheduledTime}
+          onScheduledTimeChange={setScheduledTime}
+          todayStr={todayStr}
+          tomorrowStr={tomorrowStr}
+          locStartTime={locStartTime}
+          locEndTime={locEndTime}
+          effectiveMinTime={effectiveMinTime}
+          isTodayClosedForScheduled={isTodayClosedForScheduled}
+        />
 
         {/* Адреса доставки або деталі самовивозу */}
-        {fulfillmentType === "delivery" ? (
-          <div className="space-y-3">
-            <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-wider opacity-60">
-                Адреса доставки
-              </label>
-              <SegmentedControl
-                value={addressSource}
-                onChange={(val) => {
-                  haptic("light");
-                  setAddressSource(val);
-                }}
-                options={[
-                  { value: "main", label: "Основна", icon: "📍" },
-                  { value: "additional", label: "Додаткова", icon: "🏢" },
-                  { value: "custom", label: "Інша", icon: "✏️" },
-                ]}
-              />
-            </div>
-
-            {/* Вміст обраного типу адреси */}
-            {addressSource === "main" && (
-              <div
-                className="rounded-2xl border border-[var(--app-border)] p-3.5 transition"
-                style={{ background: "var(--app-surface-2)" }}
-              >
-                {user?.delivery_address ? (
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium opacity-60">📍 Основна адреса</span>
-                      <button
-                        type="button"
-                        onClick={() => navigate("/profile")}
-                        className="text-xs font-semibold text-[var(--tg-theme-button-color)] hover:underline"
-                      >
-                        Змінити в профілі
-                      </button>
-                    </div>
-                    <p className="mt-1 text-sm font-semibold">{user.delivery_address}</p>
-                  </div>
-                ) : (
-                  <div className="text-center py-2">
-                    <p className="text-xs opacity-70">Основна адреса не вказана у вашому профілі</p>
-                    <div className="mt-2.5 flex justify-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => navigate("/profile")}
-                        className="rounded-xl px-3 py-1.5 text-xs font-medium bg-[var(--app-surface)] border border-[var(--app-border)]"
-                      >
-                        Вказати в профілі
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAddressSource("custom")}
-                        className="rounded-xl px-3 py-1.5 text-xs font-semibold"
-                        style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
-                      >
-                        Вказати іншу адресу
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {addressSource === "additional" && (
-              <div
-                className="rounded-2xl border border-[var(--app-border)] p-3.5 transition"
-                style={{ background: "var(--app-surface-2)" }}
-              >
-                {user?.additional_address ? (
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium opacity-60">🏢 Додаткова адреса</span>
-                      <button
-                        type="button"
-                        onClick={() => navigate("/profile")}
-                        className="text-xs font-semibold text-[var(--tg-theme-button-color)] hover:underline"
-                      >
-                        Змінити в профілі
-                      </button>
-                    </div>
-                    <p className="mt-1 text-sm font-semibold">{user.additional_address}</p>
-                  </div>
-                ) : (
-                  <div className="text-center py-2">
-                    <p className="text-xs opacity-70">Додаткова адреса не вказана у вашому профілі</p>
-                    <div className="mt-2.5 flex justify-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => navigate("/profile")}
-                        className="rounded-xl px-3 py-1.5 text-xs font-medium bg-[var(--app-surface)] border border-[var(--app-border)]"
-                      >
-                        Вказати в профілі
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAddressSource("custom")}
-                        className="rounded-xl px-3 py-1.5 text-xs font-semibold"
-                        style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
-                      >
-                        Вказати іншу адресу
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {addressSource === "custom" && (
-              <AddressSelector
-                onChange={(full, valid) => {
-                  setCustomAddressStr(full);
-                  setIsCustomAddressValid(valid);
-                }}
-              />
-            )}
-
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider opacity-60">
-                Під'їзд, код домофону або примітка кур'єру (необов'язково)
-              </label>
-              <input
-                type="text"
-                value={courierNote}
-                onChange={(e) => setCourierNote(e.target.value)}
-                placeholder="під'їзд 2, поверх 4, код 1234, заїзд з боку двору"
-                className="w-full rounded-xl border border-[var(--app-border)] p-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
-                style={{ background: "var(--app-surface-2)" }}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-xl p-3.5 text-xs leading-relaxed" style={{ background: "var(--app-surface-2)" }}>
-            <p className="font-semibold">Адреса для самовивозу:</p>
-            <p className="mt-1 opacity-80">{targetLocation?.address || "м. Вишгород"}</p>
-            <p className="mt-2 opacity-60">
-              Ми повідомимо вас у чаті з ботом, щойно замовлення буде готове до видачі.
-            </p>
-          </div>
-        )}
+        <DeliveryAddressSection
+          fulfillmentType={fulfillmentType}
+          targetLocationAddress={targetLocation?.address}
+          addressSource={addressSource}
+          onAddressSourceChange={setAddressSource}
+          userDeliveryAddress={user?.delivery_address}
+          userAdditionalAddress={user?.additional_address}
+          onCustomAddressChange={(full, valid) => {
+            setCustomAddressStr(full);
+            setIsCustomAddressValid(valid);
+          }}
+          courierNote={courierNote}
+          onCourierNoteChange={setCourierNote}
+          onNavigateProfile={() => navigate("/profile")}
+        />
 
         {/* Контакти отримувача */}
-        <div className="space-y-3">
-          <label className="block text-xs font-semibold uppercase tracking-wider opacity-60">
-            Контакти одержувача
-          </label>
-          <div>
-            <label className="mb-1 block text-xs font-medium opacity-70">Ім'я *</label>
-            <input
-              type="text"
-              value={contactName}
-              onChange={(e) => setContactName(e.target.value)}
-              placeholder="Ваше ім'я"
-              required
-              className="w-full rounded-xl p-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
-              style={{ background: "var(--app-surface-2)" }}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium opacity-70">Телефон *</label>
-            <input
-              type="tel"
-              value={contactPhone}
-              onChange={(e) => setContactPhone(e.target.value)}
-              placeholder="+380..."
-              required
-              className="w-full rounded-xl p-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
-              style={{ background: "var(--app-surface-2)" }}
-            />
-          </div>
-        </div>
+        <ContactSection
+          contactName={contactName}
+          onContactNameChange={setContactName}
+          contactPhone={contactPhone}
+          onContactPhoneChange={setContactPhone}
+        />
 
         {/* Спосіб оплати */}
-        <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wider opacity-60">
-            Спосіб оплати
-          </label>
-          <div className={`grid ${showQr ? "grid-cols-3" : "grid-cols-2"} gap-2`}>
-            <button
-              type="button"
-              onClick={() => {
-                haptic("light");
-                setPaymentMethod("cash");
-              }}
-              className={`app-press rounded-xl p-3 text-center text-xs font-semibold transition ${
-                paymentMethod === "cash"
-                  ? "shadow-sm ring-2 ring-current"
-                  : "opacity-60"
-              }`}
-              style={{
-                background: paymentMethod === "cash" ? "var(--app-tint)" : "var(--app-surface-2)",
-                color: paymentMethod === "cash" ? "var(--tg-theme-link-color)" : "inherit",
-              }}
-            >
-              💵 Готівка
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                haptic("light");
-                setPaymentMethod("card");
-              }}
-              className={`app-press rounded-xl p-3 text-center text-xs font-semibold transition ${
-                paymentMethod === "card"
-                  ? "shadow-sm ring-2 ring-current"
-                  : "opacity-60"
-              }`}
-              style={{
-                background: paymentMethod === "card" ? "var(--app-tint)" : "var(--app-surface-2)",
-                color: paymentMethod === "card" ? "var(--tg-theme-link-color)" : "inherit",
-              }}
-            >
-              💳 Термінал
-            </button>
-            {showQr && (
-              <button
-                type="button"
-                onClick={() => {
-                  haptic("light");
-                  setPaymentMethod("qr");
-                }}
-                className={`app-press rounded-xl p-3 text-center text-xs font-semibold transition ${
-                  paymentMethod === "qr"
-                    ? "shadow-sm ring-2 ring-current"
-                    : "opacity-60"
-                }`}
-                style={{
-                  background: paymentMethod === "qr" ? "var(--app-tint)" : "var(--app-surface-2)",
-                  color: paymentMethod === "qr" ? "var(--tg-theme-link-color)" : "inherit",
-                }}
-              >
-                📱 QR-код
-              </button>
-            )}
-          </div>
-          <p className="mt-2 text-[11px] opacity-60 text-center leading-relaxed">
-            {paymentMethod === "qr"
-              ? "Оплата смартфоном за спеціальним QR-кодом, надрукованим у чеку (при доставці)"
-              : fulfillmentType === "delivery"
-                ? paymentMethod === "cash"
-                  ? "Оплата готівкою кур'єру при отриманні"
-                  : "Оплата карткою через термінал у кур'єра"
-                : paymentMethod === "cash"
-                  ? "Оплата готівкою при отриманні у закладі"
-                  : "Оплата карткою на касі закладу"}
-          </p>
-        </div>
+        <PaymentMethodSelector
+          paymentMethod={paymentMethod}
+          onChange={setPaymentMethod}
+          showQr={showQr}
+          fulfillmentType={fulfillmentType}
+        />
 
         {/* Коментар */}
         <div>
@@ -739,25 +399,7 @@ export function CheckoutPage() {
         </div>
 
         {/* Склад замовлення */}
-        <div className="app-card rounded-2xl p-3.5 space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider opacity-60">Склад замовлення</p>
-          {locationItems.map((item) => (
-            <div key={item.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0" style={{ borderColor: "var(--app-border)" }}>
-              <div className="min-w-0 pr-2">
-                <p className="font-medium truncate">{item.product_name}</p>
-                <p className="text-[11px] opacity-60">
-                  {item.variant_label} × {item.qty}
-                  {item.options.length > 0 && ` (${item.options.map((o) => o.name).join(", ")})`}
-                </p>
-              </div>
-              <span className="font-semibold shrink-0">{formatPrice(item.subtotal)}</span>
-            </div>
-          ))}
-          <div className="flex items-center justify-between pt-2 text-base font-bold">
-            <span>Разом</span>
-            <span>{formatPrice(subtotal)}</span>
-          </div>
-        </div>
+        <CheckoutOrderSummary items={locationItems} subtotal={subtotal} />
 
         {submitError && <ErrorBox message={submitError} />}
 

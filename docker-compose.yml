@@ -31,6 +31,11 @@ services:
       options:
         max-size: "20m"
         max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
 
   redis:
     image: redis:7-alpine
@@ -47,6 +52,11 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   migrator:
     build:
@@ -64,6 +74,11 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   api:
     build:
@@ -96,6 +111,11 @@ services:
       options:
         max-size: "30m"
         max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
 
   bot:
     build:
@@ -117,6 +137,11 @@ services:
       options:
         max-size: "30m"
         max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   caddy:
     build:
@@ -140,6 +165,11 @@ services:
       options:
         max-size: "30m"
         max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   directus:
     profiles: ["cms"]
@@ -167,6 +197,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
 
 volumes:
   postgres_data:
