@@ -97,4 +97,3 @@ async def invalidate_catalog_cache(pattern: str = "catalog:*") -> int:
     except redis.exceptions.RedisError as exc:
         logger.warning("Помилка інвалідації кешу Redis (%s): %s", pattern, exc)
         return 0
-

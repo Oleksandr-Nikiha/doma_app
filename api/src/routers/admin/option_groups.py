@@ -17,6 +17,7 @@ from src.schemas.admin import (
 
 router = APIRouter()
 
+
 @router.get("/option-groups", response_model=list[OptionGroupAdminOut])
 async def list_option_groups(
     pool: asyncpg.Pool = Depends(get_pool),

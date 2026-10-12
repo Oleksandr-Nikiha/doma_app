@@ -1,4 +1,7 @@
+import hashlib
+import hmac
 import time
+from datetime import UTC
 
 import pytest
 from fastapi import HTTPException
@@ -6,6 +9,7 @@ from fastapi import HTTPException
 from src.auth.admin_token import create_admin_token, verify_admin_token
 from src.auth.deps import get_current_user, get_init_data, require_telegram_or_staff
 from src.auth.telegram_init_data import validate_init_data
+from src.auth.telegram_widget import validate_telegram_widget_data
 from tests.conftest import build_test_init_data
 
 
@@ -44,6 +48,51 @@ class TestTelegramInitDataValidation:
 
         with pytest.raises(ValueError, match="Дані застаріли"):
             validate_init_data(raw_data, bot_token=test_bot_token, max_age_seconds=86400)
+
+
+class TestTelegramWidgetValidation:
+    """Тестування перевірки підпису Telegram Login Widget (SHA256 bot_token -> HMAC-SHA256)."""
+
+    def _generate_valid_widget_data(
+        self, user_id: int, bot_token: str, auth_date: int | None = None
+    ):
+        if auth_date is None:
+            auth_date = int(time.time())
+        data = {
+            "id": user_id,
+            "first_name": "Олександр",
+            "last_name": "Тест",
+            "username": "alex_test",
+            "auth_date": auth_date,
+        }
+        # Telegram widget spec: key=value sorted alphabetically separated by \n
+        data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
+        secret_key = hashlib.sha256(bot_token.encode()).digest()
+        data["hash"] = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+        return data
+
+    def test_valid_widget_data_success(self, test_bot_token):
+        data = self._generate_valid_widget_data(123456, test_bot_token)
+        validated = validate_telegram_widget_data(data, test_bot_token)
+        assert validated["id"] == 123456
+        assert validated["first_name"] == "Олександр"
+
+    def test_missing_hash_raises_value_error(self, test_bot_token):
+        data = {"id": 123, "auth_date": int(time.time())}
+        with pytest.raises(ValueError, match="Відсутній параметр 'hash'"):
+            validate_telegram_widget_data(data, test_bot_token)
+
+    def test_hash_mismatch_raises_value_error(self, test_bot_token):
+        data = self._generate_valid_widget_data(123456, test_bot_token)
+        data["hash"] = "invalid_hash_value"
+        with pytest.raises(ValueError, match="Невалідний підпис: hash не співпадає"):
+            validate_telegram_widget_data(data, test_bot_token)
+
+    def test_expired_widget_data_raises_value_error(self, test_bot_token):
+        old_time = int(time.time()) - (2 * 86400)
+        data = self._generate_valid_widget_data(123456, test_bot_token, auth_date=old_time)
+        with pytest.raises(ValueError, match="Дані авторизації застаріли"):
+            validate_telegram_widget_data(data, test_bot_token, max_age_seconds=86400)
 
 
 class TestAdminTokenSecurity:
@@ -172,9 +221,7 @@ class TestSecurityVulnerabilityFixes:
         assert response.status_code == 400
         assert "Верифікований номер телефону не можна змінювати" in response.json()["detail"]
 
-    async def test_admin_auth_session_consumed_on_first_check(
-        self, async_client, mock_db_conn
-    ):
+    async def test_admin_auth_session_consumed_on_first_check(self, async_client, mock_db_conn):
         """Захист SEC-11: після першого отримання токена сесія маркується як consumed."""
         import uuid
         from datetime import UTC, datetime, timedelta
@@ -249,6 +296,72 @@ class TestSecurityVulnerabilityFixes:
         assert response.status_code == 403
         assert "Потрібні права головного адміністратора" in response.json()["detail"]
 
+    async def test_list_admin_users_with_nullable_telegram_id(
+        self, async_client, mock_db_conn, test_bot_token
+    ):
+        """Перевірка серіалізації користувачів без telegram_id (web users) в list_admin_users."""
+        from src.schemas.admin import AdminUserOut
+
+        # Перевірка напряму схеми Pydantic
+        user_schema = AdminUserOut(
+            id=1,
+            telegram_id=None,
+            full_name="Веб Клієнт",
+            phone="+380501234567",
+            created_at="2026-10-12 00:00",
+        )
+        assert user_schema.telegram_id is None
+
+        admin_token = create_admin_token(telegram_id=999, secret_key=test_bot_token)
+        mock_db_conn.fetchrow.return_value = {
+            "id": 1,
+            "telegram_id": 999,
+            "role": "admin",
+            "location_id": None,
+            "is_active": True,
+            "location_name": None,
+            "full_name": "Головний Адмін",
+            "phone": "+380501112233",
+        }
+        mock_db_conn.fetch.return_value = [
+            {
+                "id": 1,
+                "telegram_id": None,
+                "full_name": "Веб Клієнт",
+                "phone": "+380501234567",
+                "delivery_address": "вул. Грушевського, 1",
+                "is_blocked": False,
+                "is_phone_verified": True,
+                "admin_note": None,
+                "created_at": "2026-10-12 00:00",
+                "orders_count": 3,
+            },
+            {
+                "id": 2,
+                "telegram_id": 123456789,
+                "full_name": "Телеграм Клієнт",
+                "phone": "+380507654321",
+                "delivery_address": None,
+                "is_blocked": False,
+                "is_phone_verified": True,
+                "admin_note": "Постійний клієнт",
+                "created_at": "2026-10-11 15:30",
+                "orders_count": 5,
+            },
+        ]
+
+        response = await async_client.get(
+            "/api/admin/users",
+            headers={"X-Admin-Token": admin_token},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        assert data[0]["telegram_id"] is None
+        assert data[0]["full_name"] == "Веб Клієнт"
+        assert data[1]["telegram_id"] == 123456789
+        assert data[1]["full_name"] == "Телеграм Клієнт"
+
     async def test_healthcheck_endpoints(self, async_client):
         """Перевірка базового та readiness healthcheck ендпоінтів."""
         resp_basic = await async_client.get("/api/health")
@@ -262,3 +375,133 @@ class TestSecurityVulnerabilityFixes:
         assert "database" in data
         assert "redis" in data
 
+    async def test_update_web_profile_sync_success(self, async_client, mock_db_conn):
+        """Перевірка синхронізації номеру телефону та даних з сайту для telegram_id."""
+        mock_db_conn.fetchrow.side_effect = [
+            None,  # не знайдено existing
+            {  # new_row після INSERT
+                "id": 42,
+                "telegram_id": 999888,
+                "full_name": "Іван Тестовий",
+                "first_name": "Іван",
+                "last_name": "Тестовий",
+                "phone": "+380509998877",
+                "delivery_address": "просп. Шевченка, 2Д",
+                "additional_address": None,
+                "is_phone_verified": False,
+            },
+        ]
+        resp = await async_client.post(
+            "/api/auth/web-profile",
+            json={
+                "telegram_id": 999888,
+                "phone": "+380509998877",
+                "full_name": "Іван Тестовий",
+                "delivery_address": "просп. Шевченка, 2Д",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["telegram_id"] == 999888
+        assert data["phone"] == "+380509998877"
+        assert data["full_name"] == "Іван Тестовий"
+
+    async def test_get_web_profile_by_telegram_id(self, async_client, mock_db_conn):
+        """Перевірка отримання профілю за telegram_id."""
+        mock_db_conn.fetchrow.return_value = {
+            "id": 1,
+            "telegram_id": 395090043,
+            "full_name": "Олександр Нікіга",
+            "first_name": "Олександр",
+            "last_name": "Нікіга",
+            "phone": "+380631395639",
+            "delivery_address": "м. Вишгород, просп. Шевченка, буд. 6а",
+            "additional_address": None,
+            "is_phone_verified": True,
+        }
+        resp = await async_client.get("/api/auth/web-profile?telegram_id=395090043")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["telegram_id"] == 395090043
+        assert data["phone"] == "+380631395639"
+        assert data["is_phone_verified"] is True
+
+    async def test_get_web_profile_by_phone(self, async_client, mock_db_conn):
+        """Перевірка отримання профілю за номером телефону."""
+        mock_db_conn.fetchrow.return_value = {
+            "id": 1,
+            "telegram_id": 395090043,
+            "full_name": "Олександр Нікіга",
+            "first_name": "Олександр",
+            "last_name": "Нікіга",
+            "phone": "+380631395639",
+            "delivery_address": "м. Вишгород, просп. Шевченка, буд. 6а",
+            "additional_address": None,
+            "is_phone_verified": True,
+        }
+        resp = await async_client.get("/api/auth/web-profile?phone=%2B380631395639")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["phone"] == "+380631395639"
+        assert data["is_phone_verified"] is True
+
+    async def test_get_web_profile_missing_params(self, async_client):
+        """Перевірка помилки 400 якщо не вказано ані telegram_id, ані phone."""
+        resp = await async_client.get("/api/auth/web-profile")
+        assert resp.status_code == 400
+
+
+    async def test_phone_code_request_and_login_flow(self, async_client, mock_db_conn):
+        """Тестування запиту коду та входу за номером телефону."""
+        # 1. Запит коду
+        mock_db_conn.fetchrow.return_value = {
+            "id": 10,
+            "telegram_id": None,
+        }
+        res_code = await async_client.post("/api/auth/phone-code", json={"phone": "+380931112233"})
+        assert res_code.status_code == 200
+        code_data = res_code.json()
+        assert code_data["status"] == "ok"
+        generated_code = code_data["code"]
+        assert len(generated_code) == 4
+
+        # 2. Вхід за згенерованим кодом
+        from datetime import datetime, timedelta
+
+        mock_db_conn.fetchrow.side_effect = [
+            # user lookup in login_with_phone
+            {
+                "id": 10,
+                "telegram_id": None,
+                "full_name": "Тестовий Клієнт",
+                "first_name": "Тестовий",
+                "last_name": "Клієнт",
+                "phone": "+380931112233",
+                "delivery_address": "вул. Миру, 5",
+                "additional_address": None,
+                "is_phone_verified": False,
+                "password_hash": None,
+                "phone_code": generated_code,
+                "phone_code_expires_at": datetime.now(UTC) + timedelta(minutes=5),
+            },
+            # updated_user after marking verified
+            {
+                "id": 10,
+                "telegram_id": None,
+                "full_name": "Тестовий Клієнт",
+                "first_name": "Тестовий",
+                "last_name": "Клієнт",
+                "phone": "+380931112233",
+                "delivery_address": "вул. Миру, 5",
+                "additional_address": None,
+                "is_phone_verified": True,
+            },
+        ]
+        res_login = await async_client.post(
+            "/api/auth/phone-login",
+            json={"phone": "+380931112233", "code": generated_code},
+        )
+        assert res_login.status_code == 200
+        login_data = res_login.json()
+        assert login_data["phone"] == "+380931112233"
+        assert login_data["is_phone_verified"] is True

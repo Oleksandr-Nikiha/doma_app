@@ -16,6 +16,7 @@ from src.schemas.admin import (
 
 router = APIRouter()
 
+
 def _get_period_clause(period: str, prefix: str = "") -> str:
     col = f"{prefix}.created_at" if prefix else "created_at"
     clauses = {
@@ -37,7 +38,7 @@ async def get_analytics_summary(
     Повертає зведені показники (KPI, динаміку по днях та розбивки).
     """
     target_location_id = location_id
-    
+
     period_sql = _get_period_clause(period)
 
     # Базова умова для фільтрації orders
@@ -155,8 +156,8 @@ async def get_analytics_summary(
                 COALESCE(SUM(og.subtotal), 0) AS revenue
             FROM locations l
             LEFT JOIN order_groups og ON og.location_id = l.id
-            LEFT JOIN orders o ON o.id = og.order_id AND {' AND '.join(loc_where)}
-            {'WHERE l.id = $1' if target_location_id else ''}
+            LEFT JOIN orders o ON o.id = og.order_id AND {" AND ".join(loc_where)}
+            {"WHERE l.id = $1" if target_location_id else ""}
             GROUP BY l.id, l.name
             ORDER BY l.id
         """

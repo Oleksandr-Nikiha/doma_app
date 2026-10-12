@@ -74,7 +74,6 @@ async def require_telegram_or_staff(
     )
 
 
-
 async def get_current_user(
     init_data_raw: str | None = Depends(init_data_header),
     admin_token_raw: str | None = Depends(admin_token_header),

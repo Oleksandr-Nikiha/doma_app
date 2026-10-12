@@ -49,7 +49,7 @@ class UserUpdateIn(BaseModel):
 
 class UserOut(BaseModel):
     id: int
-    telegram_id: int
+    telegram_id: int | None = None
     full_name: str
     first_name: str | None = None
     last_name: str | None = None

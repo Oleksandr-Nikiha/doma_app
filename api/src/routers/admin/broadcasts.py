@@ -36,9 +36,7 @@ async def _send_broadcast_worker(
 
     reply_markup = None
     if button_text and button_url:
-        reply_markup = {
-            "inline_keyboard": [[{"text": button_text, "url": button_url}]]
-        }
+        reply_markup = {"inline_keyboard": [[{"text": button_text, "url": button_url}]]}
 
     for tid in recipients:
         if image_url:
@@ -151,7 +149,11 @@ async def create_broadcast(
     """
     if payload.button_url:
         clean_url = payload.button_url.strip().lower()
-        if not (clean_url.startswith("https://") or clean_url.startswith("http://") or clean_url.startswith("tg://")):
+        if not (
+            clean_url.startswith("https://")
+            or clean_url.startswith("http://")
+            or clean_url.startswith("tg://")
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Посилання кнопки має починатися з https://, http:// або tg://",

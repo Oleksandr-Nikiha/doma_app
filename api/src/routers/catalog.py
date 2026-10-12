@@ -28,9 +28,7 @@ async def list_categories(
     pool: asyncpg.Pool = Depends(get_pool),
 ):
     cache_key = (
-        f"catalog:categories:loc_{location_id}"
-        if location_id is not None
-        else "catalog:categories"
+        f"catalog:categories:loc_{location_id}" if location_id is not None else "catalog:categories"
     )
     should_bypass = bool(admin_token) and (
         bypass_cache or (x_bypass_cache in ("1", "true", "True"))

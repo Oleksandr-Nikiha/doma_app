@@ -958,7 +958,7 @@ export function useAdminOrders(params?: { status?: string | null; locationId?: n
       const qs = sp.toString() ? `?${sp.toString()}` : "";
       return api.get<AdminOrderListItem[]>(`/admin/orders${qs}`);
     },
-    refetchInterval: 15000,
+    refetchInterval: 3000,
   });
 }
 

@@ -8,6 +8,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from src.auth.deps import get_init_data
 from src.config import get_settings
 from src.db.connection import get_pool
 from src.middleware.rate_limiter import rate_limiter
@@ -59,8 +60,120 @@ class AuthStatusOut(BaseModel):
     error: str | None = None
 
 
+class TelegramWidgetAuthIn(BaseModel):
+    id: int
+    first_name: str | None = None
+    last_name: str | None = None
+    username: str | None = None
+    photo_url: str | None = None
+    auth_date: int
+    hash: str
+
+
+class AdminTokenOut(BaseModel):
+    token: str
+    telegram_id: int
+    name: str | None = None
+    role: str
+    location_id: int | None = None
+
+
 def generate_code() -> str:
     return "".join(secrets.choice(string.digits) for _ in range(6))
+
+
+@router.post("/telegram-widget", response_model=AdminTokenOut)
+async def admin_telegram_widget_login(
+    payload: TelegramWidgetAuthIn,
+    pool: asyncpg.Pool = Depends(get_pool),
+    settings=Depends(get_settings),
+):
+    """
+    Авторизація адміністратора з браузера через офіційний Telegram Login Widget.
+    """
+    from src.auth.admin_token import create_admin_token
+    from src.auth.telegram_widget import validate_telegram_widget_data
+
+    try:
+        validate_telegram_widget_data(payload.model_dump(), settings.bot_token)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Невалідні дані Telegram Login: {e}",
+        ) from e
+
+    telegram_id = payload.id
+    async with pool.acquire() as conn:
+        manager = await conn.fetchrow(
+            """
+            SELECT m.id, m.telegram_id, m.role, m.location_id, m.is_active, u.full_name
+            FROM managers m
+            LEFT JOIN users u ON u.telegram_id = m.telegram_id
+            WHERE m.telegram_id = $1
+            """,
+            telegram_id,
+        )
+
+        if not manager or not manager["is_active"]:
+            logger.warning("Спроба входу в адмінку неавторизованого telegram_id=%s", telegram_id)
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "У доступі відмовлено: ваш Telegram-акаунт не зареєстровано як адміністратора"
+                ),
+            )
+
+        token = create_admin_token(telegram_id, settings.bot_token)
+        return AdminTokenOut(
+            token=token,
+            telegram_id=telegram_id,
+            name=manager["full_name"] or payload.first_name,
+            role=manager["role"],
+            location_id=manager["location_id"],
+        )
+
+
+@router.post("/telegram-webapp", response_model=AdminTokenOut)
+async def admin_telegram_webapp_login(
+    pool: asyncpg.Pool = Depends(get_pool),
+    settings=Depends(get_settings),
+    init_data: dict = Depends(get_init_data),
+):
+    """
+    Миттєва авторизація персоналу при відкритті адмінки всередині Telegram (Webview / iframe).
+    """
+    from src.auth.admin_token import create_admin_token
+
+    user_data = init_data.get("user")
+    if not user_data or "id" not in user_data:
+        raise HTTPException(status_code=400, detail="Відсутні дані користувача в initData")
+
+    telegram_id = int(user_data["id"])
+    async with pool.acquire() as conn:
+        manager = await conn.fetchrow(
+            """
+            SELECT m.id, m.telegram_id, m.role, m.location_id, m.is_active, u.full_name
+            FROM managers m
+            LEFT JOIN users u ON u.telegram_id = m.telegram_id
+            WHERE m.telegram_id = $1
+            """,
+            telegram_id,
+        )
+
+        if not manager or not manager["is_active"]:
+            raise HTTPException(
+                status_code=403,
+                detail="У доступі відмовлено: ви не є діючим адміністратором",
+            )
+
+        token = create_admin_token(telegram_id, settings.bot_token)
+        return AdminTokenOut(
+            token=token,
+            telegram_id=telegram_id,
+            name=manager["full_name"] or user_data.get("first_name"),
+            role=manager["role"],
+            location_id=manager["location_id"],
+        )
 
 
 @router.post("/session", response_model=AuthSessionOut)

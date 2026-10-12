@@ -72,6 +72,7 @@ class WebOrderItemIn(BaseModel):
 
 
 class WebOrderCreateIn(BaseModel):
+    telegram_id: int | None = None
     location_id: int = 2
     fulfillment_type: Literal["delivery", "pickup"]
     delivery_address: str | None = None

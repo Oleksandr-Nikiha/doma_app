@@ -11,6 +11,7 @@ from src.schemas.admin import (
 
 router = APIRouter()
 
+
 @router.get("/managers", response_model=list[ManagerOut])
 async def list_managers(
     pool: asyncpg.Pool = Depends(get_pool),

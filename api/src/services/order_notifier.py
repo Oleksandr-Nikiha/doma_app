@@ -82,7 +82,7 @@ class OrderNotifier:
             )
         )
         user_tg_line = (
-            f"\n📱 <b>Telegram ID:</b> <code>{tg_id}</code> (<a href=\"tg://user?id={tg_id}\">Профіль</a>)\n"
+            f'\n📱 <b>Telegram ID:</b> <code>{tg_id}</code> (<a href="tg://user?id={tg_id}">Профіль</a>)\n'
             f"🔒 <b>Верифікація контакту:</b> {phone_badge}"
             if tg_id
             else ""
@@ -105,8 +105,8 @@ class OrderNotifier:
             f"{comment_line}\n\n"
             f"📋 <b>Страви:</b>\n{items_block}\n\n"
             f"💵 <b>Разом до сплати: {order_data['total_price']:.2f} ₴</b>\n\n"
-            f"🔗 <a href=\"{app_link}\">Відкрити у додатку</a> | "
-            f"<a href=\"{web_admin_link}\">Веб-панель</a>"
+            f'🔗 <a href="{app_link}">Відкрити у додатку</a> | '
+            f'<a href="{web_admin_link}">Веб-панель</a>'
         )
 
         reply_markup = {
@@ -150,6 +150,112 @@ class OrderNotifier:
         return await send_telegram_message(
             bot_token=settings.bot_token,
             chat_id=settings.manager_chat_id,
+            text=text,
+            parse_mode="HTML",
+            reply_markup=reply_markup,
+        )
+
+    @staticmethod
+    def build_customer_notification(
+        order_id: int, order_data: dict[str, Any], settings: Any
+    ) -> tuple[str, dict[str, Any] | None]:
+        """
+        Формує повідомлення для клієнта «Ваше замовлення сформовано» та деталі замовлення.
+        """
+        items_text_list = []
+        for item in order_data.get("items", []):
+            opts_str = ""
+            if item.get("options"):
+                opts = ", ".join(
+                    f"{html.escape(str(o['name']))}" + (f" ×{o['qty']}" if o["qty"] > 1 else "")
+                    for o in item["options"]
+                )
+                opts_str = f"\n   <i>↳ {opts}</i>"
+            p_name = html.escape(str(item["product_name"]))
+            v_label = html.escape(str(item["variant_label"]))
+            items_text_list.append(
+                f"• <b>{p_name}</b> ({v_label}) × {item['qty']} — "
+                f"{item['subtotal']:.2f} ₴{opts_str}"
+            )
+        items_block = "\n".join(items_text_list)
+
+        loc_name = html.escape(str(order_data.get("location_name", "Заклад")))
+        addr_clean = html.escape(str(order_data.get("delivery_address") or ""))
+        fulfillment_label = (
+            f"🛵 <b>Доставка:</b> <code>{addr_clean}</code>"
+            if order_data.get("fulfillment_type") == "delivery"
+            else "🛍️ <b>Самовивіз</b>"
+        )
+        scheduled_time = order_data.get("scheduled_time")
+        time_label = (
+            f"⏰ <b>Час:</b> На {html.escape(str(scheduled_time))}"
+            if scheduled_time
+            else "⏰ <b>Час:</b> Якнайшвидше"
+        )
+
+        payment_method = order_data.get("payment_method")
+        if payment_method == "cash":
+            payment_label = "💵 Готівка"
+        elif payment_method == "card":
+            payment_label = "💳 Картка при отриманні"
+        elif payment_method == "qr":
+            payment_label = "📱 QR-код"
+        else:
+            payment_label = html.escape(str(payment_method or "Оплата при отриманні"))
+
+        comment_line = (
+            f"\n💬 <b>Коментар:</b> {html.escape(str(order_data['comment']))}"
+            if order_data.get("comment")
+            else ""
+        )
+
+        bot_username = (
+            getattr(settings, "bot_username", "ncoffee_app_tst_bot") or "ncoffee_app_tst_bot"
+        )
+        app_link = f"https://t.me/{bot_username}?startapp=order_{order_id}"
+
+        text = (
+            f"🎉 <b>Ваше замовлення сформовано!</b>\n\n"
+            f"📦 <b>Замовлення #{order_id}</b>\n"
+            f"📍 <b>Заклад:</b> {loc_name}\n"
+            f"{fulfillment_label}\n"
+            f"{time_label}\n"
+            f"💰 <b>Оплата:</b> {payment_label}"
+            f"{comment_line}\n\n"
+            f"📋 <b>Склад замовлення:</b>\n{items_block}\n\n"
+            f"💵 <b>Разом до сплати: {order_data.get('total_price', 0):.2f} ₴</b>\n\n"
+            f"<i>Ми вже готуємо ваше замовлення! Повідомимо, щойно статус зміниться.</i>"
+        )
+
+        reply_markup = {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "🔍 Відстежити замовлення",
+                        "url": app_link,
+                    }
+                ]
+            ]
+        }
+        return text, reply_markup
+
+    @classmethod
+    async def send_customer_notification(
+        cls,
+        order_id: int,
+        order_data: dict[str, Any],
+        settings: Any,
+        customer_telegram_id: int | None = None,
+    ) -> bool:
+        """Асинхронно відправляє клієнту підтвердження про формування замовлення в Telegram."""
+        tg_id = customer_telegram_id or order_data.get("telegram_id")
+        if not tg_id or not getattr(settings, "bot_token", None):
+            return False
+
+        text, reply_markup = cls.build_customer_notification(order_id, order_data, settings)
+        return await send_telegram_message(
+            bot_token=settings.bot_token,
+            chat_id=tg_id,
             text=text,
             parse_mode="HTML",
             reply_markup=reply_markup,

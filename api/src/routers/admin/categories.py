@@ -12,6 +12,7 @@ from src.services.cache import invalidate_catalog_cache
 
 router = APIRouter()
 
+
 @router.post("/catalog/cache/clear")
 async def clear_catalog_cache(
     staff: asyncpg.Record = Depends(get_current_staff),
@@ -75,9 +76,7 @@ async def create_category(
         )
 
     async with pool.acquire() as conn:
-        loc_name = await conn.fetchval(
-            "SELECT name FROM locations WHERE id = $1", data.location_id
-        )
+        loc_name = await conn.fetchval("SELECT name FROM locations WHERE id = $1", data.location_id)
         async with conn.transaction():
             if data.sort_order is not None:
                 await conn.execute(

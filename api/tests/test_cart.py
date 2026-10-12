@@ -1,4 +1,3 @@
-
 from src.routers.cart import _fetch_cart
 
 
@@ -37,7 +36,7 @@ class TestCartFetch:
         }
 
         mock_db_conn.fetch.side_effect = [
-            [item_row],    # items_query
+            [item_row],  # items_query
             [option_row],  # options_query
         ]
 
@@ -120,9 +119,7 @@ class TestCartApiEndpoints:
             "pv_avail": True,
         }
         # Група вимагає обрати рівно 1 опцію (min=1, max=1)
-        mock_db_conn.fetch.return_value = [
-            {"group_id": 1, "min_select": 1, "max_select": 1}
-        ]
+        mock_db_conn.fetch.return_value = [{"group_id": 1, "min_select": 1, "max_select": 1}]
         # Користувач не вибрав жодної
         payload = {"variant_id": 5, "qty": 1, "options": []}
 

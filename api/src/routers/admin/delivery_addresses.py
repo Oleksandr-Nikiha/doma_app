@@ -11,6 +11,7 @@ from src.schemas.delivery_address import (
 
 router = APIRouter()
 
+
 @router.get("/delivery/addresses", response_model=list[AdminDeliveryAddressOut])
 async def admin_list_delivery_addresses(
     city: str | None = Query(None, description="Фільтр за містом"),
@@ -118,7 +119,7 @@ async def admin_update_delivery_address(
     updates.append("updated_at = NOW()")
     sql = f"""
         UPDATE delivery_addresses
-        SET {', '.join(updates)}
+        SET {", ".join(updates)}
         WHERE id = $1
         RETURNING id, city, street, is_active, notes, sort_order, created_at, updated_at
     """

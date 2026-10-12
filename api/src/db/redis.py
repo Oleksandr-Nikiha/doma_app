@@ -57,4 +57,3 @@ async def disconnect_redis() -> None:
 def get_redis() -> aioredis.Redis | None:
     """Повертає глобальний клієнт Redis (або None, якщо недоступний)."""
     return _redis
-

@@ -10,6 +10,7 @@ from src.schemas.admin import (
 
 router = APIRouter()
 
+
 @router.get("/users", response_model=list[AdminUserOut])
 async def list_admin_users(
     query: str = Query("", description="Пошук за номером телефону або ПІБ"),
@@ -25,12 +26,12 @@ async def list_admin_users(
                to_char(u.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
                COUNT(o.id)::int AS orders_count
         FROM users u
-        LEFT JOIN orders o ON o.telegram_id = u.telegram_id
+        LEFT JOIN orders o ON (u.telegram_id IS NOT NULL AND o.telegram_id = u.telegram_id) OR (u.telegram_id IS NULL AND u.phone <> '' AND o.contact_phone = u.phone)
         WHERE (
             $1 = ''
             OR u.phone ILIKE '%' || $1 || '%'
             OR u.full_name ILIKE '%' || $1 || '%'
-            OR u.telegram_id::text ILIKE '%' || $1 || '%'
+            OR (u.telegram_id IS NOT NULL AND u.telegram_id::text ILIKE '%' || $1 || '%')
         )
         GROUP BY u.id
         ORDER BY u.id DESC
@@ -82,7 +83,7 @@ async def update_admin_user(
                    to_char(u.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
                    COUNT(o.id)::int AS orders_count
             FROM users u
-            LEFT JOIN orders o ON o.telegram_id = u.telegram_id
+            LEFT JOIN orders o ON (u.telegram_id IS NOT NULL AND o.telegram_id = u.telegram_id) OR (u.telegram_id IS NULL AND u.phone <> '' AND o.contact_phone = u.phone)
             WHERE u.id = $1
             GROUP BY u.id
             """,
@@ -104,12 +105,13 @@ async def delete_admin_user(
         if not existing:
             raise HTTPException(status_code=404, detail="Користувача не знайдено")
 
-        if existing["telegram_id"] == admin["telegram_id"]:
+        if existing["telegram_id"] is not None and existing["telegram_id"] == admin["telegram_id"]:
             raise HTTPException(status_code=400, detail="Не можна видалити власний акаунт")
 
-        await conn.execute("DELETE FROM managers WHERE telegram_id = $1", existing["telegram_id"])
-        await conn.execute("DELETE FROM carts WHERE telegram_id = $1", existing["telegram_id"])
-        await conn.execute("DELETE FROM orders WHERE telegram_id = $1", existing["telegram_id"])
+        if existing["telegram_id"] is not None:
+            await conn.execute("DELETE FROM managers WHERE telegram_id = $1", existing["telegram_id"])
+            await conn.execute("DELETE FROM carts WHERE telegram_id = $1", existing["telegram_id"])
+            await conn.execute("DELETE FROM orders WHERE telegram_id = $1", existing["telegram_id"])
         await conn.execute("DELETE FROM users WHERE id = $1", user_id)
 
     return {"status": "ok", "message": "Користувача успішно видалено"}

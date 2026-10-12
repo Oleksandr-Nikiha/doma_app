@@ -7,6 +7,7 @@ from src.schemas.admin import AdminMeOut
 
 router = APIRouter()
 
+
 @router.get("/me", response_model=AdminMeOut)
 async def get_admin_me(
     user: asyncpg.Record = Depends(get_current_user),

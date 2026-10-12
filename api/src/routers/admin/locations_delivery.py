@@ -10,6 +10,7 @@ from src.schemas.admin import (
 
 router = APIRouter()
 
+
 @router.get("/locations/delivery", response_model=list[LocationDeliveryAdminOut])
 async def list_admin_locations_delivery(
     staff: asyncpg.Record = Depends(get_current_staff),

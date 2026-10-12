@@ -56,6 +56,16 @@
   --app-shadow-sm: 0 1px 3px rgb(0 0 0 / 6%);
 }
 
+/* Telegram Login Widget — обрізання радіуса без чорних кутів у темній темі */
+iframe[id^="telegram-login"],
+iframe[src*="oauth.telegram.org"] {
+  border-radius: 20px !important;
+  overflow: hidden !important;
+  background-color: transparent !important;
+  color-scheme: light !important;
+  border: none !important;
+}
+
 /* --- Компонування --- */
 
 /* Висота TabBar: py-2 (8px) + іконка text-xl (20px) + gap-0.5 (2px)

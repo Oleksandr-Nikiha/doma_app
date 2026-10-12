@@ -171,6 +171,7 @@ function UserCard({
   const handleCopyTid = (e: React.MouseEvent) => {
     e.stopPropagation();
     haptic("light");
+    if (!user.telegram_id) return;
     const tidStr = String(user.telegram_id);
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(tidStr).then(() => {
@@ -233,24 +234,34 @@ function UserCard({
             <a href={`tel:${user.phone}`} className="font-semibold text-blue-500 hover:underline">
               📞 {user.phone}
             </a>
-            <button
-              type="button"
-              onClick={handleCopyTid}
-              title="Натисніть, щоб скопіювати Telegram ID"
-              className="app-press inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-mono font-semibold transition border cursor-pointer"
-              style={{
-                background: copiedTid
-                  ? "color-mix(in srgb, #10b981 20%, var(--app-surface-2))"
-                  : "var(--app-surface-2)",
-                color: copiedTid ? "#10b981" : "inherit",
-                borderColor: copiedTid ? "#10b981" : "var(--app-border)",
-              }}
-            >
-              <span>🆔 {user.telegram_id}</span>
-              <span className="text-[10px] font-sans font-medium">
-                {copiedTid ? "✓ Скопійовано" : "📋"}
+            {user.telegram_id ? (
+              <button
+                type="button"
+                onClick={handleCopyTid}
+                title="Натисніть, щоб скопіювати Telegram ID"
+                className="app-press inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-mono font-semibold transition border cursor-pointer"
+                style={{
+                  background: copiedTid
+                    ? "color-mix(in srgb, #10b981 20%, var(--app-surface-2))"
+                    : "var(--app-surface-2)",
+                  color: copiedTid ? "#10b981" : "inherit",
+                  borderColor: copiedTid ? "#10b981" : "var(--app-border)",
+                }}
+              >
+                <span>🆔 {user.telegram_id}</span>
+                <span className="text-[10px] font-sans font-medium">
+                  {copiedTid ? "✓ Скопійовано" : "📋"}
+                </span>
+              </button>
+            ) : (
+              <span
+                className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-mono opacity-60 border"
+                style={{ borderColor: "var(--app-border)" }}
+                title="Користувач зареєстрований через веб-сайт"
+              >
+                🌐 Веб
               </span>
-            </button>
+            )}
             <span>🛍️ Замовлень: {user.orders_count}</span>
             <span>📅 {user.created_at}</span>
           </div>

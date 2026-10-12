@@ -148,4 +148,3 @@ class TestRateLimiterMiddleware:
         with patch("src.middleware.rate_limiter.get_redis", return_value=mock_client):
             await rate_limiter(req)
             mock_client.incr.assert_called_with("rl:192.168.1.50")
-

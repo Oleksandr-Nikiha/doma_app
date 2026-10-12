@@ -117,4 +117,3 @@ class TestBuildOptionsKey:
         ]
         key = build_options_key(dict_opts, item_qty=2)
         assert key == "1:5:2|2:10:1"
-

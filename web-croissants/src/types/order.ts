@@ -5,6 +5,7 @@ export interface WebOrderItemPayload {
 }
 
 export interface WebOrderCreatePayload {
+  telegram_id?: number | null;
   location_id: number;
   fulfillment_type: "delivery" | "pickup";
   delivery_address: string | null;

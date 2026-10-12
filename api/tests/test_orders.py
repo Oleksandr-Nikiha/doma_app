@@ -220,11 +220,11 @@ class TestOrderCreationApi:
             "subtotal": 280.0,
         }
         mock_db_conn.fetch.side_effect = [
-            cart_rows,    # cart items
-            [],           # options
+            cart_rows,  # cart items
+            [],  # options
             [group_row],  # groups in _fetch_order_by_id
-            [],           # items in _fetch_order_by_id
-            [],           # options in _fetch_order_by_id
+            [],  # items in _fetch_order_by_id
+            [],  # options in _fetch_order_by_id
         ]
         mock_db_conn.fetchval.return_value = 555  # recent_order_id знайдено
 
@@ -278,7 +278,7 @@ class TestOrderCreationApi:
         ]
         mock_db_conn.fetch.side_effect = [
             cart_rows,  # cart_items_sql
-            [],         # options_sql
+            [],  # options_sql
         ]
         # recent_order_id = None (нове замовлення)
         mock_db_conn.fetchval.return_value = None
@@ -466,6 +466,8 @@ class TestOrderHistoryAndDetailsApi:
                 "delivery_start_time": "10:30",
                 "delivery_end_time": "21:30",
             },
+            # user_row (SELECT users) - None (гість)
+            None,
             # order_row (INSERT orders)
             {"id": 301, "created_at": datetime.now(UTC)},
             # group_row (INSERT order_groups)
@@ -516,5 +518,3 @@ class TestOrderHistoryAndDetailsApi:
         assert data["total_price"] == 240.0
         assert data["source"] == "web_croissants"
         assert data["groups"][0]["location_name"] == "Doma Croissants"
-
-

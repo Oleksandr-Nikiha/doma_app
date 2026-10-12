@@ -54,6 +54,21 @@
 		}
 	}
 
+	# Публічний сайт пекарні Doma Croissants
+	redir /croissant /croissant/
+	redir /croissants /croissant/
+	redir /croissants/* /croissant/
+	handle /croissant/* {
+		reverse_proxy web-croissants:80 {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 30s
+			}
+		}
+	}
+
 	# Статика та SPA
 	handle {
 		# Кешування для асетів Vite (хешовані імена на кшталт app.a1b2c3d4.js — незмінні)

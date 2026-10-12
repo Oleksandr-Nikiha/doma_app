@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
   const apiTarget = env.VITE_API_TARGET || "http://api:8000";
 
   return {
+    base: "/croissant/",
     plugins: [react(), tailwindcss()],
 
     resolve: {
@@ -20,6 +21,7 @@ export default defineConfig(({ mode }) => {
       host: "0.0.0.0",
       port: 5174,
       strictPort: true,
+      allowedHosts: true,
       proxy: {
         "/api": {
           target: apiTarget,

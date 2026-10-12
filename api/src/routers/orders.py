@@ -6,6 +6,7 @@ import asyncpg
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
 from src.auth.deps import get_current_user
+from src.auth.password import hash_password
 from src.config import get_settings
 from src.db.cart_repo import get_or_create_cart_id
 from src.db.connection import get_pool
@@ -30,12 +31,14 @@ __all__ = [
     "router",
     "_validate_scheduled_time",
     "send_order_to_manager",
+    "send_order_to_customer",
     "_fetch_order_by_id",
 ]
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/orders", tags=["Orders"], dependencies=[Depends(rate_limiter)])
+
 
 def _validate_scheduled_time(
     scheduled_str: str,
@@ -55,6 +58,14 @@ def _validate_scheduled_time(
 
 async def send_order_to_manager(order_id: int, order_data: dict[str, Any], settings) -> None:
     await OrderNotifier.send_manager_notification(order_id, order_data, settings)
+
+
+async def send_order_to_customer(
+    order_id: int, order_data: dict[str, Any], settings, customer_telegram_id: int | None = None
+) -> None:
+    await OrderNotifier.send_customer_notification(
+        order_id, order_data, settings, customer_telegram_id
+    )
 
 
 async def _fetch_order_by_id(
@@ -202,30 +213,97 @@ async def create_web_order(
                 eff_free = g_opts[0]["free_count"] * it.qty
                 extra_cost += options_cost(units, eff_free)
                 for o in g_opts:
-                    item_options.append({
-                        "option_group_name": o["group_name"],
-                        "name": o["option_name"],
-                        "price_delta": float(o["price_delta"]),
-                        "qty": 1,
-                    })
+                    item_options.append(
+                        {
+                            "option_group_name": o["group_name"],
+                            "name": o["option_name"],
+                            "price_delta": float(o["price_delta"]),
+                            "qty": 1,
+                        }
+                    )
 
             item_subtotal = round(unit_price * it.qty + extra_cost, 2)
             total_order_price += item_subtotal
 
-            calculated_items.append({
-                "variant_id": it.variant_id,
-                "product_name": v_info["product_name"],
-                "variant_label": v_info["variant_label"],
-                "unit_price": unit_price,
-                "qty": it.qty,
-                "subtotal": item_subtotal,
-                "options": item_options,
-            })
+            calculated_items.append(
+                {
+                    "variant_id": it.variant_id,
+                    "product_name": v_info["product_name"],
+                    "variant_label": v_info["variant_label"],
+                    "unit_price": unit_price,
+                    "qty": it.qty,
+                    "subtotal": item_subtotal,
+                    "options": item_options,
+                }
+            )
 
         total_order_price = round(total_order_price, 2)
 
         # 5. Транзакційний запис у БД
         async with conn.transaction():
+            clean_phone = payload.contact_phone.strip()
+            clean_name = payload.contact_name.strip()
+
+            # Автоматичне заведення або оновлення користувача в users (Requirement 6)
+            user_row = await conn.fetchrow(
+                """
+                SELECT id, telegram_id, phone, full_name, is_phone_verified
+                FROM users
+                WHERE phone = $1 OR (telegram_id IS NOT NULL AND telegram_id = $2)
+                """,
+                clean_phone,
+                payload.telegram_id,
+            )
+
+            customer_tg_id = payload.telegram_id
+            if user_row:
+                user_dict = dict(user_row)
+                customer_tg_id = user_dict.get("telegram_id") or payload.telegram_id
+                await conn.execute(
+                    """
+                    UPDATE users
+                    SET full_name = CASE
+                            WHEN full_name = '' OR full_name LIKE 'Гість%' THEN $1
+                            ELSE full_name
+                        END,
+                        delivery_address = COALESCE(delivery_address, $2),
+                        telegram_id = COALESCE(telegram_id, $3),
+                        is_phone_verified = CASE
+                            WHEN $3 IS NOT NULL THEN true
+                            ELSE is_phone_verified
+                        END,
+                        updated_at = now()
+                    WHERE id = $4
+                    """,
+                    clean_name,
+                    payload.delivery_address,
+                    payload.telegram_id,
+                    user_dict.get("id"),
+                )
+            else:
+                first_name = clean_name.split(" ", 1)[0] if clean_name else ""
+                last_name = clean_name.split(" ", 1)[1] if " " in clean_name else None
+                is_verified = bool(payload.telegram_id)
+                initial_password = getattr(payload, "password", None) or "1234"
+                pwd_hash = hash_password(initial_password)
+                await conn.execute(
+                    """
+                    INSERT INTO users (
+                        telegram_id, full_name, first_name, last_name, phone,
+                        delivery_address, is_phone_verified, password_hash
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    """,
+                    payload.telegram_id,
+                    clean_name,
+                    first_name,
+                    last_name,
+                    clean_phone,
+                    payload.delivery_address,
+                    is_verified,
+                    pwd_hash,
+                )
+
             order_row = await conn.fetchrow(
                 """
                 INSERT INTO orders (
@@ -233,13 +311,14 @@ async def create_web_order(
                     contact_name, contact_phone, payment_method, scheduled_time,
                     comment, total_price, source
                 )
-                VALUES (NULL, 'pending_moderation', $1, $2, $3, $4, $5, $6, $7, $8, $9)
+                VALUES ($1, 'pending_moderation', $2, $3, $4, $5, $6, $7, $8, $9, $10)
                 RETURNING id, created_at
                 """,
+                customer_tg_id,
                 payload.fulfillment_type,
                 payload.delivery_address,
-                payload.contact_name.strip(),
-                payload.contact_phone.strip(),
+                clean_name,
+                clean_phone,
                 payload.payment_method,
                 clean_scheduled_time,
                 payload.comment.strip() if payload.comment else None,
@@ -298,24 +377,28 @@ async def create_web_order(
                         opt["price_delta"],
                         opt["qty"],
                     )
-                    saved_opts.append(OrderItemOptionOut(
-                        id=opt_row["id"],
-                        option_group_name=opt["option_group_name"],
-                        option_name=opt["name"],
-                        price_delta=opt["price_delta"],
-                        qty=opt["qty"],
-                    ))
+                    saved_opts.append(
+                        OrderItemOptionOut(
+                            id=opt_row["id"],
+                            option_group_name=opt["option_group_name"],
+                            option_name=opt["name"],
+                            price_delta=opt["price_delta"],
+                            qty=opt["qty"],
+                        )
+                    )
 
-                saved_items.append(OrderItemOut(
-                    id=saved_item_id,
-                    variant_id=item["variant_id"],
-                    product_name=item["product_name"],
-                    variant_label=item["variant_label"],
-                    unit_price=item["unit_price"],
-                    qty=item["qty"],
-                    subtotal=item["subtotal"],
-                    options=saved_opts,
-                ))
+                saved_items.append(
+                    OrderItemOut(
+                        id=saved_item_id,
+                        variant_id=item["variant_id"],
+                        product_name=item["product_name"],
+                        variant_label=item["variant_label"],
+                        unit_price=item["unit_price"],
+                        qty=item["qty"],
+                        subtotal=item["subtotal"],
+                        options=saved_opts,
+                    )
+                )
 
     # 6. Сповіщення менеджерів закладу у Telegram
     order_notification_data = {
@@ -330,12 +413,21 @@ async def create_web_order(
         "total_price": total_order_price,
         "items": calculated_items,
         "source": payload.source,
+        "telegram_id": customer_tg_id,
     }
     background_tasks.add_task(send_order_to_manager, order_id, order_notification_data, settings)
+    if customer_tg_id:
+        background_tasks.add_task(
+            send_order_to_customer,
+            order_id,
+            order_notification_data,
+            settings,
+            customer_tg_id,
+        )
 
     return OrderOut(
         id=order_id,
-        telegram_id=None,
+        telegram_id=customer_tg_id,
         status="pending_moderation",
         fulfillment_type=payload.fulfillment_type,
         delivery_address=payload.delivery_address,
@@ -358,6 +450,49 @@ async def create_web_order(
             )
         ],
     )
+
+
+@router.get("/web/history", response_model=list[OrderOut])
+async def get_web_orders_history(
+    phone: str | None = Query(None, description="Номер телефону клієнта"),
+    telegram_id: int | None = Query(None, description="Telegram ID клієнта"),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Отримує список останніх замовлень клієнта за номером телефону або Telegram ID
+    для особистого кабінету.
+    """
+    if not phone and not telegram_id:
+        return []
+
+    clean_phone = phone.strip() if phone else ""
+    digits_only = "".join(filter(str.isdigit, clean_phone)) if clean_phone else ""
+    normalized_plus = (
+        f"+{digits_only}" if clean_phone and not clean_phone.startswith("+") else clean_phone
+    )
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id FROM orders
+            WHERE ($1::bigint IS NOT NULL AND telegram_id = $1)
+               OR ($2::text != '' AND (
+                   contact_phone = $2 OR contact_phone = $3 OR contact_phone = $4
+               ))
+            ORDER BY id DESC
+            LIMIT 25
+            """,
+            telegram_id,
+            clean_phone,
+            digits_only,
+            normalized_plus,
+        )
+        orders = []
+        for r in rows:
+            ord_data = await OrderService.fetch_order_by_id(conn, r["id"], telegram_id=None)
+            if ord_data:
+                orders.append(ord_data)
+        return orders
 
 
 @router.get("/web/{order_id}", response_model=OrderOut)
@@ -735,6 +870,13 @@ async def create_order(
         "is_phone_verified": bool(user.get("is_phone_verified")),
     }
     background_tasks.add_task(send_order_to_manager, order_id, order_notification_data, settings)
+    background_tasks.add_task(
+        send_order_to_customer,
+        order_id,
+        order_notification_data,
+        settings,
+        telegram_id,
+    )
 
     return OrderOut(
         id=order_id,
@@ -1019,9 +1161,7 @@ async def repeat_order(
             WHERE oio.order_item_id = ANY($1::int[])
             ORDER BY oio.id
         """
-        order_opt_rows = (
-            await conn.fetch(options_sql, order_item_ids) if order_item_ids else []
-        )
+        order_opt_rows = await conn.fetch(options_sql, order_item_ids) if order_item_ids else []
 
         opts_by_order_item: dict[int, list[asyncpg.Record]] = {}
         for opt in order_opt_rows:

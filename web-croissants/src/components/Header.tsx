@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useCart } from "../context/CartContext.tsx";
-import { getWorkingHoursInfo } from "../utils/workingHours.ts";
+import { MobileNavMenu } from "./header/MobileNavMenu.tsx";
+import { TopBar } from "./header/TopBar.tsx";
+import { UserAvatar } from "./ui/UserAvatar.tsx";
 
 interface HeaderProps {
   onOpenCart: () => void;
@@ -10,6 +12,10 @@ interface HeaderProps {
   onSelectNav?: (id: string | number) => void;
   lastOrderId?: number | null;
   onOpenTracking?: () => void;
+  onOpenCabinet?: () => void;
+  userName?: string | null;
+  userAvatarUrl?: string | null;
+  isAuthenticated?: boolean;
 }
 
 export function Header({
@@ -20,11 +26,14 @@ export function Header({
   onSelectNav,
   lastOrderId,
   onOpenTracking,
+  onOpenCabinet,
+  userName,
+  userAvatarUrl,
+  isAuthenticated = false,
 }: HeaderProps) {
   const { totalQty, totalPrice } = useCart();
   const headerRef = useRef<HTMLElement>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const hoursInfo = getWorkingHoursInfo();
 
   // Динамічний розрахунок реальної висоти хедера з прив'язкою до CSS-змінної
   useEffect(() => {
@@ -74,80 +83,22 @@ export function Header({
     window.scrollTo({ top: targetY, behavior: "smooth" });
   };
 
+  const logoSrc = `${import.meta.env.BASE_URL}logo.png`;
+
   return (
     <header
       ref={headerRef}
       className="sticky top-0 z-40 bg-[#FAF7F2] border-b border-[#E8DFC8] shadow-xs"
     >
       {/* Верхня інформаційна стрічка */}
-      <div className="bg-[#2C1E14] text-[#E8DFC8] text-xs py-1.5 px-3 sm:px-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center gap-2">
-          {/* Ліва частина: статус графіку */}
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="flex items-center gap-1.5 shrink-0">
-              <span
-                className={`inline-block w-2 h-2 rounded-full shrink-0 ${
-                  hoursInfo.badgeColor === "emerald"
-                    ? "bg-emerald-400 animate-pulse"
-                    : "bg-amber-400"
-                }`}
-              ></span>
-              {/* Короткий текст для мобільних — ніколи не залазить під номер */}
-              <span className="text-[#F3EDE2] font-semibold sm:hidden whitespace-nowrap text-[11px]">
-                {hoursInfo.shortStatusText}
-              </span>
-              {/* Повний текст для екранів від sm */}
-              <span className="text-[#F3EDE2] font-medium hidden sm:inline whitespace-nowrap">
-                {hoursInfo.statusText}
-              </span>
-            </span>
-
-            <span className="text-[#8D7665] hidden md:inline">|</span>
-            <span className="hidden md:inline-flex items-center gap-1 text-[#D4C3AC] shrink-0">
-              🛵 Доставка: 10:00 – 20:00 (від 250 ₴ безкоштовно)
-            </span>
-            <span className="hidden lg:inline-block text-[#8D7665]">|</span>
-            <span className="hidden lg:inline-flex items-center gap-1 text-[#D4C3AC] truncate">
-              📍 {address}
-            </span>
-          </div>
-
-          {/* Права частина: контакти */}
-          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-            <a
-              href="https://www.instagram.com/doma.croissants/"
-              target="_blank"
-              rel="noreferrer"
-              className="hidden sm:inline-flex items-center gap-1 text-[#E8DFC8] hover:text-[#E29E57] transition-colors"
-            >
-              <span>📷</span>
-              <span className="hidden md:inline">@doma.croissants</span>
-            </a>
-            <span className="hidden sm:inline-block text-[#8D7665]">|</span>
-            <a
-              href={`tel:${phone.replace(/\s+/g, "")}`}
-              className="font-bold sm:font-medium text-[11px] sm:text-xs text-[#E8DFC8] hover:text-white transition-colors whitespace-nowrap"
-            >
-              📞 {phone}
-            </a>
-            <a
-              href="https://t.me/ncoffee_app_tst_bot"
-              target="_blank"
-              rel="noreferrer"
-              className="hidden xl:inline-flex items-center gap-1 text-sky-300 hover:text-sky-200"
-            >
-              📱 Telegram-бот
-            </a>
-          </div>
-        </div>
-      </div>
+      <TopBar phone={phone} address={address} />
 
       {/* Головний хедер */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-3">
         {/* Логотип */}
         <a href="#top" className="flex items-center gap-2.5 sm:gap-3 group">
           <img
-            src="/logo.png"
+            src={logoSrc}
             alt="Doma Croissants"
             className="h-8 sm:h-11 w-auto object-contain group-hover:scale-102 transition-transform"
           />
@@ -162,7 +113,7 @@ export function Header({
         </a>
 
         {/* Навігація десктоп */}
-        <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-[#4A3B32]">
+        <nav className="hidden lg:flex items-center gap-5 xl:gap-6 text-sm font-semibold text-[#4A3B32]">
           <a
             href="#menu"
             onClick={(e) => handleNavClick(e, "menu")}
@@ -220,20 +171,44 @@ export function Header({
           </a>
         </nav>
 
-        {/* Кнопки дій: Трекінг, Кошик та Мобільне меню */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Кнопки дій */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          {/* Кнопка особистого кабінету */}
+          {onOpenCabinet && (
+            <button
+              onClick={onOpenCabinet}
+              type="button"
+              className="flex items-center gap-1.5 sm:gap-2 bg-[#FAF7F2] hover:bg-[#F3EDE2] text-[#2C1E14] border border-[#E2D5C3] px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl font-bold transition-all active:scale-95 cursor-pointer text-xs sm:text-sm shadow-2xs shrink-0 whitespace-nowrap"
+            >
+              {isAuthenticated ? (
+                <>
+                  <UserAvatar avatarUrl={userAvatarUrl} name={userName} size="xs" />
+                  <span className="max-w-[70px] sm:max-w-[100px] truncate hidden xs:inline sm:inline">
+                    {userName ? userName.split(" ")[0] : "Кабінет"}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-base sm:text-lg">👤</span>
+                  <span className="text-xs sm:text-sm">Увійти</span>
+                </>
+              )}
+            </button>
+          )}
+
           {/* Кнопка відстеження замовлення (якщо є активне) */}
           {lastOrderId && onOpenTracking && (
             <button
               onClick={onOpenTracking}
               type="button"
-              className="flex items-center gap-1.5 sm:gap-2 bg-[#F3EDE2] hover:bg-[#EADFCF] text-[#2C1E14] border border-[#E2D5C3] px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl font-bold transition-all active:scale-95 cursor-pointer text-xs sm:text-sm shadow-2xs"
+              className="flex items-center gap-1.5 sm:gap-2 bg-[#F3EDE2] hover:bg-[#EADFCF] text-[#2C1E14] border border-[#E2D5C3] px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl font-bold transition-all active:scale-95 cursor-pointer text-xs sm:text-sm shadow-2xs shrink-0 whitespace-nowrap"
             >
-              <span className="relative flex h-2 w-2">
+              <span className="relative flex h-2 w-2 shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
               </span>
-              <span className="hidden sm:inline">Замовлення</span>
+              <span className="hidden xl:inline">Замовлення </span>
+              <span className="hidden sm:inline xl:hidden">Зам. </span>
               <span>#{lastOrderId}</span>
             </button>
           )}
@@ -242,12 +217,12 @@ export function Header({
           <button
             onClick={onOpenCart}
             type="button"
-            className="relative flex items-center gap-1.5 sm:gap-2 bg-[#2C1E14] hover:bg-[#3D2C1F] text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer text-xs sm:text-sm"
+            className="relative flex items-center gap-1.5 sm:gap-2 bg-[#2C1E14] hover:bg-[#3D2C1F] text-white px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl font-semibold shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer text-xs sm:text-sm shrink-0 whitespace-nowrap"
           >
             <span className="text-base sm:text-lg">🛍️</span>
             <span className="hidden sm:inline">Кошик</span>
             {totalQty > 0 ? (
-              <span className="bg-[#E29E57] text-[#2C1E14] font-bold text-xs px-2 py-0.5 rounded-full">
+              <span className="bg-[#E29E57] text-[#2C1E14] font-bold text-xs px-2 py-0.5 rounded-full shrink-0">
                 {totalQty} • {totalPrice} ₴
               </span>
             ) : (
@@ -260,129 +235,26 @@ export function Header({
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             type="button"
             aria-label="Меню сайту"
-            className="md:hidden w-9 h-9 rounded-xl bg-white border border-[#E2D5C3] text-[#2C1E14] flex items-center justify-center font-bold text-base hover:bg-[#F3EDE2] active:scale-95 transition-all cursor-pointer shadow-2xs"
+            className="lg:hidden w-9 h-9 rounded-xl bg-white border border-[#E2D5C3] text-[#2C1E14] flex items-center justify-center font-bold text-base hover:bg-[#F3EDE2] active:scale-95 transition-all cursor-pointer shadow-2xs shrink-0"
           >
             {isMobileMenuOpen ? "✕" : "☰"}
           </button>
         </div>
       </div>
 
-      {/* Випадаюче мобільне меню для швидкого переходу */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden border-t border-[#E8DFC8] bg-[#FAF7F2] p-4 shadow-lg animate-in slide-in-from-top-4 duration-200">
-          {/* Відстеження замовлення у мобільному меню */}
-          {lastOrderId && onOpenTracking && (
-            <div className="mb-3">
-              <button
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  onOpenTracking();
-                }}
-                type="button"
-                className="w-full flex items-center justify-between p-3 rounded-xl bg-[#FFF8EE] border border-[#E8DFC8] text-[#9C5B23] font-bold text-xs active:scale-98 transition-transform shadow-xs"
-              >
-                <span className="flex items-center gap-2">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                  </span>
-                  <span>📦 Відстежити замовлення #{lastOrderId}</span>
-                </span>
-                <span>→</span>
-              </button>
-            </div>
-          )}
-          <nav className="flex flex-col space-y-2 text-sm font-bold text-[#2C1E14]">
-            <a
-              href="#menu"
-              onClick={(e) => handleNavClick(e, "menu")}
-              className={`flex items-center justify-between p-2.5 rounded-xl transition-colors ${
-                typeof activeNavId === "number" || activeNavId === "menu"
-                  ? "bg-[#F3EDE2] text-[#9C5B23] font-extrabold"
-                  : "hover:bg-[#F3EDE2]"
-              }`}
-            >
-              <span className="flex items-center gap-2.5">
-                <span>🥐</span>
-                <span>Меню та страви</span>
-              </span>
-              <span className="text-xs text-[#9C5B23]">62 позиції →</span>
-            </a>
-            <a
-              href="#about"
-              onClick={(e) => handleNavClick(e, "about")}
-              className={`flex items-center gap-2.5 p-2.5 rounded-xl transition-colors ${
-                activeNavId === "about"
-                  ? "bg-[#F3EDE2] text-[#9C5B23] font-extrabold"
-                  : "hover:bg-[#F3EDE2]"
-              }`}
-            >
-              <span>ℹ️</span>
-              <span>Про пекарню Doma</span>
-            </a>
-            <a
-              href="#delivery"
-              onClick={(e) => handleNavClick(e, "delivery")}
-              className={`flex items-center justify-between p-2.5 rounded-xl transition-colors ${
-                activeNavId === "delivery"
-                  ? "bg-[#F3EDE2] text-[#9C5B23] font-extrabold"
-                  : "hover:bg-[#F3EDE2]"
-              }`}
-            >
-              <span className="flex items-center gap-2.5">
-                <span>🛵</span>
-                <span>Доставка та оплата</span>
-              </span>
-              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
-                від 250 ₴ 0 ₴
-              </span>
-            </a>
-            <a
-              href="#careers"
-              onClick={(e) => handleNavClick(e, "careers")}
-              className={`flex items-center gap-2.5 p-2.5 rounded-xl transition-colors ${
-                activeNavId === "careers"
-                  ? "bg-[#F3EDE2] text-[#9C5B23] font-extrabold"
-                  : "hover:bg-[#F3EDE2]"
-              }`}
-            >
-              <span>💼</span>
-              <span>Вакансії в команді</span>
-            </a>
-            <a
-              href="#contacts"
-              onClick={(e) => handleNavClick(e, "contacts")}
-              className={`flex items-center gap-2.5 p-2.5 rounded-xl transition-colors ${
-                activeNavId === "contacts"
-                  ? "bg-[#F3EDE2] text-[#9C5B23] font-extrabold"
-                  : "hover:bg-[#F3EDE2]"
-              }`}
-            >
-              <span>📍</span>
-              <span>Контакти та адреса</span>
-            </a>
-          </nav>
-
-          <div className="mt-4 pt-3 border-t border-[#E8DFC8] flex flex-col gap-2">
-            <a
-              href={`tel:${phone.replace(/\s+/g, "")}`}
-              className="flex items-center justify-center gap-2 bg-[#2C1E14] text-white py-2.5 rounded-xl text-xs font-bold shadow-xs active:scale-98"
-            >
-              <span>📞</span>
-              <span>Зателефонувати: {phone}</span>
-            </a>
-            <a
-              href="https://www.instagram.com/doma.croissants/"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-center gap-2 bg-white border border-[#E2D5C3] text-[#2C1E14] py-2 rounded-xl text-xs font-semibold"
-            >
-              <span>📷</span>
-              <span>Instagram @doma.croissants</span>
-            </a>
-          </div>
-        </div>
-      )}
+      {/* Мобільне навігаційне меню */}
+      <MobileNavMenu
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+        activeNavId={activeNavId}
+        onSelectNav={onSelectNav}
+        lastOrderId={lastOrderId}
+        onOpenTracking={onOpenTracking}
+        onOpenCabinet={onOpenCabinet}
+        userName={userName}
+        userAvatarUrl={userAvatarUrl}
+        isAuthenticated={isAuthenticated}
+      />
     </header>
   );
 }

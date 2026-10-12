@@ -165,7 +165,6 @@ class BulkOptionGroupActionIn(BaseModel):
     groups: list[ProductOptionGroupAttachIn] | None = None
 
 
-
 # --- Моделі відповідей для адмінки ---
 
 
@@ -268,7 +267,7 @@ class LocationDeliveryUpdateIn(BaseModel):
 
 class AdminUserOut(BaseModel):
     id: int
-    telegram_id: int
+    telegram_id: int | None = None
     full_name: str
     phone: str
     delivery_address: str | None = None
@@ -386,7 +385,6 @@ class AdminOrderDetailOut(BaseModel):
     user_admin_note: str | None = None
     source: str = "telegram"
     groups: list[AdminOrderGroupOut] = []
-
 
 
 # --- Аналітика та статистика ---

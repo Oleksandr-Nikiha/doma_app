@@ -50,4 +50,3 @@ async def list_active_delivery_addresses(
         city.strip(),
     )
     return [DeliveryAddressOut(**dict(r)) for r in rows]
-

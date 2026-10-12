@@ -5,9 +5,15 @@ interface CartDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenCheckout: () => void;
+  isAuthenticated?: boolean;
 }
 
-export function CartDrawer({ isOpen, onClose, onOpenCheckout }: CartDrawerProps) {
+export function CartDrawer({
+  isOpen,
+  onClose,
+  onOpenCheckout,
+  isAuthenticated = false,
+}: CartDrawerProps) {
   const { items, totalQty, totalPrice, updateQty, removeItem, clearCart } = useCart();
 
   if (!isOpen) return null;
@@ -196,9 +202,16 @@ export function CartDrawer({ isOpen, onClose, onOpenCheckout }: CartDrawerProps)
                 type="button"
                 className="w-full bg-[#C8823E] hover:bg-[#B36F2D] text-white py-3.5 px-4 rounded-2xl font-bold text-base shadow-lg shadow-[#C8823E]/20 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
               >
-                <span>Оформити замовлення</span>
+                <span>{isAuthenticated ? "Оформити замовлення" : "Увійти та оформити"}</span>
                 <span>→</span>
               </button>
+
+              {!isAuthenticated && (
+                <p className="text-[11px] text-center text-[#8D7B6D] flex items-center justify-center gap-1.5 pt-0.5">
+                  <span>🔒</span>
+                  <span>Оформлення замовлення доступне після швидкої авторизації</span>
+                </p>
+              )}
 
               <button
                 onClick={clearCart}

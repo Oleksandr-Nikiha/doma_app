@@ -18,7 +18,7 @@ export function ManagerModal({
   const [telegramId, setTelegramId] = useState(
     manager
       ? String(manager.telegram_id)
-      : initialUser
+      : initialUser?.telegram_id
       ? String(initialUser.telegram_id)
       : "",
   );
@@ -92,7 +92,7 @@ export function ManagerModal({
       (u) =>
         u.full_name.toLowerCase().includes(q) ||
         u.phone.includes(q) ||
-        String(u.telegram_id).includes(q),
+        (u.telegram_id != null && String(u.telegram_id).includes(q)),
     ).slice(0, 15);
   }, [users, clientSearch]);
 
@@ -174,7 +174,11 @@ export function ManagerModal({
                           )}
                         </div>
                         <p className="mt-0.5 text-[11px] opacity-70">
-                          📞 {selectedUser.phone} • 🆔 <span className="font-mono font-semibold">{selectedUser.telegram_id}</span>
+                          📞 {selectedUser.phone} {selectedUser.telegram_id ? (
+                            <>• 🆔 <span className="font-mono font-semibold">{selectedUser.telegram_id}</span></>
+                          ) : (
+                            <>• 🌐 <span className="font-sans font-semibold">Веб-клієнт</span></>
+                          )}
                         </p>
                       </div>
                       <button
@@ -222,14 +226,14 @@ export function ManagerModal({
                           </div>
                         ) : (
                           filteredUsers.map((u) => {
-                            const isMgr = managers.find((m) => m.telegram_id === u.telegram_id);
+                            const isMgr = u.telegram_id ? managers.find((m) => m.telegram_id === u.telegram_id) : undefined;
                             return (
                               <button
                                 key={u.id}
                                 type="button"
                                 onClick={() => {
                                   setSelectedUser(u);
-                                  setTelegramId(String(u.telegram_id));
+                                  setTelegramId(u.telegram_id ? String(u.telegram_id) : "");
                                 }}
                                 className="w-full text-left p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center justify-between gap-2"
                               >
@@ -244,7 +248,7 @@ export function ManagerModal({
                                     )}
                                   </p>
                                   <p className="text-[11px] opacity-60 font-mono">
-                                    📞 {u.phone} • 🆔 {u.telegram_id}
+                                    📞 {u.phone} {u.telegram_id ? `• 🆔 ${u.telegram_id}` : "• 🌐 Веб"}
                                   </p>
                                 </div>
                                 <span className="text-xs text-blue-500 font-bold shrink-0">

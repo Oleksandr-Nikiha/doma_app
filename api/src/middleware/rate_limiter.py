@@ -61,4 +61,3 @@ async def rate_limiter(request: Request) -> None:
         logger.warning("Помилка Redis при перевірці rate limit (%s): %s", key, exc)
     except Exception as exc:
         logger.warning("Неочікувана помилка в rate limiter: %s", exc)
-

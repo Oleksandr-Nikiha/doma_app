@@ -23,7 +23,18 @@
 		}
 	}
 
-	# Статика Vite та SPA fallback
+	# Статика Vite та SPA fallback (підтримка як прямого кореню, так і шляху /croissant/*)
+	handle_path /croissant/* {
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+
+		@index path /index.html
+		header @index Cache-Control "no-cache, no-store, must-revalidate"
+
+		try_files {path} /index.html
+		file_server
+	}
+
 	handle {
 		@assets path /assets/*
 		header @assets Cache-Control "public, max-age=31536000, immutable"

@@ -79,10 +79,7 @@ async def auto_invalidate_catalog_cache_middleware(request: Request, call_next):
     (створення/редагування/видалення категорій, страв, модифікаторів чи локацій).
     """
     response = await call_next(request)
-    if (
-        request.method in ("POST", "PUT", "PATCH", "DELETE")
-        and response.status_code < 400
-    ):
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and response.status_code < 400:
         path = request.url.path
         if any(
             path.startswith(prefix)
@@ -109,6 +106,7 @@ app.include_router(locations.router)
 app.include_router(delivery_addresses.router)
 app.include_router(admin.router)
 app.include_router(admin_auth.router)
+
 
 class CachedStaticFiles(StaticFiles):
     """Роздача файлів із Cache-Control заголовком для браузерів та Telegram WebView."""
@@ -169,4 +167,3 @@ async def health_ready():
             "redis": "connected" if redis_ok else "disconnected",
         },
     )
-

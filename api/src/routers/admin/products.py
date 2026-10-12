@@ -19,6 +19,7 @@ from src.schemas.admin import (
 
 router = APIRouter()
 
+
 @router.get("/products", response_model=list[ProductAdminOut])
 async def list_admin_products(
     category_id: int | None = Query(None),
@@ -667,7 +668,6 @@ async def toggle_variant_availability(
         )
 
     return {"id": variant_id, "is_available": data.is_available}
-
 
 
 @router.get("/variant-choices", response_model=list[VariantSelectorOut])

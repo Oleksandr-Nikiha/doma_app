@@ -477,7 +477,7 @@ export interface DeliveryAddressUpdatePayload {
 
 export interface AdminUser {
   id: number;
-  telegram_id: number;
+  telegram_id: number | null;
   full_name: string;
   phone: string;
   delivery_address: string | null;

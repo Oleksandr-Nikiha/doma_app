@@ -33,8 +33,8 @@ class TestPhoneNormalization:
             "",
             "   ",
             "12345",
-            "09312345",         # 8 цифр
-            "38093123456789",    # забагато цифр
+            "09312345",  # 8 цифр
+            "38093123456789",  # забагато цифр
             "abcdefghij",
             "+12345678901",
         ],
@@ -88,9 +88,17 @@ class TestScheduledTimeValidation:
         assert exc_info.value.status_code == 400
         assert "в минулому" in exc_info.value.detail
 
-    def test_time_less_than_30_minutes_raises_400(self):
-        # 10 хвилин від поточного часу
-        too_soon = datetime.now(KYIV_TZ) + timedelta(minutes=10)
+    def test_time_less_than_30_minutes_raises_400(self, monkeypatch):
+        # 10 хвилин від фіксованого денного часу (щоб уникнути переходу через північ)
+        fixed_now = datetime(2026, 10, 11, 14, 0, tzinfo=KYIV_TZ)
+
+        class MockDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed_now
+
+        monkeypatch.setattr("src.services.order_service.datetime", MockDateTime)
+        too_soon = fixed_now + timedelta(minutes=10)
         time_str = f"Сьогодні, {too_soon.strftime('%H:%M')}"
         with pytest.raises(HTTPException) as exc_info:
             _validate_scheduled_time(

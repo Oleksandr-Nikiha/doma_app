@@ -16,11 +16,7 @@ export function isTelegramWebApp(): boolean {
   ) {
     return true;
   }
-  try {
-    return isTMA();
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 export function getTelegramStartParam(): string | null {

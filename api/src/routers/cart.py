@@ -55,9 +55,7 @@ def build_options_key(options, item_qty: int = 1) -> str:
     return "|".join(parts)
 
 
-async def _fetch_cart(
-    conn_or_pool: asyncpg.Connection | asyncpg.Pool, telegram_id: int
-) -> CartOut:
+async def _fetch_cart(conn_or_pool: asyncpg.Connection | asyncpg.Pool, telegram_id: int) -> CartOut:
     """
     Витягує кошик разом із вибраними опціями.
     Підтримує як asyncpg.Connection, так і asyncpg.Pool для уникнення зайвих циклів acquire/release.
@@ -183,14 +181,14 @@ async def add_item_to_cart(
     async with pool.acquire() as conn:
         async with conn.transaction():
             variant = await conn.fetchrow(
-            """
+                """
             SELECT p.id as product_id, p.is_available as p_avail, pv.is_available as pv_avail 
             FROM product_variants pv
             JOIN products p ON p.id = pv.product_id
             WHERE pv.id = $1
         """,
-            payload.variant_id,
-        )
+                payload.variant_id,
+            )
 
         if not variant:
             raise HTTPException(status_code=404, detail="Варіант не знайдено")
@@ -330,7 +328,7 @@ async def update_cart_item(
     async with pool.acquire() as conn:
         async with conn.transaction():
             item = await conn.fetchrow(
-            """
+                """
             SELECT ci.id, ci.cart_id, ci.qty, ci.variant_id, pv.product_id
             FROM cart_items ci
             JOIN carts c ON c.id = ci.cart_id
@@ -338,9 +336,9 @@ async def update_cart_item(
             WHERE ci.id = $1 AND c.telegram_id = $2
             FOR UPDATE OF ci
             """,
-            item_id,
-            user["telegram_id"],
-        )
+                item_id,
+                user["telegram_id"],
+            )
         if item is None:
             raise HTTPException(status_code=404, detail="Товар не знайдено в кошику")
 

@@ -42,4 +42,3 @@ class DeliveryAddressUpdateIn(BaseModel):
     is_active: bool | None = None
     notes: str | None = Field(default=None, max_length=500)
     sort_order: int | None = None
-

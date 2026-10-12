@@ -53,9 +53,7 @@ def build_test_init_data(
     secret_key = hmac.new(b"WebAppData", token.encode("utf-8"), hashlib.sha256).digest()
     calc_hash = hmac.new(secret_key, check_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
-    encoded_pairs = [
-        (k, v) for k, v in pairs
-    ] + [("hash", calc_hash)]
+    encoded_pairs = [(k, v) for k, v in pairs] + [("hash", calc_hash)]
     return urllib.parse.urlencode(encoded_pairs)
 
 
