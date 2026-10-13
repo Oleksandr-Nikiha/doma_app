@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useOrders, useRepeatOrder } from "@/api/queries";
 import { EmptyState, ErrorBox, ScreenTitle, formatPrice } from "@/components/ui";
 import { useBackButton } from "@/hooks/useBackButton";
-import { haptic, hapticNotify } from "@/telegram/sdk";
+import { haptic, hapticNotify, showAlert } from "@/telegram/sdk";
 import type { Order } from "@/api/types";
 
 function getStatusBadge(status: string, fulfillmentType?: string) {
@@ -93,24 +93,29 @@ export function OrdersPage() {
     repeatOrder.mutate(
       { orderId },
       {
-        onSuccess: (res) => {
+        onSuccess: async (res) => {
           hapticNotify("success");
           setRepeatingOrderId(null);
           if (res.unavailable_items && res.unavailable_items.length > 0) {
-            alert(
-              `Товари додано до кошика за актуальними цінами!\n\nЗверніть увагу: деякі позиції наразі недоступні в меню:\n• ${res.unavailable_items.join("\n• ")}`
+            await showAlert(
+              `Товари додано до кошика за актуальними цінами!\n\nЗверніть увагу: деякі позиції наразі недоступні в меню:\n• ${res.unavailable_items.join("\n• ")}`,
+              "Повторення замовлення",
             );
           } else if (res.price_changed) {
-            alert(
-              `Товари додано до кошика за актуальними цінами!\nНова сума: ${formatPrice(res.new_total)} (було: ${formatPrice(res.old_total)})`
+            await showAlert(
+              `Товари додано до кошика за актуальними цінами!\nНова сума: ${formatPrice(res.new_total)} (було: ${formatPrice(res.old_total)})`,
+              "Ціни оновлено",
             );
           }
           navigate("/cart");
         },
-        onError: (err) => {
+        onError: async (err) => {
           hapticNotify("error");
           setRepeatingOrderId(null);
-          alert(err instanceof Error ? err.message : "Не вдалося повторити замовлення");
+          await showAlert(
+            err instanceof Error ? err.message : "Не вдалося повторити замовлення",
+            "Помилка",
+          );
         },
       }
     );

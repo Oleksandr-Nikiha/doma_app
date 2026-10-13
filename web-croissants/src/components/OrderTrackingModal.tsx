@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchWebOrder } from "../api/client.ts";
+import { useModalBehavior } from "../hooks/useModalBehavior.ts";
 import type { OrderOut } from "../types/order.ts";
 import { OrderDetailsCard } from "./tracking/OrderDetailsCard.tsx";
 import { OrderTimeline } from "./tracking/OrderTimeline.tsx";
@@ -22,6 +23,8 @@ export function OrderTrackingModal({
   onClose,
   isNewlyCreated = false,
 }: OrderTrackingModalProps) {
+  useModalBehavior({ isOpen, onClose });
+
   const [currentOrderId, setCurrentOrderId] = useState<number | null>(
     propOrderId || initialOrder?.id || null,
   );

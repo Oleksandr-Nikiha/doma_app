@@ -111,6 +111,7 @@ export interface CartItemOption {
 export interface CartItem {
   id: number;
   product_id: number;
+  variant_id?: number | null;
   product_name: string;
   variant_label: string;
   weight: string | null;
@@ -120,6 +121,7 @@ export interface CartItem {
   location_id: number;
   location_name: string;
   options: CartItemOption[];
+  group_free_count?: Record<number, number>;
 }
 
 export interface Cart {
@@ -146,6 +148,11 @@ export interface OrderCreatePayload {
   payment_method: "cash" | "card" | "qr";
   scheduled_time?: string | null;
   comment?: string | null;
+  items?: Array<{
+    variant_id: number;
+    qty: number;
+    option_variant_ids?: number[];
+  }>;
 }
 
 export interface OrderItemOption {
@@ -528,7 +535,7 @@ export interface AdminOrderGroup {
 
 export interface AdminOrderListItem {
   id: number;
-  telegram_id: number;
+  telegram_id?: number | null;
   status: string;
   fulfillment_type: string;
   delivery_address: string | null;
@@ -544,11 +551,12 @@ export interface AdminOrderListItem {
   location_name: string | null;
   user_is_blocked: boolean;
   user_admin_note: string | null;
+  source?: string | null;
 }
 
 export interface AdminOrderDetail {
   id: number;
-  telegram_id: number;
+  telegram_id?: number | null;
   status: string;
   fulfillment_type: string;
   delivery_address: string | null;
@@ -561,6 +569,7 @@ export interface AdminOrderDetail {
   created_at: string;
   user_is_blocked: boolean;
   user_admin_note: string | null;
+  source?: string | null;
   groups: AdminOrderGroup[];
 }
 

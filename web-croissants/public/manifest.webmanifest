@@ -2,21 +2,21 @@
   "name": "Doma Croissants — Перша пекарня задоволення",
   "short_name": "Doma Croissants",
   "description": "Великі хрусткі круасани, авторська кава та бенто-піци у Вишгороді. Доставка та самовивіз.",
-  "start_url": "/",
-  "id": "/",
+  "start_url": "./",
+  "id": "./",
   "display": "standalone",
   "background_color": "#FAF7F2",
   "theme_color": "#2C1E14",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/favicon.svg",
+      "src": "./favicon.svg",
       "sizes": "32x32 48x48 72x72 96x96 128x128 256x256",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/logo.png",
+      "src": "./logo.png",
       "sizes": "192x192 512x512",
       "type": "image/png",
       "purpose": "any maskable"

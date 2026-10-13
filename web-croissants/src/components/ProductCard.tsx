@@ -1,4 +1,4 @@
-import { getImageUrl } from "../api/client.ts";
+import { DEFAULT_PRODUCT_IMAGE, getImageUrl } from "../api/client.ts";
 import type { ProductListItem } from "../types/catalog.ts";
 
 interface ProductCardProps {
@@ -13,14 +13,13 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
       className="group bg-white rounded-2xl border border-[#E8DFC8] overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col cursor-pointer hover:-translate-y-1 active:scale-[0.98]"
     >
       {/* Зображення страви */}
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-[#F3EDE2]">
+      <div className="relative aspect-square w-full overflow-hidden bg-[#F3EDE2]">
         <img
           src={getImageUrl(product.image_url)}
           alt={product.name}
           loading="lazy"
           onError={(e) => {
-            (e.currentTarget as HTMLImageElement).src =
-              "https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=600&q=80";
+            (e.currentTarget as HTMLImageElement).src = DEFAULT_PRODUCT_IMAGE;
           }}
           className="w-full h-full object-cover group-hover:scale-106 transition-transform duration-500"
         />

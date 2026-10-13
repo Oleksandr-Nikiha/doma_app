@@ -97,6 +97,27 @@ function buildOptionsKey(options: OptionSelection[], itemQty: number = 1): strin
     .join("|");
 }
 
+function getGroupFreeCount(item: CartItem): Record<number, number> {
+  if (item.group_free_count && Object.keys(item.group_free_count).length > 0) {
+    return item.group_free_count;
+  }
+  const inferred: Record<number, number> = {};
+  if (!item.options || item.options.length === 0 || !item.qty) {
+    return inferred;
+  }
+  const byGroup = new Map<number, number>();
+  for (const opt of item.options) {
+    byGroup.set(opt.group_id, (byGroup.get(opt.group_id) ?? 0) + opt.qty);
+  }
+  const optionsCharged = Math.max(0, item.subtotal - item.price * item.qty);
+  if (optionsCharged === 0) {
+    for (const [groupId, count] of byGroup.entries()) {
+      inferred[groupId] = Math.round(count / item.qty);
+    }
+  }
+  return inferred;
+}
+
 export function addGuestItem(payload: AddGuestCartPayload): Cart {
   const cart = getGuestCart();
   const optionsKey = buildOptionsKey(payload.options, payload.qty);
@@ -128,16 +149,23 @@ export function addGuestItem(payload: AddGuestCartPayload): Cart {
       ...opt,
       qty: opt.qty > 0 ? (opt.qty / (existing.qty - payload.qty)) * newQty : 0,
     }));
+    if (payload.group_free_count) {
+      existing.group_free_count = {
+        ...existing.group_free_count,
+        ...payload.group_free_count,
+      };
+    }
     existing.subtotal = calculateItemSubtotal(
       existing.price,
       newQty,
       existing.options,
-      payload.group_free_count ?? {},
+      getGroupFreeCount(existing),
     );
   } else {
     const newItem: CartItem = {
       id: Date.now() + Math.floor(Math.random() * 1000),
       product_id: payload.product_id,
+      variant_id: payload.variant_id,
       product_name: payload.product_name,
       variant_label: payload.variant_label,
       weight: payload.weight,
@@ -147,6 +175,7 @@ export function addGuestItem(payload: AddGuestCartPayload): Cart {
       location_id: payload.location_id,
       location_name: payload.location_name,
       options: payload.options_details,
+      group_free_count: payload.group_free_count,
     };
     cart.items.push(newItem);
   }
@@ -186,7 +215,6 @@ export function updateGuestItem(itemId: number, payload: UpdateGuestCartPayload)
   const newPrice = payload.price ?? current.price;
   const newQty = payload.qty ?? current.qty;
   const newOptions = payload.options_details ?? current.options;
-  const groupFreeCount = payload.group_free_count ?? {};
 
   const optionsKey = buildOptionsKey(
     newOptions.map((o) => ({ group_id: o.group_id, variant_id: o.variant_id, qty: o.qty })),
@@ -216,7 +244,13 @@ export function updateGuestItem(itemId: number, payload: UpdateGuestCartPayload)
         qty: opt.qty + (match ? match.qty : 0),
       };
     });
-    other.subtotal = calculateItemSubtotal(other.price, mergedQty, other.options, groupFreeCount);
+    if (payload.group_free_count) {
+      other.group_free_count = {
+        ...other.group_free_count,
+        ...payload.group_free_count,
+      };
+    }
+    other.subtotal = calculateItemSubtotal(other.price, mergedQty, other.options, getGroupFreeCount(other));
     cart.items.splice(itemIdx, 1);
   } else {
     current.variant_label = newVariantLabel;
@@ -224,7 +258,10 @@ export function updateGuestItem(itemId: number, payload: UpdateGuestCartPayload)
     current.price = newPrice;
     current.qty = newQty;
     current.options = newOptions;
-    current.subtotal = calculateItemSubtotal(newPrice, newQty, newOptions, groupFreeCount);
+    if (payload.group_free_count) {
+      current.group_free_count = payload.group_free_count;
+    }
+    current.subtotal = calculateItemSubtotal(newPrice, newQty, newOptions, getGroupFreeCount(current));
   }
 
   saveGuestCart(cart);
@@ -242,7 +279,8 @@ export function updateGuestItemQty(itemId: number, newQty: number): Cart {
       ...opt,
       qty: Math.max(1, Math.round(opt.qty * ratio)),
     }));
-    item.subtotal = calculateItemSubtotal(item.price, newQty, item.options);
+    const groupFreeCount = getGroupFreeCount(item);
+    item.subtotal = calculateItemSubtotal(item.price, newQty, item.options, groupFreeCount);
     saveGuestCart(cart);
   }
   return cart;

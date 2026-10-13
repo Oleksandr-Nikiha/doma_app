@@ -36,9 +36,15 @@ export function TopBar({ phone, address }: TopBarProps) {
             🛵 Доставка: 10:00 – 20:00 (від 250 ₴ безкоштовно)
           </span>
           <span className="hidden lg:inline-block text-[#8D7665]">|</span>
-          <span className="hidden lg:inline-flex items-center gap-1 text-[#D4C3AC] truncate">
+          <a
+            href="https://maps.app.goo.gl/jeX4BLChZar5k1so6"
+            target="_blank"
+            rel="noreferrer"
+            className="hidden lg:inline-flex items-center gap-1 text-[#D4C3AC] hover:text-[#E29E57] transition-colors truncate"
+            title="Відкрити на мапі Google Maps"
+          >
             📍 {address}
-          </span>
+          </a>
         </div>
 
         {/* Права частина: контакти */}

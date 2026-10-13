@@ -33,6 +33,7 @@ class CartItemOptionOut(BaseModel):
 class CartItemOut(BaseModel):
     id: int
     product_id: int
+    variant_id: int | None = None
     product_name: str
     variant_label: str
     weight: str | None = None

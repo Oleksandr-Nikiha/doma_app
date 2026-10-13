@@ -94,9 +94,9 @@ async def get_manager_by_telegram_id(telegram_id: int) -> asyncpg.Record | None:
         return await conn.fetchrow(
             """
             SELECT m.id, m.telegram_id, m.role, m.location_id, m.is_active,
-                   u.full_name, u.phone
+                   COALESCE(u.full_name, 'Співробітник') AS full_name, u.phone
             FROM managers m
-            JOIN users u ON u.telegram_id = m.telegram_id
+            LEFT JOIN users u ON u.telegram_id = m.telegram_id
             WHERE m.telegram_id = $1 AND m.is_active = true
             """,
             telegram_id,

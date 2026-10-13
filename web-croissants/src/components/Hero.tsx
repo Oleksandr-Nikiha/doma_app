@@ -4,7 +4,7 @@ interface HeroProps {
 
 export function Hero({ onScrollToMenu }: HeroProps) {
   return (
-    <section className="relative overflow-hidden bg-gradient-to-b from-[#FAF7F2] to-[#F3EDE2] pt-8 pb-16 md:py-20 border-b border-[#EADFCF]">
+    <section id="hero" className="relative overflow-hidden bg-gradient-to-b from-[#FAF7F2] to-[#F3EDE2] pt-8 pb-16 md:py-20 border-b border-[#EADFCF]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-center">
           {/* Текстовий блок */}

@@ -42,12 +42,16 @@ SSL_CTX.check_hostname = False
 SSL_CTX.verify_mode = ssl.CERT_NONE
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
 }
 
 
 def normalize_text(text: str) -> str:
-    """Нормалізує рядок для нечіткого порівняння: прибирає пунктуацію, апострофи, пробіли, зводить до нижнього регістру."""
+    """Нормалізує рядок для нечіткого порівняння: прибирає пунктуацію,
+    апострофи, пробіли, зводить до нижнього регістру."""
     if not text:
         return ""
     t = text.lower()
@@ -227,7 +231,9 @@ async def run_sync():
     print("Підключено до PostgreSQL!")
 
     # 1. Застосовуємо міграцію
-    migration_file = Path("/home/alex/Development/doma_app/db/migrations/0009_product_images_directus.sql")
+    migration_file = (
+        Path("/home/alex/Development/doma_app/db/migrations/0009_product_images_directus.sql")
+    )
     if migration_file.exists():
         print("Застосування міграції 0009_product_images_directus.sql...")
         migration_sql = migration_file.read_text(encoding="utf-8")
@@ -353,7 +359,7 @@ async def run_sync():
         updated_count += 1
         print(f"✅ [{p_id}] {p_name} -> {filename_disk} ({width}x{height}, {filesize // 1024} KB)")
 
-    print(f"\nПідсумок:")
+    print("\nПідсумок:")
     print(f"  Всього знайдено відповідностей: {matched_count}/{len(products)}")
     print(f"  Успішно оновлено в БД та збережено: {updated_count}")
     print(f"  Без фото (прибори, порційні соуси): {skipped_count}")

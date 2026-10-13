@@ -6,11 +6,11 @@ import { ErrorBox, ScreenTitle, Spinner, formatPrice } from "@/components/ui";
 import { WebHeader } from "@/components/WebHeader";
 import { useBackButton } from "@/hooks/useBackButton";
 import { isTelegramWebApp } from "@/telegram/env";
-import { haptic, hapticNotify } from "@/telegram/sdk";
+import { haptic, hapticNotify, showAlert } from "@/telegram/sdk";
 
 const getSteps = (fulfillmentType?: string) => [
   { key: "pending_moderation", label: "Прийнято", icon: "📝" },
-  { key: "confirmed", label: "Підтверджено", icon: "👍" },
+  { key: "confirmed", label: "Підтверджено", shortMobile: ["Підтвер-", "джено"], icon: "👍" },
   { key: "in_progress", label: "Готується", icon: "👨‍🍳" },
   {
     key: fulfillmentType === "delivery" ? "on_the_way" : "ready",
@@ -61,22 +61,27 @@ export function OrderSuccessPage() {
     repeatOrder.mutate(
       { orderId: id },
       {
-        onSuccess: (res) => {
+        onSuccess: async (res) => {
           hapticNotify("success");
           if (res.unavailable_items && res.unavailable_items.length > 0) {
-            alert(
-              `Товари додано до кошика за актуальними цінами!\n\nЗверніть увагу: деякі позиції наразі недоступні в меню:\n• ${res.unavailable_items.join("\n• ")}`
+            await showAlert(
+              `Товари додано до кошика за актуальними цінами!\n\nЗверніть увагу: деякі позиції наразі недоступні в меню:\n• ${res.unavailable_items.join("\n• ")}`,
+              "Повторення замовлення",
             );
           } else if (res.price_changed) {
-            alert(
-              `Товари додано до кошика за актуальними цінами!\nНова сума: ${formatPrice(res.new_total)} (було: ${formatPrice(res.old_total)})`
+            await showAlert(
+              `Товари додано до кошика за актуальними цінами!\nНова сума: ${formatPrice(res.new_total)} (було: ${formatPrice(res.old_total)})`,
+              "Ціни оновлено",
             );
           }
           navigate("/cart");
         },
-        onError: (err) => {
+        onError: async (err) => {
           hapticNotify("error");
-          alert(err instanceof Error ? err.message : "Не вдалося повторити замовлення");
+          await showAlert(
+            err instanceof Error ? err.message : "Не вдалося повторити замовлення",
+            "Помилка",
+          );
         },
       }
     );
@@ -221,10 +226,10 @@ export function OrderSuccessPage() {
           {/* Інтерактивний степер кроків (якщо не відхилено/скасовано) */}
           {!isNegative && (
             <div className="mt-6 pt-4 border-t" style={{ borderColor: "var(--app-border)" }}>
-              <div className="flex items-center justify-between relative px-2">
-                {/* Лінія зв'язку */}
+              <div className="relative w-full">
+                {/* Лінія зв'язку між центрами першої (10%) та останньої (90%) колонок */}
                 <div
-                  className="absolute left-6 right-6 top-3 h-0.5 -z-0 overflow-hidden"
+                  className="absolute left-[10%] right-[10%] top-3 h-0.5 -z-0 overflow-hidden"
                   style={{ background: "var(--app-surface-2)" }}
                 >
                   <div
@@ -236,40 +241,53 @@ export function OrderSuccessPage() {
                   />
                 </div>
 
-                {steps.map((step, idx) => {
-                  const isDone = idx < currentStep;
-                  const isActive = idx === currentStep;
-                  return (
-                    <div key={step.key} className="flex flex-col items-center gap-1.5 z-10">
-                      <div
-                        className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
-                          isActive ? "ring-4 ring-blue-500/20 app-pop" : ""
-                        }`}
-                        style={{
-                          background:
-                            isDone || isActive
-                              ? "var(--tg-theme-button-color)"
-                              : "var(--app-surface-2)",
-                          color:
-                            isDone || isActive
-                              ? "var(--tg-theme-button-text-color)"
-                              : "var(--tg-theme-hint-color)",
-                        }}
-                      >
-                        {isDone ? "✓" : idx + 1}
+                <div className="grid grid-cols-5 relative z-10">
+                  {steps.map((step, idx) => {
+                    const isDone = idx < currentStep;
+                    const isActive = idx === currentStep;
+                    return (
+                      <div key={step.key} className="flex flex-col items-center gap-1.5 min-w-0">
+                        <div
+                          className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all shrink-0 ${
+                            isActive ? "ring-4 ring-blue-500/20 app-pop" : ""
+                          }`}
+                          style={{
+                            background:
+                              isDone || isActive
+                                ? "var(--tg-theme-button-color)"
+                                : "var(--app-surface-2)",
+                            color:
+                              isDone || isActive
+                                ? "var(--tg-theme-button-text-color)"
+                                : "var(--tg-theme-hint-color)",
+                          }}
+                        >
+                          {isDone ? "✓" : idx + 1}
+                        </div>
+                        <span
+                          className="text-[9px] sm:text-[10px] font-semibold transition-opacity text-center leading-[1.15] w-full px-0.5 min-h-[24px] flex flex-col items-center justify-start"
+                          style={{
+                            opacity: isActive ? 1 : isDone ? 0.85 : 0.45,
+                            color: isActive ? "var(--tg-theme-button-color)" : "inherit",
+                          }}
+                        >
+                          {step.shortMobile ? (
+                            <>
+                              <span className="hidden sm:inline">{step.label}</span>
+                              <span className="sm:hidden leading-[1.1]">
+                                {step.shortMobile[0]}
+                                <br />
+                                {step.shortMobile[1]}
+                              </span>
+                            </>
+                          ) : (
+                            <span>{step.label}</span>
+                          )}
+                        </span>
                       </div>
-                      <span
-                        className="text-[10px] font-semibold transition-opacity text-center leading-tight max-w-[56px]"
-                        style={{
-                          opacity: isActive ? 1 : isDone ? 0.8 : 0.4,
-                          color: isActive ? "var(--tg-theme-button-color)" : "inherit",
-                        }}
-                      >
-                        {step.label}
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
@@ -499,10 +517,13 @@ export function OrderSuccessPage() {
                       hapticNotify("success");
                       setShowCancelModal(false);
                     },
-                    onError: (err) => {
+                    onError: async (err) => {
                       hapticNotify("error");
-                      alert(err instanceof Error ? err.message : "Помилка при скасуванні");
                       setShowCancelModal(false);
+                      await showAlert(
+                        err instanceof Error ? err.message : "Помилка при скасуванні",
+                        "Скасування замовлення",
+                      );
                     },
                   });
                 }}

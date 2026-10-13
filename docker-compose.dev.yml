@@ -138,6 +138,48 @@ services:
           cpus: "1.0"
           memory: 768M
 
+  web-pizza:
+    build:
+      context: ./web-pizza
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    ports:
+      - "5175:5175"
+    volumes:
+      - ./web-pizza:/app
+    command: sh -c "[ -d node_modules/vite ] || npm install; npm run dev -- --host 0.0.0.0"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+
+  web-group:
+    build:
+      context: ./web-group
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    ports:
+      - "5176:5176"
+    volumes:
+      - ./web-group:/app
+    command: sh -c "[ -d node_modules/vite ] || npm install; npm run dev -- --host 0.0.0.0"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+
   directus:
     image: directus/directus:latest
     restart: unless-stopped

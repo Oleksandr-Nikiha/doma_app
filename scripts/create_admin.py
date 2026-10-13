@@ -77,7 +77,10 @@ async def main():
                 telegram_id,
             )
 
-        print(f"✅ Користувача {full_name} (telegram_id: {telegram_id}) успішно призначено Адміністратором (роль: admin)!")
+        print(
+            f"✅ Користувача {full_name} (telegram_id: {telegram_id}) "
+            "успішно призначено Адміністратором (роль: admin)!"
+        )
         print("Тепер цей акаунт має повний доступ до адмін-панелі /admin.")
     finally:
         await conn.close()

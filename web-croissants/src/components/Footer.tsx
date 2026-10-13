@@ -1,4 +1,6 @@
 export function Footer() {
+  const logoSrc = `${import.meta.env.BASE_URL}logo.png`;
+
   return (
     <footer
       id="contacts"
@@ -14,9 +16,12 @@ export function Footer() {
           <div className="md:col-span-5 space-y-4">
             <div className="flex items-center gap-3">
               <img
-                src="/logo.png"
+                src={logoSrc}
                 alt="Doma Croissants"
                 className="h-10 w-auto object-contain brightness-0 invert"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
               />
             </div>
             <div className="text-xs uppercase text-[#E29E57] tracking-wider font-bold">
@@ -49,7 +54,7 @@ export function Footer() {
                 <span>📍</span>
                 <div>
                   <a
-                    href="https://maps.app.goo.gl/BCWjLvhHmZPBK3un7"
+                    href="https://maps.app.goo.gl/jeX4BLChZar5k1so6"
                     target="_blank"
                     rel="noreferrer"
                     className="hover:text-white underline underline-offset-2 transition-colors"
@@ -87,9 +92,7 @@ export function Footer() {
             <ul className="space-y-2 text-sm text-[#D4C3AC]">
               <li>
                 <a
-                  href="https://domapizza.com.ua"
-                  target="_blank"
-                  rel="noreferrer"
+                  href="/pizza/"
                   className="hover:text-white transition-colors flex items-center gap-1.5"
                 >
                   <span>🍕</span>
@@ -98,9 +101,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href="https://domagroup.com.ua"
-                  target="_blank"
-                  rel="noreferrer"
+                  href="/group/"
                   className="hover:text-white transition-colors flex items-center gap-1.5"
                 >
                   <span>🌐</span>

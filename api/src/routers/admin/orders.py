@@ -409,6 +409,14 @@ async def notify_order_updated(
         raise HTTPException(status_code=500, detail="BOT_TOKEN не налаштовано")
 
     order = await get_admin_order(order_id, pool, staff)
+    if not order.telegram_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "У цього замовлення немає прив'язаного Telegram-акаунта клієнта "
+                "(замовлення з веб-сайту)."
+            ),
+        )
 
     items_text_list = []
     for g in order.groups:

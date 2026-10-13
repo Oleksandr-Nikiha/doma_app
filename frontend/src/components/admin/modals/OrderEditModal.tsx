@@ -323,7 +323,30 @@ export function OrderEditModal({
           style={{ borderColor: "var(--app-border)" }}
         >
           <div>
-            <h3 className="text-base font-bold">Зміна замовлення #{order.id}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-bold">Зміна замовлення #{order.id}</h3>
+              {order.source === "web_croissants" ? (
+                <span
+                  className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                  style={{
+                    background: "rgba(200, 130, 62, 0.15)",
+                    color: "#a15914",
+                  }}
+                >
+                  🥐 Веб-сайт
+                </span>
+              ) : (
+                <span
+                  className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                  style={{
+                    background: "rgba(59, 130, 246, 0.15)",
+                    color: "#2563eb",
+                  }}
+                >
+                  🤖 Telegram
+                </span>
+              )}
+            </div>
             <p className="text-xs opacity-60">
               {order.fulfillment_type === "delivery" ? "🛵 Доставка" : "🛍️ Самовивіз"} • 📅{" "}
               {order.created_at}
@@ -647,18 +670,30 @@ export function OrderEditModal({
             {updateOrder.isPending ? "Збереження..." : "💾 Зберегти зміни"}
           </button>
 
-          <button
-            onClick={handleNotify}
-            disabled={notifyOrder.isPending || notified}
-            className="app-press w-full rounded-xl py-2.5 text-xs font-semibold border"
-            style={{ borderColor: "var(--app-border)" }}
-          >
-            {notified
-              ? "✅ Сповіщення надіслано в Telegram!"
-              : notifyOrder.isPending
-              ? "Надсилання..."
-              : "💬 Надіслати оновлений чек клієнту в Telegram"}
-          </button>
+          {order.telegram_id ? (
+            <button
+              onClick={handleNotify}
+              disabled={notifyOrder.isPending || notified}
+              className="app-press w-full rounded-xl py-2.5 text-xs font-semibold border"
+              style={{ borderColor: "var(--app-border)" }}
+            >
+              {notified
+                ? "✅ Сповіщення надіслано в Telegram!"
+                : notifyOrder.isPending
+                ? "Надсилання..."
+                : "💬 Надіслати оновлений чек клієнту в Telegram"}
+            </button>
+          ) : (
+            <div
+              className="w-full rounded-xl py-2.5 px-3 text-xs text-center font-medium opacity-75 border"
+              style={{
+                borderColor: "var(--app-border)",
+                background: "var(--app-surface-2)",
+              }}
+            >
+              ℹ️ Сповіщення в Telegram недоступне (замовлення оформлено з сайту без Telegram)
+            </div>
+          )}
         </div>
 
         {/* Модалка вибору страви для додавання */}

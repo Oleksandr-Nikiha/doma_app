@@ -25,6 +25,21 @@ admin_token_header = APIKeyHeader(
 )
 
 
+user_token_header = APIKeyHeader(
+    name="X-Auth-Token",
+    scheme_name="UserAuthToken",
+    description="Токен авторизації веб-клієнта (X-Auth-Token)",
+    auto_error=False,
+)
+
+auth_header = APIKeyHeader(
+    name="Authorization",
+    scheme_name="BearerAuth",
+    description="Bearer токен авторизації",
+    auto_error=False,
+)
+
+
 async def get_init_data(
     init_data_raw: str | None = Depends(init_data_header), settings=Depends(get_settings)
 ) -> dict:
@@ -77,23 +92,51 @@ async def require_telegram_or_staff(
 async def get_current_user(
     init_data_raw: str | None = Depends(init_data_header),
     admin_token_raw: str | None = Depends(admin_token_header),
+    user_token_raw: str | None = Depends(user_token_header),
+    bearer_raw: str | None = Depends(auth_header),
     settings=Depends(get_settings),
     pool: asyncpg.Pool = Depends(get_pool),
 ):
     """
-    Авторизує користувача через X-Admin-Token або X-Telegram-Init-Data.
-    Повертає запис користувача з бази даних.
+    Авторизує користувача через X-Admin-Token, X-Telegram-Init-Data,
+    X-Auth-Token або Bearer токен. Повертає запис користувача з бази даних.
     """
-    telegram_id: int | None = None
+    # Підтримка Authorization: Bearer <token>
+    if isinstance(bearer_raw, str) and bearer_raw.startswith("Bearer "):
+        bearer_token = bearer_raw[7:].strip()
+        if bearer_token.startswith("u1."):
+            user_token_raw = bearer_token
+        elif bearer_token.startswith("v1."):
+            admin_token_raw = bearer_token
 
-    if admin_token_raw:
+    # 1. Токен користувача веб-додатку (u1.user_id...)
+    if isinstance(user_token_raw, str):
+        from src.auth.admin_token import verify_user_token
+
+        user_id = verify_user_token(user_token_raw, settings.bot_token)
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Недійсний або прострочений токен веб-сесії (X-Auth-Token)",
+            )
+        async with pool.acquire() as conn:
+            user_row = await conn.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
+        if not user_row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Користувача не зареєстровано"
+            )
+        return user_row
+
+    # 2. Токен адміністратора (v1.telegram_id...)
+    telegram_id: int | None = None
+    if isinstance(admin_token_raw, str):
         telegram_id = verify_admin_token(admin_token_raw, settings.bot_token)
         if not telegram_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Недійсний або прострочений токен адміністратора (X-Admin-Token)",
             )
-    elif init_data_raw:
+    elif isinstance(init_data_raw, str):
         try:
             init_data = validate_init_data(init_data=init_data_raw, bot_token=settings.bot_token)
             user_data = init_data.get("user", {})
@@ -105,8 +148,13 @@ async def get_current_user(
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Відсутній заголовок авторизації (X-Telegram-Init-Data або X-Admin-Token)",
+            detail=(
+                "Відсутній заголовок авторизації "
+                "(X-Telegram-Init-Data, X-Auth-Token або X-Admin-Token)"
+            ),
         )
+
+
 
     if not telegram_id:
         raise HTTPException(

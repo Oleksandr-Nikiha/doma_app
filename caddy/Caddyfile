@@ -69,6 +69,35 @@
 		}
 	}
 
+	# Публічний сайт Doma Pizza & Sushi
+	redir /pizza /pizza/
+	redir /pizza/* /pizza/
+	handle /pizza/* {
+		reverse_proxy web-pizza:80 {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 30s
+			}
+		}
+	}
+
+	# Портал мережі DomaGroup та клубу лояльності DomaClub
+	redir /club /group/
+	redir /club/* /group/
+	redir /group /group/
+	handle /group/* {
+		reverse_proxy web-group:80 {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 30s
+			}
+		}
+	}
+
 	# Статика та SPA
 	handle {
 		# Кешування для асетів Vite (хешовані імена на кшталт app.a1b2c3d4.js — незмінні)

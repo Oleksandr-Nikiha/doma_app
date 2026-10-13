@@ -61,7 +61,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     extraPerUnit: number;
   }) => {
     // Формуємо унікальний ключ позиції
-    const optionIds = selectedOptions.map((o) => o.option.variant_id).sort().join("_");
+    const optionIds = selectedOptions
+      .map((o) => `${o.option.variant_id}x${o.qty || 1}`)
+      .sort()
+      .join("_");
     const itemKey = `${variant.id}:${optionIds}`;
 
     setItems((prev) => {

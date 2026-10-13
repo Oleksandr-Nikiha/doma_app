@@ -57,8 +57,12 @@ export function App() {
 
   // Scrollspy & Плавний скрол
   const {
+    selectedCategoryId,
     activeNavId,
+    activeSubcategoryId,
     showScrollTop,
+    handleSelectCategory,
+    handleSelectSubcategory,
     handleSelectNav,
     handleScrollToMenu,
     scrollToTop,
@@ -147,13 +151,7 @@ export function App() {
   };
 
   const handleOpenCheckout = () => {
-    if (!isAuthenticated) {
-      setIsCartOpen(false);
-      setAuthReason("checkout");
-      setPendingCheckoutAfterAuth(true);
-      setIsCabinetOpen(true);
-      return;
-    }
+    setIsCartOpen(false);
     setIsCheckoutOpen(true);
   };
 
@@ -203,7 +201,7 @@ export function App() {
     window.history.replaceState({}, "", url.toString());
   };
 
-  const handleOrderCreatedSuccess = (order: OrderOut) => {
+  const handleOrderCreatedSuccess = (order: OrderOut, createdProfile?: UserProfile) => {
     setLastOrderId(order.id);
     setTrackingOrderId(order.id);
     setInitialTrackingOrder(order);
@@ -212,6 +210,18 @@ export function App() {
 
     if (order.contact_name) {
       setUserName(order.contact_name);
+    }
+
+    if (createdProfile) {
+      setUserProfile(createdProfile);
+    } else {
+      try {
+        const saved = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
+        if (saved) {
+          const parsed: UserProfile = JSON.parse(saved);
+          setUserProfile(parsed);
+        }
+      } catch {}
     }
 
     const url = new URL(window.location.href);
@@ -286,11 +296,17 @@ export function App() {
   }, [filteredProductsByCategory, normalizedSearch]);
 
   const visibleCategories = useMemo(() => {
-    if (!normalizedSearch) return rootCategories;
-    return rootCategories.filter(
-      (cat) => (filteredProductsByCategory[cat.id]?.length || 0) > 0,
-    );
-  }, [rootCategories, filteredProductsByCategory, normalizedSearch]);
+    if (normalizedSearch) {
+      return rootCategories.filter(
+        (cat) => (filteredProductsByCategory[cat.id]?.length || 0) > 0,
+      );
+    }
+    if (selectedCategoryId === "all") {
+      return rootCategories;
+    }
+    const found = rootCategories.find((cat) => cat.id === selectedCategoryId);
+    return found ? [found] : rootCategories.slice(0, 1);
+  }, [rootCategories, filteredProductsByCategory, normalizedSearch, selectedCategoryId]);
 
   return (
     <div id="top" className="min-h-screen flex flex-col bg-[#FAF7F2]">
@@ -316,16 +332,22 @@ export function App() {
       {rootCategories.length > 0 && (
         <CategoryNav
           categories={categories}
+          selectedCategoryId={selectedCategoryId}
           activeNavId={activeNavId}
+          activeSubcategoryId={activeSubcategoryId}
+          onSelectCategory={handleSelectCategory}
           onSelectNav={handleSelectNav}
+          onSelectSubcategory={handleSelectSubcategory}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          productsByCategory={filteredProductsByCategory}
         />
       )}
 
       {/* Секція Меню з каталогом та пошуком */}
       <MenuSection
         categories={visibleCategories}
+        allCategories={categories}
         productsByCategory={filteredProductsByCategory}
         loading={loading}
         searchQuery={searchQuery}

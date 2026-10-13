@@ -16,6 +16,7 @@ interface ProfileSettingsTabProps {
   activeOrdersCount: number;
   streetsList: DeliveryAddress[];
   onOpenOrders: () => void;
+  onOpenLoyalty?: () => void;
   onSaveProfile: (updated: UserProfile) => void;
   onLogout: () => void;
   onOpenPhoneAuth?: () => void;
@@ -29,6 +30,7 @@ export function ProfileSettingsTab({
   activeOrdersCount,
   streetsList,
   onOpenOrders,
+  onOpenLoyalty,
   onSaveProfile,
   onLogout,
   onOpenPhoneAuth,
@@ -460,11 +462,27 @@ export function ProfileSettingsTab({
 
       {/* Секція 3: Картка клієнта (Ідентично до TG WebApp) */}
       <section className="space-y-2">
-        <p className="text-xs font-bold uppercase tracking-wider text-[#8D7B6D] px-1">
-          Картка клієнта
-        </p>
+        <div className="flex items-center justify-between px-1">
+          <p className="text-xs font-bold uppercase tracking-wider text-[#8D7B6D]">
+            Картка клієнта
+          </p>
+          {onOpenLoyalty && (
+            <button
+              type="button"
+              onClick={onOpenLoyalty}
+              className="text-xs text-[#9C5B23] hover:underline font-bold cursor-pointer"
+            >
+              Про бонуси →
+            </button>
+          )}
+        </div>
 
-        <div className="relative overflow-hidden rounded-3xl p-5 shadow-lg bg-gradient-to-br from-[#2C1E14] via-[#4A3B32] to-[#2C1E14] text-white border border-[#5A4535]">
+        <div
+          onClick={onOpenLoyalty}
+          className={`relative overflow-hidden rounded-3xl p-5 shadow-lg bg-gradient-to-br from-[#2C1E14] via-[#4A3B32] to-[#2C1E14] text-white border border-[#5A4535] ${
+            onOpenLoyalty ? "cursor-pointer hover:border-[#E29E57]/60 transition-all active:scale-[0.99]" : ""
+          }`}
+        >
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2">

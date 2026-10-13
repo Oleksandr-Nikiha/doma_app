@@ -61,7 +61,7 @@ async def _fetch_cart(conn_or_pool: asyncpg.Connection | asyncpg.Pool, telegram_
     Підтримує як asyncpg.Connection, так і asyncpg.Pool для уникнення зайвих циклів acquire/release.
     """
     items_query = """
-        SELECT ci.id, p.id AS product_id, p.name AS product_name,
+        SELECT ci.id, ci.variant_id, p.id AS product_id, p.name AS product_name,
                pv.label AS variant_label, pv.weight, pv.price, ci.qty,
                loc.id AS location_id, loc.name AS location_name
         FROM cart_items ci
@@ -145,6 +145,7 @@ async def _fetch_cart(conn_or_pool: asyncpg.Connection | asyncpg.Pool, telegram_
             CartItemOut(
                 id=item["id"],
                 product_id=item["product_id"],
+                variant_id=item.get("variant_id"),
                 product_name=item["product_name"],
                 variant_label=item["variant_label"],
                 weight=item["weight"],
@@ -178,17 +179,16 @@ async def add_item_to_cart(
             raise HTTPException(status_code=400, detail="Дублювання опцій у запиті")
         seen_opts.add(pair)
 
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            variant = await conn.fetchrow(
-                """
+    async with pool.acquire() as conn, conn.transaction():
+        variant = await conn.fetchrow(
+            """
             SELECT p.id as product_id, p.is_available as p_avail, pv.is_available as pv_avail 
             FROM product_variants pv
             JOIN products p ON p.id = pv.product_id
             WHERE pv.id = $1
-        """,
-                payload.variant_id,
-            )
+            """,
+            payload.variant_id,
+        )
 
         if not variant:
             raise HTTPException(status_code=404, detail="Варіант не знайдено")
@@ -325,10 +325,9 @@ async def update_cart_item(
     Якщо передано лише payload.qty (без options):
     - Зберігається пропорційне масштабування раніше обраних опцій.
     """
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            item = await conn.fetchrow(
-                """
+    async with pool.acquire() as conn, conn.transaction():
+        item = await conn.fetchrow(
+            """
             SELECT ci.id, ci.cart_id, ci.qty, ci.variant_id, pv.product_id
             FROM cart_items ci
             JOIN carts c ON c.id = ci.cart_id
@@ -336,9 +335,9 @@ async def update_cart_item(
             WHERE ci.id = $1 AND c.telegram_id = $2
             FOR UPDATE OF ci
             """,
-                item_id,
-                user["telegram_id"],
-            )
+            item_id,
+            user["telegram_id"],
+        )
         if item is None:
             raise HTTPException(status_code=404, detail="Товар не знайдено в кошику")
 

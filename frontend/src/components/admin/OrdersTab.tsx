@@ -121,6 +121,27 @@ export function OrdersTab({
                       >
                         {sc.label}
                       </span>
+                      {o.source === "web_croissants" ? (
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                          style={{
+                            background: "rgba(200, 130, 62, 0.15)",
+                            color: "#a15914",
+                          }}
+                        >
+                          🥐 Веб-сайт
+                        </span>
+                      ) : (
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                          style={{
+                            background: "rgba(59, 130, 246, 0.15)",
+                            color: "#2563eb",
+                          }}
+                        >
+                          🤖 Telegram
+                        </span>
+                      )}
                       {o.location_name && (
                         <span className="text-[11px] opacity-60">📍 {o.location_name}</span>
                       )}

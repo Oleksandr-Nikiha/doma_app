@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { hasTelegramAuth } from "@/api/client";
 import { useAdminMe, useMe, useOrders, useUpdateProfile } from "@/api/queries";
 import { AddressSelector } from "@/components/delivery/AddressSelector";
 import { ErrorBox, ScreenTitle, Spinner } from "@/components/ui";
-import { haptic, hapticNotify, openTelegramLink } from "@/telegram/sdk";
+import {
+  closeMiniApp,
+  haptic,
+  hapticNotify,
+  openTelegramLink,
+  requestTelegramContact,
+} from "@/telegram/sdk";
 
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -12,6 +19,7 @@ export function ProfilePage() {
   const { data: adminMe } = useAdminMe();
   const { data: orders } = useOrders();
   const updateProfile = useUpdateProfile();
+  const [isVerifyingPhone, setIsVerifyingPhone] = useState(false);
 
   const ordersCount = orders?.length ?? 0;
   const activeOrdersCount =
@@ -67,10 +75,14 @@ export function ProfilePage() {
         <ScreenTitle>Профіль</ScreenTitle>
         <div className="app-rise space-y-4 px-4">
           <div className="app-card rounded-2xl p-5 text-center">
-            <div className="mb-3 text-4xl">👤</div>
-            <h2 className="text-lg font-bold">Гостьовий режим</h2>
+            <div className="mb-3 text-4xl">{hasTelegramAuth() ? "👋" : "👤"}</div>
+            <h2 className="text-lg font-bold">
+              {hasTelegramAuth() ? "Створіть свій профіль" : "Гостьовий режим"}
+            </h2>
             <p className="mt-2 text-xs leading-relaxed opacity-70">
-              Ви переглядаєте меню та оформлюєте замовлення як гість.
+              {hasTelegramAuth()
+                ? "Зареєструйтесь, щоб накопичувати бонуси, зберігати адреси та швидко повторювати замовлення."
+                : "Ви переглядаєте меню та оформлюєте замовлення як гість."}
             </p>
             <div
               className="mt-4 rounded-xl p-3.5 text-left text-xs"
@@ -84,16 +96,34 @@ export function ProfilePage() {
                 <li>Миттєві сповіщення про статус у боті</li>
               </ul>
             </div>
-            <a
-              href="https://t.me"
-              target="_blank"
-              rel="noreferrer"
-              className="app-press mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white transition-transform active:scale-98"
-              style={{ background: "var(--tg-theme-button-color)" }}
-            >
-              <span>Відкрити у боті Telegram</span>
-              <span>↗</span>
-            </a>
+            {hasTelegramAuth() ? (
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("light");
+                  navigate("/register");
+                }}
+                className="app-press mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold shadow-md transition-transform active:scale-98"
+                style={{
+                  background: "var(--tg-theme-button-color)",
+                  color: "var(--tg-theme-button-text-color)",
+                }}
+              >
+                <span>Зареєструватися</span>
+                <span>→</span>
+              </button>
+            ) : (
+              <a
+                href="https://t.me"
+                target="_blank"
+                rel="noreferrer"
+                className="app-press mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white transition-transform active:scale-98"
+                style={{ background: "var(--tg-theme-button-color)" }}
+              >
+                <span>Відкрити у боті Telegram</span>
+                <span>↗</span>
+              </a>
+            )}
           </div>
         </div>
       </div>
@@ -328,28 +358,69 @@ export function ProfilePage() {
 
               {!user.is_phone_verified && (
                 <div
-                  className="rounded-2xl p-3.5 text-xs leading-relaxed border space-y-2 mt-2"
+                  className="rounded-2xl p-3.5 text-xs leading-relaxed border space-y-2.5 mt-2"
                   style={{
                     background: "color-mix(in srgb, #f59e0b 8%, var(--app-surface))",
                     borderColor: "color-mix(in srgb, #f59e0b 25%, transparent)",
                   }}
                 >
                   <p className="opacity-80">
-                    Номер не верифіковано. Ви можете змінити його вище та зберегти профіль, або підтвердити поточний номер через наш Telegram-бот.
+                    Номер не верифіковано. Ви можете підтвердити його в 1 клік через Telegram або перейти в чат бота.
                   </p>
+                  <button
+                    type="button"
+                    disabled={isVerifyingPhone}
+                    onClick={async () => {
+                      haptic("light");
+                      setIsVerifyingPhone(true);
+                      try {
+                        const contactResult = await requestTelegramContact();
+                        if (contactResult) {
+                          hapticNotify("success");
+                          await refetch();
+                          setTimeout(() => {
+                            void refetch();
+                          }, 600);
+                          return;
+                        }
+                        if (contactResult === false) {
+                          // Користувач скасував нативне вікно запиту контакту
+                          return;
+                        }
+                      } catch (e) {
+                        console.warn("requestTelegramContact error:", e);
+                      } finally {
+                        setIsVerifyingPhone(false);
+                      }
+
+                      // Fallback: якщо нативний метод не підтримується — відкриваємо чат і закриваємо Mini App
+                      const botUsername = user.bot_username || "ncoffee_app_tst_bot";
+                      const verifyUrl = `https://t.me/${botUsername}?start=verify_phone`;
+                      openTelegramLink(verifyUrl);
+                      setTimeout(() => {
+                        closeMiniApp();
+                      }, 100);
+                    }}
+                    className="app-press flex items-center justify-center gap-1.5 w-full rounded-xl py-2.5 px-3 text-xs font-bold text-white transition shadow-sm disabled:opacity-50"
+                    style={{ background: "var(--tg-theme-button-color)" }}
+                  >
+                    <span>📱</span>
+                    <span>{isVerifyingPhone ? "Очікування підтвердження..." : "Підтвердити номер телефону"}</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
                       haptic("light");
-                      const botUsername = user.bot_username || "domapizza_bot";
+                      const botUsername = user.bot_username || "ncoffee_app_tst_bot";
                       const verifyUrl = `https://t.me/${botUsername}?start=verify_phone`;
                       openTelegramLink(verifyUrl);
+                      setTimeout(() => {
+                        closeMiniApp();
+                      }, 100);
                     }}
-                    className="app-press flex items-center justify-center gap-1.5 w-full rounded-xl py-2.5 px-3 text-xs font-bold text-white transition shadow-sm"
-                    style={{ background: "var(--tg-theme-button-color)" }}
+                    className="app-press text-[11px] underline opacity-70 hover:opacity-100 block mx-auto text-center pt-0.5"
                   >
-                    <span>📱</span>
-                    <span>Підтвердити телефон у боті →</span>
+                    Або відкрити чат з ботом →
                   </button>
                 </div>
               )}

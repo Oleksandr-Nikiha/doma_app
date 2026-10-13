@@ -1,8 +1,11 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { retrieveLaunchParams } from "@telegram-apps/sdk-react";
 
 import { useRegister } from "@/api/queries";
+import type { User } from "@/api/types";
 import { AddressSelector } from "@/components/delivery/AddressSelector";
+import { useBackButton } from "@/hooks/useBackButton";
 import { hapticNotify } from "@/telegram/sdk";
 
 /** Ім'я з Telegram — як підказка в полі; користувач може змінити. */
@@ -15,7 +18,20 @@ function telegramFullName(): string {
   }
 }
 
-export function RegisterPage() {
+export interface RegisterPageProps {
+  onRegistered?: (user?: User) => void;
+}
+
+export function RegisterPage({ onRegistered }: RegisterPageProps = {}) {
+  const navigate = useNavigate();
+  useBackButton(() => {
+    if (onRegistered) {
+      navigate(-1);
+    } else {
+      navigate("/");
+    }
+  });
+
   const register = useRegister();
   const [fullName, setFullName] = useState(telegramFullName);
   const [phone, setPhone] = useState("");
@@ -40,7 +56,17 @@ export function RegisterPage() {
             phone: phone.trim(),
             delivery_address: address.trim() || null,
           },
-          { onError: () => hapticNotify("error"), onSuccess: () => hapticNotify("success") },
+          {
+            onError: () => hapticNotify("error"),
+            onSuccess: (registeredUser) => {
+              hapticNotify("success");
+              if (onRegistered) {
+                onRegistered(registeredUser);
+              } else {
+                navigate("/");
+              }
+            },
+          },
         );
       }}
     >

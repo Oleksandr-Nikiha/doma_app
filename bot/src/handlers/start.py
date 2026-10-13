@@ -124,6 +124,16 @@ async def _process_admin_auth(message: Message, payload: str) -> bool:
 
 
 async def _prompt_phone_verification(message: Message) -> None:
+    settings = get_settings()
+    user = await get_user_by_telegram_id(message.from_user.id)
+    if user and user.get("is_phone_verified"):
+        await message.answer(
+            f"✅ <b>Ваш номер телефону вже верифіковано:</b> <code>{user['phone']}</code>\n\n"
+            "Ви вже можете відкрити меню та оформлювати замовлення.",
+            reply_markup=_open_app_keyboard(settings.mini_app_url),
+        )
+        return
+
     kb = ReplyKeyboardMarkup(
         keyboard=[
             [
@@ -154,7 +164,7 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
         handled = await _process_admin_auth(message, command.args)
         if handled:
             return
-        if command.args in ("verify_phone", "verify"):
+        if command.args.strip() in ("verify_phone", "verify"):
             await _prompt_phone_verification(message)
             return
 

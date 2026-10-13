@@ -6,15 +6,16 @@ import {
   fetchWebOrdersHistory,
   fetchWebProfile,
   updateWebProfile,
-  type UserOut,
 } from "../../api/client.ts";
 import { useCart } from "../../context/CartContext.tsx";
 import type { DeliveryAddress, ProductVariant } from "../../types/catalog.ts";
 import type { OrderOut } from "../../types/order.ts";
 import { isUserAuthenticated, USER_PROFILE_STORAGE_KEY, type UserProfile } from "../../types/user.ts";
+import { useModalBehavior } from "../../hooks/useModalBehavior.ts";
 import { CUSTOMER_STORAGE_KEY, type SavedCustomer } from "../CheckoutModal.tsx";
 import { ORDERS_HISTORY_STORAGE_KEY } from "../OrderTrackingModal.tsx";
 import { UserAvatar } from "../ui/UserAvatar.tsx";
+import { LoyaltyBonusTab } from "./LoyaltyBonusTab.tsx";
 import { OrdersHistoryTab } from "./OrdersHistoryTab.tsx";
 import { PhoneAuthView } from "./PhoneAuthView.tsx";
 import { ProfileSettingsTab } from "./ProfileSettingsTab.tsx";
@@ -41,8 +42,10 @@ export function UserCabinetModal({
   authReason = null,
   onAuthSuccess,
 }: UserCabinetModalProps) {
+  useModalBehavior({ isOpen, onClose });
+
   const { addItem } = useCart();
-  const [currentView, setCurrentView] = useState<"profile" | "orders" | "auth">("auth");
+  const [currentView, setCurrentView] = useState<"profile" | "orders" | "auth" | "loyalty">("auth");
   const [profile, setProfile] = useState<UserProfile>({
     name: "",
     phone: "",
@@ -319,31 +322,6 @@ export function UserCabinetModal({
     }
   };
 
-  const handlePhoneAuthSuccess = (userOut: UserOut) => {
-    const updatedProfile: UserProfile = {
-      ...profile,
-      name: userOut.full_name || profile.name,
-      first_name: userOut.first_name || undefined,
-      last_name: userOut.last_name || undefined,
-      phone: userOut.phone || profile.phone,
-      telegram_id: userOut.telegram_id || profile.telegram_id,
-      bonuses: Math.max(profile.bonuses, userOut.bonus_balance || 50),
-      client_code: userOut.client_code || `DM-${userOut.telegram_id || userOut.id}`,
-      is_phone_verified: userOut.is_phone_verified,
-      isAuthenticated: true,
-    };
-    if (userOut.delivery_address && !profile.street) {
-      updatedProfile.street = userOut.delivery_address;
-    }
-    handleSaveProfile(updatedProfile);
-    if (onAuthSuccess) {
-      onAuthSuccess(updatedProfile);
-    } else {
-      setCurrentView("profile");
-      void loadOrders(updatedProfile.phone, updatedProfile.telegram_id, false);
-    }
-  };
-
   const handleDisconnectTelegram = () => {
     const updated: UserProfile = {
       ...profile,
@@ -466,6 +444,8 @@ export function UserCabinetModal({
                     : "Вхід до кабінету"
                   : currentView === "orders"
                   ? "Мої замовлення"
+                  : currentView === "loyalty"
+                  ? "Програма лояльності"
                   : currentView === "auth"
                   ? "Авторизація"
                   : profile.name
@@ -478,6 +458,8 @@ export function UserCabinetModal({
                     ? authReason === "checkout"
                       ? "Авторизуйтесь, щоб оформити замовлення"
                       : "Авторизуйтесь для перегляду профілю"
+                    : currentView === "loyalty"
+                    ? "Бонуси та клубні переваги Doma"
                     : profile.phone ? profile.phone : "Профіль клієнта Doma"}
                 </p>
                 {isAuthenticated && profile.telegram_id && (
@@ -509,7 +491,6 @@ export function UserCabinetModal({
           {!isAuthenticated || currentView === "auth" ? (
             <PhoneAuthView
               authReason={authReason}
-              onSuccess={handlePhoneAuthSuccess}
               onTelegramAuth={handleTelegramAuth}
               onCancel={isAuthenticated ? () => setCurrentView("profile") : undefined}
             />
@@ -524,6 +505,8 @@ export function UserCabinetModal({
               }}
               onRefresh={() => void loadOrders(profile.phone, profile.telegram_id, false)}
             />
+          ) : currentView === "loyalty" ? (
+            <LoyaltyBonusTab bonuses={profile.bonuses ?? 50} phone={profile.phone} />
           ) : (
             <ProfileSettingsTab
               profile={profile}
@@ -531,6 +514,7 @@ export function UserCabinetModal({
               activeOrdersCount={activeOrdersCount}
               streetsList={streetsList}
               onOpenOrders={() => setCurrentView("orders")}
+              onOpenLoyalty={() => setCurrentView("loyalty")}
               onSaveProfile={handleSaveProfile}
               onLogout={handleLogout}
               onOpenPhoneAuth={() => setCurrentView("auth")}
@@ -551,6 +535,8 @@ export function UserCabinetModal({
                 </span>
                 Авто-оновлення статусів активне
               </span>
+            ) : currentView === "loyalty" ? (
+              <span>1 бонус = 1 ₴ знижки на замовлення</span>
             ) : (
               <span>Doma Croissants • м. Вишгород</span>
             )}

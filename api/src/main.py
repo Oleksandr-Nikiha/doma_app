@@ -1,9 +1,11 @@
 import asyncio
 import logging
+import mimetypes
 import os
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
+import asyncpg
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
@@ -23,6 +25,9 @@ from src.routers import (
 )
 from src.services.cache import invalidate_catalog_cache
 
+mimetypes.add_type("image/webp", ".webp")
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -41,15 +46,59 @@ async def _periodic_cleanup_task() -> None:
         await asyncio.sleep(86400)
 
 
+async def _catalog_notification_listener_task() -> None:
+    """
+    Слухає PostgreSQL NOTIFY канал 'catalog_cache_invalidate' і миттєво
+    інвалідує кеш Redis при будь-яких змінах у каталозі (включно зі змінами через Directus CMS).
+    """
+    settings = get_settings()
+    while True:
+        conn = None
+        try:
+            conn = await asyncpg.connect(settings.database_url)
+
+            async def _on_notification(connection, pid, channel, payload):
+                logger.info(
+                    "⚡ Отримано pg_notify(%s): автоматичне скидання Redis-кешу...",
+                    channel,
+                )
+                try:
+                    await invalidate_catalog_cache()
+                except Exception as err:
+                    logger.warning("Помилка інвалідації кешу за сигналом pg_notify: %s", err)
+
+            await conn.add_listener("catalog_cache_invalidate", _on_notification)
+            logger.info("✅ Успішно підписано на канал pg_notify 'catalog_cache_invalidate'")
+
+            while True:
+                await asyncio.sleep(60)
+                await conn.execute("SELECT 1")
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.warning(
+                "Помилка слухача pg_notify 'catalog_cache_invalidate': %s. "
+                "Перепідключення через 5с...",
+                exc,
+            )
+            await asyncio.sleep(5)
+        finally:
+            if conn and not conn.is_closed():
+                with suppress(Exception):
+                    await conn.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_db()
     await connect_redis()
     cleanup_task = asyncio.create_task(_periodic_cleanup_task())
+    cache_listener_task = asyncio.create_task(_catalog_notification_listener_task())
     yield
     cleanup_task.cancel()
+    cache_listener_task.cancel()
     with suppress(asyncio.CancelledError):
-        await cleanup_task
+        await asyncio.gather(cleanup_task, cache_listener_task, return_exceptions=True)
     from src.services.telegram_client import close_telegram_client
 
     await close_telegram_client()
@@ -116,6 +165,7 @@ class CachedStaticFiles(StaticFiles):
         if response.status_code == 200:
             response.headers["Cache-Control"] = "public, max-age=2592000, immutable"
         return response
+
 
 
 # Роздача збережених фотографій страв

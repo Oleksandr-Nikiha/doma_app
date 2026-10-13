@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
-import { ApiError } from "@/api/client";
-import { useMe } from "@/api/queries";
+import { ApiError, getAdminToken } from "@/api/client";
+import { useAdminMe, useMe } from "@/api/queries";
 import { Layout } from "@/components/Layout";
 import { ErrorBox, Spinner } from "@/components/ui";
 import { CartPage } from "@/pages/CartPage";
@@ -52,9 +52,11 @@ export function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith("/admin");
-  const { data: user, isPending, error, refetch } = useMe();
+  const { isPending, error, refetch } = useMe();
+  const { data: adminMe, isPending: isAdminMePending } = useAdminMe();
   const isTg = isTelegramWebApp();
 
+  const isStaff = Boolean(adminMe?.is_staff || getAdminToken());
   const targetOrderId = resolveTargetOrderId();
 
   useEffect(() => {
@@ -64,11 +66,23 @@ export function App() {
       return;
     }
 
+    if (isAdminMePending && isTg) {
+      return;
+    }
+
     const checkAndRedirect = () => {
       const orderId = resolveTargetOrderId();
-      if (orderId && !location.pathname.startsWith("/admin")) {
+      if (
+        orderId &&
+        !location.pathname.startsWith("/admin") &&
+        location.pathname !== `/orders/${orderId}/success`
+      ) {
         markStartParamConsumed();
-        navigate(`/admin?order_id=${orderId}`, { replace: true });
+        if (isStaff) {
+          navigate(`/admin?order_id=${orderId}`, { replace: true });
+        } else {
+          navigate(`/orders/${orderId}/success`, { replace: true });
+        }
         return true;
       }
       return false;
@@ -91,23 +105,27 @@ export function App() {
       clearInterval(interval);
       clearTimeout(timeout);
     };
-  }, [location.pathname, navigate]);
+  }, [location.pathname, navigate, isStaff, isAdminMePending, isTg]);
 
-  // Якщо передано ID замовлення (через startapp або order_id), одразу ведемо в адмінку
-  if (targetOrderId && !isAdminRoute) {
+  // Якщо передано ID замовлення (через startapp або order_id), ведемо в адмінку (для персоналу) або на екран відстеження (для клієнта)
+  if (
+    targetOrderId &&
+    !isAdminRoute &&
+    location.pathname !== `/orders/${targetOrderId}/success` &&
+    (!isAdminMePending || !isTg)
+  ) {
     markStartParamConsumed();
-    return <Navigate to={`/admin?order_id=${targetOrderId}`} replace />;
+    return (
+      <Navigate
+        to={isStaff ? `/admin?order_id=${targetOrderId}` : `/orders/${targetOrderId}/success`}
+        replace
+      />
+    );
   }
 
-  // Тільки Admin панель доступна з браузерів десктопу / поза Telegram.
-  // Меню та клієнтська частина доступні виключно з додатку Telegram або Telegram Web фрейму.
-  if (!isTg && !isAdminRoute) {
-    return <Navigate to="/admin" replace />;
-  }
-
-  // Для адмін-панелі (/admin, /admin/login) не показуємо онбординг клієнта
+  // Для адмін-панелі (/admin, /admin/login) не показуємо онбординг або блокувальні екрани клієнта
   if (!isAdminRoute) {
-    if (isPending) return <Spinner />;
+    if (isPending && isTg) return <Spinner />;
 
     // 401 означає, що бекенд не визнав підпис initData всередині Telegram.
     if (isTg && error instanceof ApiError && error.status === 401) {
@@ -127,9 +145,6 @@ export function App() {
     if (error && !(error instanceof ApiError && error.status === 401)) {
       return <ErrorBox message={error.message} onRetry={() => void refetch()} />;
     }
-
-    // Усередині Telegram, якщо нового користувача ще немає в БД — показуємо онбординг
-    if (isTg && !user) return <RegisterPage />;
   }
 
   return (
@@ -142,7 +157,7 @@ export function App() {
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/orders" element={<OrdersPage />} />
       </Route>
-      {/* Картка товару, чекаут, екран успіху та адмінка — без клієнтської нижньої панелі */}
+      {/* Картка товару, чекаут, реєстрація, екран успіху та адмінка — без клієнтської нижньої панелі */}
       <Route
         path="/admin/login"
         element={
@@ -159,10 +174,11 @@ export function App() {
           </Suspense>
         }
       />
+      <Route path="/register" element={<RegisterPage />} />
       <Route path="/products/:productId" element={<ProductPage />} />
       <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/orders/:orderId/success" element={<OrderSuccessPage />} />
-      <Route path="*" element={<Navigate to={isTg ? "/" : "/admin"} replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

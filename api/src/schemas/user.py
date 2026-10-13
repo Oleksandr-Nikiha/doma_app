@@ -60,3 +60,4 @@ class UserOut(BaseModel):
     client_code: str | None = None
     bonus_balance: int = 0
     bot_username: str | None = None
+    auth_token: str | None = None

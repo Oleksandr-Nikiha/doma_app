@@ -518,3 +518,63 @@ class TestOrderHistoryAndDetailsApi:
         assert data["total_price"] == 240.0
         assert data["source"] == "web_croissants"
         assert data["groups"][0]["location_name"] == "Doma Croissants"
+
+    async def test_get_web_orders_history_batch(self, async_client, mock_db_conn):
+        """Тестування отримання історії веб-замовлень без N+1 проблеми."""
+        mock_db_conn.fetch.side_effect = [
+            # 1. orders
+            [
+                {
+                    "id": 301,
+                    "telegram_id": None,
+                    "status": "confirmed",
+                    "fulfillment_type": "pickup",
+                    "delivery_address": None,
+                    "contact_name": "Марія",
+                    "contact_phone": "+380931234567",
+                    "payment_method": "cash",
+                    "scheduled_time": None,
+                    "comment": None,
+                    "total_price": 240.0,
+                    "created_at": datetime.now(UTC),
+                    "source": "web_croissants",
+                }
+            ],
+            # 2. groups
+            [
+                {
+                    "id": 401,
+                    "order_id": 301,
+                    "location_id": 2,
+                    "location_name": "Doma Croissants",
+                    "status": "confirmed",
+                    "subtotal": 240.0,
+                }
+            ],
+            # 3. items
+            [
+                {
+                    "id": 501,
+                    "order_group_id": 401,
+                    "variant_id": 10,
+                    "product_name": "Круасан Фісташковий",
+                    "variant_label": "Стандартний",
+                    "unit_price": 120.0,
+                    "qty": 2,
+                    "subtotal": 240.0,
+                }
+            ],
+            # 4. options
+            [],
+        ]
+
+        response = await async_client.get("/api/orders/web/history?phone=%2B380931234567")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == 301
+        assert data[0]["contact_name"] == "Марія"
+        assert len(data[0]["groups"]) == 1
+        assert data[0]["groups"][0]["location_name"] == "Doma Croissants"
+        assert data[0]["groups"][0]["items"][0]["product_name"] == "Круасан Фісташковий"
+

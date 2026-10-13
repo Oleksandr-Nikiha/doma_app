@@ -5,7 +5,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.types import MenuButtonWebApp, WebAppInfo
+from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 
 from src.config import get_settings
 from src.db.connection import connect_db, disconnect_db, get_pool
@@ -31,10 +31,21 @@ async def setup_menu_button(bot: Bot, mini_app_url: str) -> None:
     )
 
 
+async def setup_bot_commands(bot: Bot) -> None:
+    """
+    Реєструє список команд боту в інтерфейсі Telegram (спливаюче меню /).
+    """
+    await bot.set_my_commands([
+        BotCommand(command="start", description="Відкрити меню та оформити замовлення"),
+        BotCommand(command="verify", description="Верифікувати номер телефону"),
+        BotCommand(command="admin", description="Вхід до панелі керування закладом"),
+    ])
+
+
 async def auto_transition_scheduled_orders(bot: Bot) -> None:
     """
     Періодично перевіряє замовлення у статусі 'confirmed' із scheduled_time.
-    Якщо залишилося <= 30 хв:
+    Якщо залишилося від -15 до 30 хв:
     - автоматично переводить замовлення у статус 'in_progress' (Готується)
     - сповіщає клієнта у Telegram
     - сповіщає групу менеджерів
@@ -53,22 +64,23 @@ async def auto_transition_scheduled_orders(bot: Bot) -> None:
                 )
                 for order in order_rows:
                     mins_left = orders.get_minutes_until_scheduled(order["scheduled_time"])
-                    if mins_left is not None and mins_left <= 30:
+                    if mins_left is not None and -15 <= mins_left <= 30:
                         order_id = order["id"]
                         logger.info(
                             "Автоперехід #%s у in_progress (залишилось %.1f хв)",
                             order_id,
                             mins_left,
                         )
-                        await conn.execute(
-                            "UPDATE orders SET status = 'in_progress', updated_at = now() "
-                            "WHERE id = $1",
-                            order_id,
-                        )
-                        await conn.execute(
-                            "UPDATE order_groups SET status = 'cooking' WHERE order_id = $1",
-                            order_id,
-                        )
+                        async with conn.transaction():
+                            await conn.execute(
+                                "UPDATE orders SET status = 'in_progress', updated_at = now() "
+                                "WHERE id = $1",
+                                order_id,
+                            )
+                            await conn.execute(
+                                "UPDATE order_groups SET status = 'cooking' WHERE order_id = $1",
+                                order_id,
+                            )
 
                         # Сповіщення клієнта
                         if order["telegram_id"]:
@@ -133,6 +145,7 @@ async def main() -> None:
     await connect_db()
     try:
         await setup_menu_button(bot, settings.mini_app_url)
+        await setup_bot_commands(bot)
         me = await bot.get_me()
         logger.info("Бот @%s запущено, Mini App: %s", me.username, settings.mini_app_url)
 

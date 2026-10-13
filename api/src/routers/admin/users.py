@@ -26,7 +26,10 @@ async def list_admin_users(
                to_char(u.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
                COUNT(o.id)::int AS orders_count
         FROM users u
-        LEFT JOIN orders o ON (u.telegram_id IS NOT NULL AND o.telegram_id = u.telegram_id) OR (u.telegram_id IS NULL AND u.phone <> '' AND o.contact_phone = u.phone)
+        LEFT JOIN orders o ON (
+            (u.telegram_id IS NOT NULL AND o.telegram_id = u.telegram_id)
+            OR (u.telegram_id IS NULL AND u.phone <> '' AND o.contact_phone = u.phone)
+        )
         WHERE (
             $1 = ''
             OR u.phone ILIKE '%' || $1 || '%'
@@ -83,7 +86,10 @@ async def update_admin_user(
                    to_char(u.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
                    COUNT(o.id)::int AS orders_count
             FROM users u
-            LEFT JOIN orders o ON (u.telegram_id IS NOT NULL AND o.telegram_id = u.telegram_id) OR (u.telegram_id IS NULL AND u.phone <> '' AND o.contact_phone = u.phone)
+            LEFT JOIN orders o ON (
+                (u.telegram_id IS NOT NULL AND o.telegram_id = u.telegram_id)
+                OR (u.telegram_id IS NULL AND u.phone <> '' AND o.contact_phone = u.phone)
+            )
             WHERE u.id = $1
             GROUP BY u.id
             """,
@@ -100,7 +106,7 @@ async def delete_admin_user(
     admin: asyncpg.Record = Depends(get_current_admin),
 ):
     """Видалення користувача (тільки для ролі admin)."""
-    async with pool.acquire() as conn:
+    async with pool.acquire() as conn, conn.transaction():
         existing = await conn.fetchrow("SELECT id, telegram_id FROM users WHERE id = $1", user_id)
         if not existing:
             raise HTTPException(status_code=404, detail="Користувача не знайдено")
@@ -109,9 +115,10 @@ async def delete_admin_user(
             raise HTTPException(status_code=400, detail="Не можна видалити власний акаунт")
 
         if existing["telegram_id"] is not None:
-            await conn.execute("DELETE FROM managers WHERE telegram_id = $1", existing["telegram_id"])
-            await conn.execute("DELETE FROM carts WHERE telegram_id = $1", existing["telegram_id"])
-            await conn.execute("DELETE FROM orders WHERE telegram_id = $1", existing["telegram_id"])
+            tg_id = existing["telegram_id"]
+            await conn.execute("DELETE FROM managers WHERE telegram_id = $1", tg_id)
+            await conn.execute("DELETE FROM carts WHERE telegram_id = $1", tg_id)
+            await conn.execute("DELETE FROM orders WHERE telegram_id = $1", tg_id)
         await conn.execute("DELETE FROM users WHERE id = $1", user_id)
 
     return {"status": "ok", "message": "Користувача успішно видалено"}

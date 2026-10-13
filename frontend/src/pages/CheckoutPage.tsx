@@ -17,6 +17,7 @@ import {
 import { useBackButton } from "@/hooks/useBackButton";
 import { isTelegramWebApp } from "@/telegram/env";
 import { haptic, hapticNotify } from "@/telegram/sdk";
+import { RegisterPage } from "@/pages/RegisterPage";
 
 export function CheckoutPage() {
   const navigate = useNavigate();
@@ -28,7 +29,7 @@ export function CheckoutPage() {
 
   const { data: cart, isPending: isCartPending } = useCart();
   const { data: locations, isPending: isLocationsPending } = useLocations();
-  const { data: user, isPending: isUserPending } = useMe();
+  const { data: user, isPending: isUserPending, refetch } = useMe();
   const createOrder = useCreateOrder();
 
   // Перевірка кількості закладів у кошику
@@ -103,24 +104,28 @@ export function CheckoutPage() {
   const [courierNote, setCourierNote] = useState("");
 
   const [userAddressesLoaded, setUserAddressesLoaded] = useState(false);
-  useEffect(() => {
-    if (user && !userAddressesLoaded) {
-      setUserAddressesLoaded(true);
-      if (user.delivery_address) {
-        setAddressSource("main");
-      } else if (user.additional_address) {
-        setAddressSource("additional");
-      } else {
-        setAddressSource("custom");
-      }
-    }
-  }, [user, userAddressesLoaded]);
-
   const [contactName, setContactName] = useState(user?.full_name ?? "");
   const [contactPhone, setContactPhone] = useState(user?.phone ?? "");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "qr">("cash");
   const [comment, setComment] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      if (!userAddressesLoaded) {
+        setUserAddressesLoaded(true);
+        if (user.delivery_address) {
+          setAddressSource("main");
+        } else if (user.additional_address) {
+          setAddressSource("additional");
+        } else {
+          setAddressSource("custom");
+        }
+      }
+      setContactName((prev) => (prev.trim() ? prev : (user.full_name ?? "")));
+      setContactPhone((prev) => (prev.trim() ? prev : (user.phone ?? "")));
+    }
+  }, [user, userAddressesLoaded]);
 
   // Якщо доставка тимчасово вимкнена через навантаження — перемикаємо на самовивіз
   useEffect(() => {
@@ -141,6 +146,23 @@ export function CheckoutPage() {
 
   if (isCartPending || isLocationsPending || isUserPending) {
     return <Spinner />;
+  }
+
+  if (isTelegramWebApp() && !user) {
+    return (
+      <RegisterPage
+        onRegistered={(newUser) => {
+          if (newUser) {
+            setContactName(newUser.full_name || "");
+            setContactPhone(newUser.phone || "");
+            if (newUser.delivery_address) {
+              setAddressSource("main");
+            }
+          }
+          void refetch();
+        }}
+      />
+    );
   }
 
   // Якщо в кошику страви з різних закладів, а користувач зайшов без конкретного locationId
@@ -281,6 +303,11 @@ export function CheckoutPage() {
               : `${scheduledDate} ${scheduledTime}`
             : null,
         comment: comment.trim() || null,
+        items: locationItems.map((item) => ({
+          variant_id: item.variant_id ?? 0,
+          qty: item.qty,
+          option_variant_ids: item.options.flatMap((o) => Array(o.qty).fill(o.variant_id)),
+        })),
       },
       {
         onSuccess: (order) => {

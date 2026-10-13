@@ -9,8 +9,11 @@ import type { OrderOut, WebOrderCreatePayload } from "../types/order.ts";
 
 export const CROISSANTS_LOCATION_ID = 2;
 
+export const DEFAULT_PRODUCT_IMAGE =
+  "https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=600&q=80";
+
 export function getImageUrl(path: string | null | undefined): string {
-  if (!path) return "https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=600&q=80";
+  if (!path) return DEFAULT_PRODUCT_IMAGE;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
   if (path.startsWith("/")) return path;
   return `/${path}`;
@@ -175,55 +178,5 @@ export async function updateWebProfile(payload: WebProfileUpdatePayload): Promis
   return res.json();
 }
 
-export async function requestPhoneCode(phone: string): Promise<{
-  status: string;
-  message: string;
-  code?: string;
-  sent_to_telegram: boolean;
-}> {
-  const res = await fetch("/api/auth/phone-code", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone }),
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || "Не вдалося відправити код підтвердження");
-  }
-  return res.json();
-}
-
-export async function loginWithPhone(payload: {
-  phone: string;
-  password?: string;
-  code?: string;
-}): Promise<UserOut> {
-  const res = await fetch("/api/auth/phone-login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || "Не вдалося увійти");
-  }
-  return res.json();
-}
-
-export async function setPhonePassword(payload: {
-  phone: string;
-  password: string;
-}): Promise<UserOut> {
-  const res = await fetch("/api/auth/phone-set-password", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || "Не вдалося зберегти пароль");
-  }
-  return res.json();
-}
 
 

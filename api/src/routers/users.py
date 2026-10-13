@@ -1,19 +1,15 @@
 import logging
-import secrets
-from datetime import UTC, datetime
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from src.auth.deps import get_current_user, get_init_data
-from src.auth.password import hash_password, verify_password
 from src.auth.telegram_widget import validate_telegram_widget_data
 from src.config import get_settings
 from src.db.connection import get_pool
 from src.middleware.rate_limiter import rate_limiter
 from src.schemas.user import RegisterIn, UserOut, UserUpdateIn
-from src.services.telegram_client import send_telegram_message
 
 logger = logging.getLogger(__name__)
 
@@ -30,22 +26,12 @@ class TelegramWidgetAuthIn(BaseModel):
     hash: str
 
 
-class PhoneLoginIn(BaseModel):
-    phone: str
-    password: str | None = None
-    code: str | None = None
 
-
-class PhoneCodeRequestIn(BaseModel):
-    phone: str
-
-
-class PhoneSetPasswordIn(BaseModel):
-    phone: str
-    password: str
-
-
-def _user_to_out(row: asyncpg.Record | dict, bot_token: str | None = None) -> UserOut:
+def _user_to_out(
+    row: asyncpg.Record | dict,
+    bot_token: str | None = None,
+    generate_token: bool = False,
+) -> UserOut:
     d = dict(row)
     if not d.get("first_name"):
         parts = (d.get("full_name") or "").split(" ", 1)
@@ -60,7 +46,12 @@ def _user_to_out(row: asyncpg.Record | dict, bot_token: str | None = None) -> Us
     d["bot_username"] = (
         getattr(settings, "bot_username", "ncoffee_app_tst_bot") or "ncoffee_app_tst_bot"
     )
+    if generate_token and d.get("id") and settings.bot_token:
+        from src.auth.admin_token import create_user_token
+
+        d["auth_token"] = create_user_token(d["id"], settings.bot_token)
     return UserOut(**d)
+
 
 
 @router.post("/auth/telegram-widget", response_model=UserOut)
@@ -131,7 +122,7 @@ async def auth_telegram_widget(
                 """,
                 telegram_id,
             )
-            return _user_to_out(existing, settings.bot_token)
+            return _user_to_out(existing, settings.bot_token, generate_token=True)
 
         new_row = await conn.fetchrow(
             """
@@ -147,7 +138,8 @@ async def auth_telegram_widget(
             first_name,
             last_name,
         )
-        return _user_to_out(new_row, settings.bot_token)
+        return _user_to_out(new_row, settings.bot_token, generate_token=True)
+
 
 
 @router.post("/register", response_model=UserOut)
@@ -477,200 +469,4 @@ async def update_web_profile(
 
 
 
-@router.post("/auth/phone-code")
-async def request_phone_code(
-    payload: PhoneCodeRequestIn,
-    pool: asyncpg.Pool = Depends(get_pool),
-    settings=Depends(get_settings),
-):
-    """
-    Генерує 4-значний код для підтвердження номера телефону та входу.
-    Якщо користувач має прив'язаний Telegram, код також надсилається ботом у приватні повідомлення.
-    """
-    from src.schemas.user import normalize_phone
 
-    try:
-        norm_phone = normalize_phone(payload.phone)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    code = f"{secrets.randbelow(9000) + 1000}"
-
-    async with pool.acquire() as conn:
-        existing = await conn.fetchrow(
-            "SELECT id, telegram_id FROM users WHERE phone = $1", norm_phone
-        )
-        if existing:
-            await conn.execute(
-                """
-                UPDATE users
-                SET phone_code = $1,
-                    phone_code_expires_at = now() + interval '10 minutes',
-                    updated_at = now()
-                WHERE id = $2
-                """,
-                code,
-                existing["id"],
-            )
-            tg_id = existing["telegram_id"]
-        else:
-            await conn.execute(
-                """
-                INSERT INTO users (phone, full_name, phone_code, phone_code_expires_at)
-                VALUES ($1, 'Клієнт', $2, now() + interval '10 minutes')
-                """,
-                norm_phone,
-                code,
-            )
-            tg_id = None
-
-    if tg_id and settings.bot_token:
-        try:
-            await send_telegram_message(
-                settings.bot_token,
-                tg_id,
-                f"🔐 Ваш код для входу в особистий кабінет Doma: <b>{code}</b> "
-                "(дійсний 10 хвилин).",
-            )
-        except Exception as e:
-            logger.warning("Не вдалося надіслати код у TG: %s", e)
-
-    return {
-        "status": "ok",
-        "message": "Код підтвердження сформовано",
-        "code": code,
-        "sent_to_telegram": bool(tg_id),
-    }
-
-
-@router.post("/auth/phone-login", response_model=UserOut)
-async def login_with_phone(
-    payload: PhoneLoginIn,
-    pool: asyncpg.Pool = Depends(get_pool),
-    settings=Depends(get_settings),
-):
-    """
-    Авторизація клієнта за номером телефону та паролем (або одноразовим кодом / PIN).
-    """
-    from src.schemas.user import normalize_phone
-
-    try:
-        norm_phone = normalize_phone(payload.phone)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    async with pool.acquire() as conn:
-        user = await conn.fetchrow(
-            """
-            SELECT id, telegram_id, full_name, first_name, last_name, phone,
-                   delivery_address, additional_address, is_phone_verified,
-                   password_hash, phone_code, phone_code_expires_at
-            FROM users
-            WHERE phone = $1
-            """,
-            norm_phone,
-        )
-        if not user:
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    "Користувача з таким номером телефону не знайдено. "
-                    "Будь ласка, оформіть замовлення або увійдіть через Telegram."
-                ),
-            )
-
-        # Перевірка через одноразовий код
-        if payload.code:
-            clean_code = payload.code.strip()
-            if not user["phone_code"] or user["phone_code"] != clean_code:
-                raise HTTPException(status_code=400, detail="Невірний код підтвердження")
-            if user["phone_code_expires_at"] and user["phone_code_expires_at"] < datetime.now(
-                UTC
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Термін дії коду вичерпано. Запитайте новий код.",
-                )
-            await conn.execute(
-                """
-                UPDATE users
-                SET phone_code = NULL,
-                    phone_code_expires_at = NULL,
-                    is_phone_verified = true,
-                    updated_at = now()
-                WHERE id = $1
-                """,
-                user["id"],
-            )
-            updated_user = await conn.fetchrow("SELECT * FROM users WHERE id = $1", user["id"])
-            return _user_to_out(updated_user, settings.bot_token)
-
-        # Перевірка через пароль / PIN
-        if payload.password:
-            clean_pwd = payload.password.strip()
-            valid = False
-            if user["password_hash"]:
-                valid = verify_password(clean_pwd, user["password_hash"])
-            elif clean_pwd in ("1234", "0000"):
-                valid = True
-                await conn.execute(
-                    "UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2",
-                    hash_password(clean_pwd),
-                    user["id"],
-                )
-
-            if not valid:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        "Невірний пароль. Якщо ви забули пароль, скористайтеся входом "
-                        "за кодом або через Telegram."
-                    ),
-                )
-
-            return _user_to_out(user, settings.bot_token)
-
-        raise HTTPException(
-            status_code=400,
-            detail="Вкажіть пароль або код підтвердження для входу.",
-        )
-
-
-@router.post("/auth/phone-set-password", response_model=UserOut)
-async def set_phone_password(
-    payload: PhoneSetPasswordIn,
-    pool: asyncpg.Pool = Depends(get_pool),
-    settings=Depends(get_settings),
-):
-    """
-    Встановлення або зміна пароля для входу за номером телефону.
-    """
-    from src.schemas.user import normalize_phone
-
-    try:
-        norm_phone = normalize_phone(payload.phone)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    pwd = payload.password.strip()
-    if len(pwd) < 4:
-        raise HTTPException(status_code=400, detail="Пароль має містити щонайменше 4 символи")
-
-    pwd_hash = hash_password(pwd)
-    async with pool.acquire() as conn:
-        user = await conn.fetchrow(
-            """
-            UPDATE users
-            SET password_hash = $1,
-                updated_at = now()
-            WHERE phone = $2
-            RETURNING id, telegram_id, full_name, first_name, last_name, phone,
-                      delivery_address, additional_address, is_phone_verified
-            """,
-            pwd_hash,
-            norm_phone,
-        )
-        if not user:
-            raise HTTPException(status_code=404, detail="Користувача з таким номером не знайдено")
-
-    return _user_to_out(user, settings.bot_token)

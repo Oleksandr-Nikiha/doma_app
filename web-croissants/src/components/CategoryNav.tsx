@@ -1,25 +1,41 @@
-import { useEffect, useRef } from "react";
-import type { Category } from "../types/catalog.ts";
+import { useEffect, useMemo, useRef } from "react";
+import type { Category, ProductListItem } from "../types/catalog.ts";
 
 interface CategoryNavProps {
   categories: Category[];
+  selectedCategoryId: number | "all";
   activeNavId: string | number | null;
+  activeSubcategoryId?: number | null;
+  onSelectCategory: (id: number | "all") => void;
   onSelectNav: (id: string | number) => void;
+  onSelectSubcategory: (subcatId: number | null) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  productsByCategory?: Record<number, ProductListItem[]>;
 }
 
 export function CategoryNav({
   categories,
+  selectedCategoryId,
   activeNavId,
+  activeSubcategoryId = null,
+  onSelectCategory,
   onSelectNav,
+  onSelectSubcategory,
   searchQuery,
   onSearchChange,
+  productsByCategory = {},
 }: CategoryNavProps) {
   const rootCategories = categories.filter((c) => c.parent_id === null);
   const navRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const categoriesScrollRef = useRef<HTMLDivElement>(null);
+  const subcategoriesScrollRef = useRef<HTMLDivElement>(null);
 
+  const isInfoActive =
+    typeof activeNavId === "string" &&
+    ["about", "delivery", "careers", "contacts"].includes(activeNavId);
+
+  // Вимірюємо точну динамічну висоту навігаційної плашки
   useEffect(() => {
     const el = navRef.current;
     if (!el) return;
@@ -44,16 +60,17 @@ export function CategoryNav({
       ro.disconnect();
       window.removeEventListener("resize", updateHeight);
     };
-  }, []);
+  }, [selectedCategoryId, activeNavId]);
 
-  // Автоматичне плавне центрування активної плашки при скролі або переході
+  // Автоматичне центрування активної категорії при кліку або зміні
   useEffect(() => {
-    if (!activeNavId || !scrollContainerRef.current || searchQuery) return;
-    const activeBtn = scrollContainerRef.current.querySelector<HTMLElement>(
-      `[data-nav-id="${activeNavId}"]`,
+    if (!categoriesScrollRef.current || searchQuery) return;
+    const targetKey = String(activeNavId ?? selectedCategoryId);
+    const activeBtn = categoriesScrollRef.current.querySelector<HTMLElement>(
+      `[data-category-id="${targetKey}"]`,
     );
     if (!activeBtn) return;
-    const container = scrollContainerRef.current;
+    const container = categoriesScrollRef.current;
     const pillLeft = activeBtn.offsetLeft;
     const pillWidth = activeBtn.offsetWidth;
     const containerWidth = container.offsetWidth;
@@ -61,16 +78,66 @@ export function CategoryNav({
       left: pillLeft - containerWidth / 2 + pillWidth / 2,
       behavior: "smooth",
     });
-  }, [activeNavId, searchQuery]);
+  }, [activeNavId, selectedCategoryId, searchQuery]);
+
+  // Автоматичне центрування активної підкатегорії
+  useEffect(() => {
+    if (!subcategoriesScrollRef.current || searchQuery) return;
+    const targetKey = activeSubcategoryId === null ? "all" : String(activeSubcategoryId);
+    const activeBtn = subcategoriesScrollRef.current.querySelector<HTMLElement>(
+      `[data-subcategory-id="${targetKey}"]`,
+    );
+    if (!activeBtn) return;
+    const container = subcategoriesScrollRef.current;
+    const pillLeft = activeBtn.offsetLeft;
+    const pillWidth = activeBtn.offsetWidth;
+    const containerWidth = container.offsetWidth;
+    container.scrollTo({
+      left: pillLeft - containerWidth / 2 + pillWidth / 2,
+      behavior: "smooth",
+    });
+  }, [activeSubcategoryId, searchQuery]);
+
+  // Визначаємо підкатегорії для поточної вибраної категорії
+  const currentRootId =
+    typeof selectedCategoryId === "number"
+      ? selectedCategoryId
+      : typeof activeNavId === "number"
+      ? activeNavId
+      : rootCategories[0]?.id;
+
+  const activeRootCategory = rootCategories.find((c) => c.id === currentRootId);
+
+  const activeSubcategories = activeRootCategory
+    ? categories
+        .filter((c) => c.parent_id === activeRootCategory.id)
+        .sort((a, b) => a.sort_order - b.sort_order)
+    : [];
+
+  const activeCategoryItems = activeRootCategory
+    ? productsByCategory[activeRootCategory.id] || []
+    : [];
+
+  const subcategoryCounts = useMemo(() => {
+    return activeSubcategories.reduce<Record<number, number>>((acc, sub) => {
+      acc[sub.id] = activeCategoryItems.filter(
+        (p) =>
+          p.category_id === sub.id ||
+          p.category_name?.trim().toLowerCase() === sub.name.trim().toLowerCase(),
+      ).length;
+      return acc;
+    }, {});
+  }, [activeSubcategories, activeCategoryItems]);
 
   return (
     <div
       ref={navRef}
       data-category-nav="true"
-      className="sticky z-30 bg-[#FAF7F2] border-b border-[#EADFCF] py-2.5 sm:py-3 shadow-xs"
+      className="sticky z-30 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#EADFCF] py-2.5 sm:py-3 shadow-xs space-y-2"
       style={{ top: "var(--header-height, 96px)" }}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 space-y-2">
+        {/* Рядок 1: Пошук та головні категорії меню */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-4">
           {/* Поле швидкого пошуку */}
           <div className="relative w-full sm:w-64 md:w-72 shrink-0">
@@ -96,23 +163,27 @@ export function CategoryNav({
             )}
           </div>
 
-          {/* Навігація категоріями та розділами із відстеженням активного елемента */}
+          {/* Горизонтальний ряд категорій меню з перемиканням вкладок */}
           <div
-            ref={scrollContainerRef}
-            className="flex-1 min-w-0 relative flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-none no-scrollbar"
+            ref={categoriesScrollRef}
+            className="flex-1 min-w-0 relative flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-0.5 scrollbar-none no-scrollbar"
           >
             {/* Категорії страв каталогу */}
             {rootCategories.map((cat) => {
-              const isSelected = !searchQuery && activeNavId === cat.id;
+              const isSelected =
+                !searchQuery &&
+                !isInfoActive &&
+                (selectedCategoryId === cat.id ||
+                  (selectedCategoryId === "all" && activeNavId === cat.id));
               return (
                 <button
                   key={cat.id}
-                  data-nav-id={cat.id}
+                  data-category-id={cat.id}
                   type="button"
-                  onClick={() => onSelectNav(cat.id)}
+                  onClick={() => onSelectCategory(cat.id)}
                   className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer ${
                     isSelected
-                      ? "bg-[#2C1E14] text-white shadow-md shadow-[#2C1E14]/15 scale-[1.02]"
+                      ? "bg-[#C8823E] text-white shadow-md shadow-[#C8823E]/25 scale-[1.02]"
                       : "bg-white hover:bg-[#F3EDE2] text-[#4A3B32] border border-[#E2D5C3]"
                   }`}
                 >
@@ -122,62 +193,71 @@ export function CategoryNav({
               );
             })}
 
-            {/* Розділювач між стравами та інформаційними розділами */}
+            {/* Всі категорії (Повне меню) */}
+            <button
+              data-category-id="all"
+              type="button"
+              onClick={() => onSelectCategory("all")}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer ${
+                !searchQuery && !isInfoActive && selectedCategoryId === "all"
+                  ? "bg-[#2C1E14] text-white shadow-md scale-[1.02]"
+                  : "bg-white hover:bg-[#F3EDE2] text-[#4A3B32] border border-[#E2D5C3]"
+              }`}
+            >
+              <span>🍽️</span>
+              <span>Все меню</span>
+            </button>
+
+            {/* Розділювач */}
             <div className="h-5 w-px bg-[#E2D5C3] mx-1 shrink-0" />
 
-            {/* Секція Про пекарню */}
+            {/* Інформаційні секції сайту */}
             <button
-              data-nav-id="about"
+              data-category-id="about"
               type="button"
               onClick={() => onSelectNav("about")}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer ${
                 !searchQuery && activeNavId === "about"
-                  ? "bg-[#2C1E14] text-white shadow-md shadow-[#2C1E14]/15 scale-[1.02]"
+                  ? "bg-[#2C1E14] text-white shadow-md"
                   : "bg-white hover:bg-[#F3EDE2] text-[#4A3B32] border border-[#E2D5C3]"
               }`}
             >
               <span>ℹ️</span>
               <span>Про нас</span>
             </button>
-
-            {/* Секція Доставка */}
             <button
-              data-nav-id="delivery"
+              data-category-id="delivery"
               type="button"
               onClick={() => onSelectNav("delivery")}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer ${
                 !searchQuery && activeNavId === "delivery"
-                  ? "bg-[#2C1E14] text-white shadow-md shadow-[#2C1E14]/15 scale-[1.02]"
+                  ? "bg-[#2C1E14] text-white shadow-md"
                   : "bg-white hover:bg-[#F3EDE2] text-[#4A3B32] border border-[#E2D5C3]"
               }`}
             >
               <span>🛵</span>
               <span>Доставка</span>
             </button>
-
-            {/* Секція Вакансії */}
             <button
-              data-nav-id="careers"
+              data-category-id="careers"
               type="button"
               onClick={() => onSelectNav("careers")}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer ${
                 !searchQuery && activeNavId === "careers"
-                  ? "bg-[#2C1E14] text-white shadow-md shadow-[#2C1E14]/15 scale-[1.02]"
+                  ? "bg-[#2C1E14] text-white shadow-md"
                   : "bg-white hover:bg-[#F3EDE2] text-[#4A3B32] border border-[#E2D5C3]"
               }`}
             >
               <span>💼</span>
               <span>Вакансії</span>
             </button>
-
-            {/* Секція Контакти */}
             <button
-              data-nav-id="contacts"
+              data-category-id="contacts"
               type="button"
               onClick={() => onSelectNav("contacts")}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer ${
                 !searchQuery && activeNavId === "contacts"
-                  ? "bg-[#2C1E14] text-white shadow-md shadow-[#2C1E14]/15 scale-[1.02]"
+                  ? "bg-[#2C1E14] text-white shadow-md"
                   : "bg-white hover:bg-[#F3EDE2] text-[#4A3B32] border border-[#E2D5C3]"
               }`}
             >
@@ -186,6 +266,65 @@ export function CategoryNav({
             </button>
           </div>
         </div>
+
+        {/* Рядок 2: Підкатегорії поточної активної категорії */}
+        {!searchQuery && !isInfoActive && activeSubcategories.length > 0 && activeRootCategory && (
+          <div className="pt-1 border-t border-[#EADFCF]/60 flex items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#8D7B6D] shrink-0 hidden md:inline">
+              Підкатегорії:
+            </span>
+            <div
+              ref={subcategoriesScrollRef}
+              className="flex-1 flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none no-scrollbar"
+            >
+              {/* Кнопка «Всі» для поточної категорії */}
+              <button
+                data-subcategory-id="all"
+                type="button"
+                onClick={() => onSelectSubcategory(null)}
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs whitespace-nowrap transition-all cursor-pointer ${
+                  activeSubcategoryId === null
+                    ? "bg-[#2C1E14] text-white shadow-xs font-bold"
+                    : "bg-[#F3EDE2] hover:bg-[#EADFCF] text-[#4A3B32] font-medium"
+                }`}
+              >
+                Всі ({activeCategoryItems.length})
+              </button>
+
+              {/* Список підкатегорій */}
+              {activeSubcategories.map((sub) => {
+                const count = subcategoryCounts[sub.id] || 0;
+                if (count === 0) return null;
+                const isSelected = activeSubcategoryId === sub.id;
+
+                return (
+                  <button
+                    key={sub.id}
+                    data-subcategory-id={sub.id}
+                    type="button"
+                    onClick={() => onSelectSubcategory(sub.id)}
+                    className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs whitespace-nowrap transition-all cursor-pointer ${
+                      isSelected
+                        ? "bg-[#C8823E] text-white shadow-xs font-bold scale-[1.02]"
+                        : "bg-[#F3EDE2] hover:bg-[#EADFCF] text-[#4A3B32] font-medium"
+                    }`}
+                  >
+                    <span>{sub.name}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
+                        isSelected
+                          ? "bg-white/25 text-white"
+                          : "bg-white/90 text-[#6B533E]"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

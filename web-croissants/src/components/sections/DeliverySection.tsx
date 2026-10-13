@@ -49,8 +49,17 @@ export function DeliverySection() {
               Самовивіз без черги
             </h3>
             <p className="text-sm text-[#614F42] leading-relaxed">
-              Пекарня працює щодня з <strong>08:00 до 20:00</strong> за адресою:
-              <strong> просп. Шевченка, 2Д</strong>. Замовляйте на сайті заздалегідь.
+              Пекарня працює щодня з <strong>08:00 до 20:00</strong> за адресою:{" "}
+              <a
+                href="https://maps.app.goo.gl/jeX4BLChZar5k1so6"
+                target="_blank"
+                rel="noreferrer"
+                className="font-bold underline hover:text-[#C8823E] transition-colors"
+                title="Відкрити на мапі Google Maps"
+              >
+                просп. Шевченка, 2Д
+              </a>
+              . Замовляйте на сайті заздалегідь.
             </p>
             <div className="text-xs font-semibold text-[#8D7665]">
               Приготуємо свіжим до вашого приходу!

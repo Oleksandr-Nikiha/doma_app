@@ -56,8 +56,8 @@ def get_minutes_until_scheduled(scheduled_str: str | None) -> float | None:
     today_kyiv = now_kyiv.date()
     scheduled_dt: datetime | None = None
 
-    # 1. YYYY-MM-DD HH:MM або YYYY-MM-DDTHH:MM
-    iso_match = re.match(r"^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}:\d{2})$", clean)
+    # 1. YYYY-MM-DD HH:MM або YYYY-MM-DDTHH:MM (з можливими секундами)
+    iso_match = re.match(r"^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}:\d{2})", clean)
     if iso_match:
         with contextlib.suppress(Exception):
             d_obj = datetime.strptime(iso_match.group(1), "%Y-%m-%d").date()
@@ -84,6 +84,8 @@ def get_minutes_until_scheduled(scheduled_str: str | None) -> float | None:
                 scheduled_dt = datetime(
                     today_kyiv.year, today_kyiv.month, today_kyiv.day, h, m, tzinfo=KYIV_TZ
                 )
+                if scheduled_dt < now_kyiv - timedelta(hours=6) and now_kyiv.hour >= 18 and h < 6:
+                    scheduled_dt += timedelta(days=1)
 
     # 4. 'HH:MM'
     if not scheduled_dt:
@@ -94,6 +96,8 @@ def get_minutes_until_scheduled(scheduled_str: str | None) -> float | None:
                 scheduled_dt = datetime(
                     today_kyiv.year, today_kyiv.month, today_kyiv.day, h, m, tzinfo=KYIV_TZ
                 )
+                if scheduled_dt < now_kyiv - timedelta(hours=6) and now_kyiv.hour >= 18 and h < 6:
+                    scheduled_dt += timedelta(days=1)
 
 
     if not scheduled_dt:
@@ -297,15 +301,47 @@ def calculate_new_time(current_scheduled: str | None, option: str) -> str | None
     now_kyiv = datetime.now(KYIV_TZ)
     base_dt: datetime | None = None
 
-    if current_scheduled and ":" in current_scheduled:
-        try:
-            parts = current_scheduled.strip().split(":")
-            h, m = int(parts[0]), int(parts[1])
-            candidate = now_kyiv.replace(hour=h, minute=m, second=0, microsecond=0)
-            if candidate >= now_kyiv - timedelta(minutes=15):
-                base_dt = candidate
-        except Exception:
-            base_dt = None
+    if current_scheduled:
+        # 1. YYYY-MM-DD HH:MM або YYYY-MM-DDTHH:MM
+        iso_match = re.search(r"(\d{4}-\d{2}-\d{2})[T ](\d{1,2}:\d{2})", current_scheduled)
+        if iso_match:
+            try:
+                d_obj = datetime.strptime(iso_match.group(1), "%Y-%m-%d").date()
+                h, m = map(int, iso_match.group(2).split(":"))
+                candidate = datetime(d_obj.year, d_obj.month, d_obj.day, h, m, tzinfo=KYIV_TZ)
+                if candidate >= now_kyiv - timedelta(minutes=15):
+                    base_dt = candidate
+            except Exception:
+                base_dt = None
+
+        # 2. 'Завтра, HH:MM'
+        if not base_dt:
+            tomorrow_match = re.search(
+                r"Завтра[, ]+(\d{1,2}:\d{2})", current_scheduled, re.IGNORECASE
+            )
+            if tomorrow_match:
+                try:
+                    h, m = map(int, tomorrow_match.group(1).split(":"))
+                    d_obj = now_kyiv.date() + timedelta(days=1)
+                    candidate = datetime(d_obj.year, d_obj.month, d_obj.day, h, m, tzinfo=KYIV_TZ)
+                    if candidate >= now_kyiv - timedelta(minutes=15):
+                        base_dt = candidate
+                except Exception:
+                    base_dt = None
+
+        # 3. 'Сьогодні, HH:MM' або 'HH:MM'
+        if not base_dt:
+            time_match = re.search(r"(\d{1,2}):(\d{2})", current_scheduled)
+            if time_match:
+                try:
+                    h, m = int(time_match.group(1)), int(time_match.group(2))
+                    candidate = now_kyiv.replace(hour=h, minute=m, second=0, microsecond=0)
+                    if candidate < now_kyiv - timedelta(hours=6) and now_kyiv.hour >= 18 and h < 6:
+                        candidate += timedelta(days=1)
+                    if candidate >= now_kyiv - timedelta(minutes=15):
+                        base_dt = candidate
+                except Exception:
+                    base_dt = None
 
     if not base_dt:
         base_dt = now_kyiv
