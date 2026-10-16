@@ -45,7 +45,7 @@ services:
       - "127.0.0.1:8010:8000"   # 8000 на хості зайнятий portainer
     volumes:
       - ./api/src:/app/src   # hot-reload: правки коду одразу підхоплюються
-      - directus_uploads:/directus/uploads
+      - ./uploads:/app/uploads
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
     logging:
       driver: "json-file"
@@ -179,41 +179,3 @@ services:
         limits:
           cpus: "1.0"
           memory: 768M
-
-  directus:
-    image: directus/directus:latest
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:${DIRECTUS_PORT:-8055}:8055"
-    environment:
-      KEY: ${DIRECTUS_KEY}
-      SECRET: ${DIRECTUS_SECRET}
-      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
-      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
-      DB_CLIENT: ${DIRECTUS_DB_CLIENT:-pg}
-      DB_CONNECTION_STRING: ${DIRECTUS_DB_CONNECTION_STRING}
-      DB_SEARCH_PATH: ${DIRECTUS_DB_SEARCH_PATH:-directus,public}
-      CACHE_ENABLED: ${DIRECTUS_CACHE_ENABLED:-false}
-      CACHE_STORE: ${DIRECTUS_CACHE_STORE:-redis}
-      REDIS: ${DIRECTUS_CACHE_REDIS:-redis://redis:6379/1}
-      PUBLIC_URL: ${DIRECTUS_PUBLIC_URL:-http://localhost:8055}
-    volumes:
-      - directus_uploads:/directus/uploads
-      - directus_extensions:/directus/extensions
-    depends_on:
-      redis:
-        condition: service_healthy
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 768M
-
-volumes:
-  directus_uploads:
-  directus_extensions:

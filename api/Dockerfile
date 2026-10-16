@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src ./src
 
-RUN mkdir -p /directus/uploads /app/uploads && chown -R appuser:appuser /app /directus
+RUN mkdir -p /app/uploads && chown -R appuser:appuser /app
 
 USER appuser
 EXPOSE 8000

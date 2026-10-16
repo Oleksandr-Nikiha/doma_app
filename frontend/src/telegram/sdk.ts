@@ -40,6 +40,56 @@ function dropEmptyThemeVars(): void {
   }
 }
 
+/**
+ * Застосовує теплу фірмову колірну схему Doma (Croissants & Pizza)
+ * замість стандартного синього кольору Telegram.
+ */
+function applyDomaBrandTheme(): void {
+  const el = document.documentElement;
+  const isDark =
+    themeParams.isDark?.() ??
+    window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ??
+    false;
+
+  if (isDark) {
+    el.style.setProperty("--tg-theme-bg-color", "#1A1410");
+    el.style.setProperty("--tg-theme-secondary-bg-color", "#241C16");
+    el.style.setProperty("--tg-theme-text-color", "#F5EFE6");
+    el.style.setProperty("--tg-theme-hint-color", "#A8988B");
+    el.style.setProperty("--tg-theme-link-color", "#E29E57");
+    el.style.setProperty("--tg-theme-button-color", "#D96D43");
+    el.style.setProperty("--tg-theme-button-text-color", "#FFFFFF");
+    el.style.setProperty("--app-surface", "#241C16");
+    el.style.setProperty("--app-surface-2", "#2E241D");
+    el.style.setProperty("--app-surface-3", "#3A2E25");
+    el.style.setProperty("--app-border", "#3D2E24");
+    el.style.setProperty("--app-veil", "rgba(26, 20, 16, 0.88)");
+  } else {
+    el.style.setProperty("--tg-theme-bg-color", "#FAF7F2");
+    el.style.setProperty("--tg-theme-secondary-bg-color", "#F3EDE2");
+    el.style.setProperty("--tg-theme-text-color", "#2C1E14");
+    el.style.setProperty("--tg-theme-hint-color", "#7A695C");
+    el.style.setProperty("--tg-theme-link-color", "#C85A32");
+    el.style.setProperty("--tg-theme-button-color", "#C85A32");
+    el.style.setProperty("--tg-theme-button-text-color", "#FFFFFF");
+    el.style.setProperty("--app-surface", "#FFFFFF");
+    el.style.setProperty("--app-surface-2", "#F5EFE6");
+    el.style.setProperty("--app-surface-3", "#EADFCF");
+    el.style.setProperty("--app-border", "#E8DFC8");
+    el.style.setProperty("--app-veil", "rgba(250, 247, 242, 0.88)");
+  }
+
+  try {
+    const headerColor = isDark ? "#1A1410" : "#FAF7F2";
+    if (miniApp.setHeaderColor.isAvailable()) {
+      miniApp.setHeaderColor(headerColor as `#${string}`);
+    }
+    if (miniApp.setBackgroundColor.isAvailable()) {
+      miniApp.setBackgroundColor(headerColor as `#${string}`);
+    }
+  } catch { /* ignore */ }
+}
+
 export function initSdk(): void {
   if (ready) return;
 
@@ -68,17 +118,19 @@ export function initSdk(): void {
         miniApp.ready();
       }
     } catch { /* ignore */ }
-    // Прив'язка теми — окремо від miniApp: якщо mountSync недоступний
-    // (старіший клієнт, мок), кольори Telegram інакше не приїхали б зовсім,
-    // і застосунок лишався б світлим у темному клієнті.
+    // Прив'язка теми та накладання фірмових кольорів Doma
     try {
       themeParams.mountSync();
       themeParams.bindCssVars();
       dropEmptyThemeVars();
-      // Користувач може перемкнути тему на льоту: SDK перепризначить змінні,
-      // і порожні можуть повернутись — чистимо після кожної зміни.
-      themeParams.state.sub(() => dropEmptyThemeVars());
-    } catch { /* теми немає — лишаються значення з index.css */ }
+      applyDomaBrandTheme();
+      themeParams.state.sub(() => {
+        dropEmptyThemeVars();
+        applyDomaBrandTheme();
+      });
+    } catch {
+      applyDomaBrandTheme();
+    }
     if (viewport.mount.isAvailable()) {
       void viewport.mount().then(() => {
         if (viewport.bindCssVars.isAvailable()) viewport.bindCssVars();

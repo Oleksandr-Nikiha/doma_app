@@ -4,56 +4,51 @@
    themeParams.bindCssVars). Він виставляє їх інлайново, тож перебиває все
    нижче. Тут — значення на випадок, коли теми немає: звичайний браузер,
    дебаг, старий клієнт. */
+/* Колірна палітра мережі закладів Doma (Croissants, Pizza & Sushi, DomaClub)
+   Теплі відтінки свіжої випічки, кави та італійської піци */
 :root {
   color-scheme: light;
-  --tg-theme-bg-color: #ffffff;
-  --tg-theme-text-color: #000000;
-  --tg-theme-hint-color: #707579;
-  --tg-theme-link-color: #3390ec;
-  --tg-theme-button-color: #3390ec;
-  --tg-theme-button-text-color: #ffffff;
-  --tg-theme-secondary-bg-color: #f4f4f5;
+  --tg-theme-bg-color: #FAF7F2;
+  --tg-theme-secondary-bg-color: #F3EDE2;
+  --tg-theme-text-color: #2C1E14;
+  --tg-theme-hint-color: #7A695C;
+  --tg-theme-link-color: #C85A32;
+  --tg-theme-button-color: #C85A32;
+  --tg-theme-button-text-color: #FFFFFF;
+
+  --app-surface: #FFFFFF;
+  --app-surface-2: #F5EFE6;
+  --app-surface-3: #EADFCF;
+  --app-border: #E8DFC8;
+  --app-border-focus: #C85A32;
+  --app-skeleton: color-mix(in srgb, currentColor 8%, transparent);
+  --app-veil: color-mix(in srgb, #FAF7F2 88%, transparent);
+  --app-tint: color-mix(in srgb, var(--tg-theme-button-color) 12%, transparent);
+  --app-tint-hover: color-mix(in srgb, var(--tg-theme-button-color) 20%, transparent);
+  --app-shadow: 0 2px 10px -2px rgba(44, 30, 20, 0.08), 0 8px 24px -6px rgba(44, 30, 20, 0.12);
+  --app-shadow-sm: 0 1px 4px rgba(44, 30, 20, 0.06);
 }
 
-/* Поза Telegram орієнтуємось на системну тему — інакше нічний користувач
-   отримував би сліпучо-білий екран. */
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --tg-theme-bg-color: #17212b;
-    --tg-theme-text-color: #f5f5f5;
-    --tg-theme-hint-color: #708499;
-    --tg-theme-link-color: #6ab3f3;
-    --tg-theme-button-color: #5288c1;
-    --tg-theme-button-text-color: #ffffff;
-    --tg-theme-secondary-bg-color: #232e3c;
+    --tg-theme-bg-color: #1A1410;
+    --tg-theme-secondary-bg-color: #241C16;
+    --tg-theme-text-color: #F5EFE6;
+    --tg-theme-hint-color: #A8988B;
+    --tg-theme-link-color: #E29E57;
+    --tg-theme-button-color: #D96D43;
+    --tg-theme-button-text-color: #FFFFFF;
+
+    --app-surface: #241C16;
+    --app-surface-2: #2E241D;
+    --app-surface-3: #3A2E25;
+    --app-border: #3D2E24;
+    --app-border-focus: #D96D43;
+    --app-veil: color-mix(in srgb, #1A1410 88%, transparent);
+    --app-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.3), 0 8px 24px -6px rgba(0, 0, 0, 0.4);
+    --app-shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.2);
   }
-}
-
-/* Похідні кольори рахуємо через color-mix, а не задаємо двома наборами.
-   Інакше при темній темі Telegram і світлій системній (media-query не
-   спрацює) рамки й підкладки лишились би від світлої теми.
-
-   Підкладки навмисно мішаємо від currentColor, а НЕ від
-   --tg-theme-secondary-bg-color. Частина клієнтів Telegram не надсилає
-   secondary_bg_color, і SDK прив'язує змінну порожньою. Порожнє значення
-   перебиває дефолт із :root, підстановка var() дає ніщо — уся декларація
-   background стає недійсною, і картка виходить прозорою. На темній темі це
-   виглядає так, ніби плашки під текстом просто немає.
-   currentColor доступний завжди, тож 8% чорнила поверх фону дають підкладку
-   в будь-якій темі: на темному вона світлішає, на світлому темнішає. */
-:root {
-  --app-surface: color-mix(in srgb, currentColor 8%, transparent);
-  --app-surface-2: color-mix(in srgb, currentColor 14%, transparent);
-  --app-surface-3: color-mix(in srgb, currentColor 20%, transparent);
-  --app-border: color-mix(in srgb, currentColor 9%, transparent);
-  --app-border-focus: color-mix(in srgb, var(--tg-theme-button-color) 45%, transparent);
-  --app-skeleton: color-mix(in srgb, currentColor 8%, transparent);
-  --app-veil: color-mix(in srgb, var(--tg-theme-bg-color) 82%, transparent);
-  --app-tint: color-mix(in srgb, var(--tg-theme-button-color) 12%, transparent);
-  --app-tint-hover: color-mix(in srgb, var(--tg-theme-button-color) 20%, transparent);
-  --app-shadow: 0 2px 8px -2px rgb(0 0 0 / 8%), 0 8px 24px -6px rgb(0 0 0 / 12%);
-  --app-shadow-sm: 0 1px 3px rgb(0 0 0 / 6%);
 }
 
 /* Telegram Login Widget — обрізання радіуса без чорних кутів у темній темі */
@@ -69,10 +64,7 @@ iframe[src*="oauth.telegram.org"] {
 /* --- Компонування --- */
 
 /* Висота TabBar: py-2 (8px) + іконка text-xl (20px) + gap-0.5 (2px)
-   + підпис text-xs (16px) + py-2 (8px) + border-t (1px) = 55px.
-   Порахована з фактичної розмітки TabBar.tsx — онови тут, якщо зміниш
-   там padding, розмір іконки чи шрифт. Екрани зі скролом додають цю
-   висоту собі в padding-bottom через Layout.tsx, а не дублюють число. */
+   + підпис text-xs (16px) + py-2 (8px) + border-t (1px) = 55px. */
 :root {
   --app-tabbar-height: 55px;
 }
@@ -81,9 +73,12 @@ body {
   margin: 0;
   background: var(--tg-theme-bg-color);
   color: var(--tg-theme-text-color);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  /* Тягнеться на всю висоту, щоб фон теми не обривався під коротким екраном */
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   min-height: 100dvh;
+}
+
+h1, h2, .font-display {
+  font-family: 'Playfair Display', Georgia, serif;
 }
 
 /* --- Рух --- */

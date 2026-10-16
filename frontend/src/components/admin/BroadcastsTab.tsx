@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { api } from "@/api/client";
 import {
   useAdminBroadcastRecipientsCount,
   useAdminBroadcasts,
@@ -46,6 +47,27 @@ export function BroadcastsTab() {
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await api.upload<{ url: string }>("/admin/upload", formData);
+      setImageUrl(res.url);
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : "Помилка завантаження файлу");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
   const [buttonText, setButtonText] = useState("");
   const [buttonUrl, setButtonUrl] = useState("");
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -249,15 +271,34 @@ export function BroadcastsTab() {
 
             <div>
               <label className="block text-xs font-semibold mb-1 opacity-80">
-                URL зображення / банера (опціонально)
+                Зображення / банер (опціонально)
               </label>
-              <input
-                type="url"
-                placeholder="https://example.com/promo-banner.jpg"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                className="w-full rounded-xl px-3 py-2 text-xs border border-[var(--app-border)] bg-[var(--app-surface-2)] focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  placeholder="/api/uploads/... або https://..."
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  className="flex-1 rounded-xl px-3 py-2 text-xs border border-[var(--app-border)] bg-[var(--app-surface-2)] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="app-press shrink-0 rounded-xl px-3 py-2 text-xs font-semibold"
+                  style={{ background: "var(--app-tint)", color: "var(--tg-theme-button-color)" }}
+                >
+                  {isUploading ? "⏳..." : "📁 Фото"}
+                </button>
+              </div>
+              {uploadError && <p className="mt-1 text-xs text-red-500">{uploadError}</p>}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">

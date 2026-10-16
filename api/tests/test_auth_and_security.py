@@ -529,3 +529,71 @@ class TestSecurityVulnerabilityFixes:
         assert res.status_code == 400
         assert "немає прив'язаного Telegram-акаунта" in res.json()["detail"]
 
+    async def test_admin_upload_image_requires_staff(self, async_client, mock_db_conn):
+        """Ендпоінт /api/admin/upload вимагає прав персоналу (403 якщо не знайдено в managers)."""
+        mock_db_conn.fetchrow.return_value = None
+        files = {"file": ("test.jpg", b"fake image content", "image/jpeg")}
+        res = await async_client.post("/api/admin/upload", files=files)
+        assert res.status_code == 403
+
+    async def test_admin_upload_image_rejects_bad_extension(
+        self, async_client, mock_db_conn, test_bot_token
+    ):
+        """Ендпоінт /api/admin/upload відхиляє небезпечні розширення."""
+        from src.auth.admin_token import create_admin_token
+
+        admin_token = create_admin_token(999, test_bot_token)
+        mock_db_conn.fetchrow.return_value = {
+            "telegram_id": 999,
+            "role": "admin",
+            "location_id": None,
+            "is_active": True,
+            "full_name": "Адмін",
+            "phone": "+380501234567",
+        }
+
+        files = {"file": ("malicious.exe", b"executable payload", "application/octet-stream")}
+        res = await async_client.post(
+            "/api/admin/upload",
+            files=files,
+            headers={"X-Admin-Token": admin_token},
+        )
+        assert res.status_code == 400
+        assert "Непідтримуваний формат" in res.json()["detail"]
+
+    async def test_admin_upload_image_success(
+        self, async_client, mock_db_conn, test_bot_token, tmp_path, monkeypatch
+    ):
+        """Успішне завантаження фотографії страви через нативний ендпоінт адмінки."""
+        from src.auth.admin_token import create_admin_token
+
+        monkeypatch.setenv("UPLOADS_DIR", str(tmp_path))
+
+        admin_token = create_admin_token(999, test_bot_token)
+        mock_db_conn.fetchrow.return_value = {
+            "telegram_id": 999,
+            "role": "admin",
+            "location_id": None,
+            "is_active": True,
+            "full_name": "Адмін",
+            "phone": "+380501234567",
+        }
+
+        image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        files = {"file": ("croissant.png", image_bytes, "image/png")}
+        res = await async_client.post(
+            "/api/admin/upload",
+            files=files,
+            headers={"X-Admin-Token": admin_token},
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["url"].startswith("/api/uploads/")
+        assert data["filename"].endswith(".png")
+
+        # Переконуємось, що файл справді збережений на диск
+        saved_file = tmp_path / data["filename"]
+        assert saved_file.exists()
+        assert saved_file.read_bytes() == image_bytes
+
+

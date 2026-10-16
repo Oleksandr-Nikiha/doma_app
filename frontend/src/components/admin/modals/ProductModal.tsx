@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { api } from "@/api/client";
 import { useCreateProduct, useUpdateProduct } from "@/api/queries";
 import type { AdminProduct, AdminCategory, ProductCreatePayload, ProductUpdatePayload } from "@/api/types";
 import { hapticNotify } from "@/telegram/sdk";
@@ -19,6 +20,28 @@ export function ProductModal({
   const [description, setDescription] = useState(product?.description || "");
   const [imageUrl, setImageUrl] = useState(product?.image_url || "");
   const [sortOrder, setSortOrder] = useState(product?.sort_order ?? 0);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await api.upload<{ url: string }>("/admin/upload", formData);
+      setImageUrl(res.url);
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : "Помилка завантаження файлу");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const [initialVariantLabel, setInitialVariantLabel] = useState("Стандарт");
   const [initialVariantPrice, setInitialVariantPrice] = useState("150");
@@ -160,16 +183,87 @@ export function ProductModal({
             />
           </label>
 
-          <label className="block">
-            <span className="opacity-60">URL зображення</span>
+          {/* Фотографія страви */}
+          <div className="block space-y-2">
+            <span className="opacity-60 text-xs font-semibold">Фотографія страви</span>
+
             <input
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://..."
-              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-              style={inputStyle}
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileUpload}
+              className="hidden"
             />
-          </label>
+
+            {imageUrl.trim() ? (
+              <div
+                className="flex items-center gap-3 rounded-xl p-3 border"
+                style={{ borderColor: "var(--app-border)", background: "var(--app-surface)" }}
+              >
+                <img
+                  src={imageUrl.trim()}
+                  alt="Прев'ю"
+                  className="h-16 w-16 rounded-xl object-cover border border-white/10 shrink-0"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = "none";
+                  }}
+                />
+                <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="app-press rounded-lg px-3 py-1.5 text-xs font-semibold"
+                      style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
+                    >
+                      {isUploading ? "⏳ Завантаження..." : "🔄 Змінити фото"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImageUrl("")}
+                      className="app-press rounded-lg px-3 py-1.5 text-xs font-semibold text-red-400 bg-red-500/10 hover:bg-red-500/20"
+                    >
+                      🗑️ Видалити
+                    </button>
+                  </div>
+                  <input
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    placeholder="/api/uploads/... або https://..."
+                    className="w-full rounded-lg px-2 py-1 text-[11px] opacity-70 outline-none"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div
+                className="flex flex-col items-center justify-center rounded-xl p-4 border border-dashed text-center space-y-2"
+                style={{ borderColor: "var(--app-border)", background: "var(--app-surface)" }}
+              >
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="app-press rounded-xl px-4 py-2 text-xs font-semibold flex items-center gap-2 shadow-sm"
+                  style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
+                >
+                  {isUploading ? "⏳ Завантаження..." : "📷 Додати фото"}
+                </button>
+                <div className="w-full pt-1">
+                  <span className="opacity-40 text-[10px] block mb-1">або посилання вручну:</span>
+                  <input
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    placeholder="/api/uploads/... або https://..."
+                    className="w-full rounded-lg px-2.5 py-1.5 text-xs outline-none"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+            )}
+            {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
+          </div>
 
           <label className="block">
             <span className="opacity-60">Порядок сортування</span>

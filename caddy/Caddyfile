@@ -17,22 +17,6 @@
 		Content-Security-Policy "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org;"
 	}
 
-	# Directus CMS (якщо активовано профіль cms)
-	redir /directus /directus/
-	handle_path /directus/* {
-		request_body {
-			max_size 30MB
-		}
-		reverse_proxy directus:8055 {
-			header_up Host {host}
-			header_up X-Forwarded-Prefix /directus
-			transport http {
-				dial_timeout 5s
-				response_header_timeout 60s
-			}
-		}
-	}
-
 	# Проксі API у контейнер FastAPI
 	@api path /api /api/*
 	handle @api {

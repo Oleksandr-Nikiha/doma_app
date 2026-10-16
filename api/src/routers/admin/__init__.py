@@ -10,11 +10,13 @@ from .me import router as me_router
 from .option_groups import router as option_groups_router
 from .orders import router as orders_router
 from .products import router as products_router
+from .upload import router as upload_router
 from .users import router as users_router
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 router.include_router(me_router)
+router.include_router(upload_router)
 router.include_router(managers_router)
 router.include_router(categories_router)
 router.include_router(products_router)

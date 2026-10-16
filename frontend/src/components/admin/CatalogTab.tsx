@@ -1,12 +1,14 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   useAdminCategories,
   useAdminProducts,
   useDeleteCategory,
   useDeleteProduct,
   useDeleteVariant,
+  useUpdateProduct,
   useBulkProductAvailability,
 } from "@/api/queries";
+import { api } from "@/api/client";
 import type { AdminCategory, AdminProduct, AdminVariant, Location } from "@/api/types";
 import { EmptyState, ErrorBox, Spinner, Thumb } from "@/components/ui";
 import { haptic, hapticNotify } from "@/telegram/sdk";
@@ -122,6 +124,37 @@ export function CatalogTab({
   const deleteCategory = useDeleteCategory();
   const deleteProduct = useDeleteProduct();
   const deleteVariant = useDeleteVariant();
+  const updateProduct = useUpdateProduct();
+
+  const catalogFileInputRef = useRef<HTMLInputElement>(null);
+  const targetProdIdRef = useRef<number | null>(null);
+  const [uploadingProdId, setUploadingProdId] = useState<number | null>(null);
+
+  const handleQuickPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const prodId = targetProdIdRef.current;
+    if (!file || !prodId) return;
+    setUploadingProdId(prodId);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await api.upload<{ url: string }>("/admin/upload", formData);
+      await updateProduct.mutateAsync({ productId: prodId, payload: { image_url: res.url } });
+      hapticNotify("success");
+    } catch {
+      hapticNotify("error");
+    } finally {
+      setUploadingProdId(null);
+      targetProdIdRef.current = null;
+      if (catalogFileInputRef.current) catalogFileInputRef.current.value = "";
+    }
+  };
+
+  const triggerPhotoUpload = (prodId: number) => {
+    haptic("light");
+    targetProdIdRef.current = prodId;
+    catalogFileInputRef.current?.click();
+  };
 
   if (catLoading) return <Spinner />;
   if (catError) return <ErrorBox message={catError.message} />;
@@ -442,11 +475,33 @@ export function CatalogTab({
                         className="h-4 w-4 rounded cursor-pointer accent-[var(--tg-theme-button-color)]"
                       />
                     </div>
-                    <Thumb src={p.image_url} className="h-16 w-16 shrink-0" />
+                    <div
+                      className="relative h-16 w-16 shrink-0 cursor-pointer group"
+                      onClick={() => triggerPhotoUpload(p.id)}
+                      title="Натисніть, щоб змінити фото"
+                    >
+                      <Thumb src={p.image_url} className="h-16 w-16" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center rounded-xl transition-opacity">
+                        <span className="text-base">📷</span>
+                      </div>
+                      {uploadingProdId === p.id && (
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-xl">
+                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        </div>
+                      )}
+                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-1">
                       <p className="truncate text-sm font-bold">{p.name}</p>
                       <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => triggerPhotoUpload(p.id)}
+                          disabled={uploadingProdId === p.id}
+                          className="app-press rounded-lg p-1 text-xs opacity-60 hover:opacity-100"
+                          title="Додати або змінити фото"
+                        >
+                          📷
+                        </button>
                         <button
                           onClick={() => {
                             haptic("light");
@@ -748,6 +803,14 @@ export function CatalogTab({
           }}
         />
       )}
+      {/* Прихований інпут для швидкої зміни фото страв */}
+      <input
+        ref={catalogFileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleQuickPhotoUpload}
+        className="hidden"
+      />
     </div>
   );
 }

@@ -169,7 +169,7 @@ class CachedStaticFiles(StaticFiles):
 
 
 # Роздача збережених фотографій страв
-_uploads_dir = os.environ.get("UPLOADS_DIR", "/directus/uploads")
+_uploads_dir = os.environ.get("UPLOADS_DIR", "/app/uploads")
 if not os.path.isdir(_uploads_dir):
     _uploads_dir = str(Path(__file__).resolve().parent.parent.parent / "uploads")
 os.makedirs(_uploads_dir, exist_ok=True)
