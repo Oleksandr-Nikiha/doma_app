@@ -28,7 +28,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => {
     if (typeof window === "undefined") return [];
     try {
-      const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem("doma_croissants_cart_v1");
+      const saved = localStorage.getItem(STORAGE_KEY);
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];

@@ -134,6 +134,12 @@ export function CatalogTab({
     const file = e.target.files?.[0];
     const prodId = targetProdIdRef.current;
     if (!file || !prodId) return;
+    if (file.size > 10 * 1024 * 1024) {
+      hapticNotify("error");
+      if (catalogFileInputRef.current) catalogFileInputRef.current.value = "";
+      targetProdIdRef.current = null;
+      return;
+    }
     setUploadingProdId(prodId);
     try {
       const formData = new FormData();

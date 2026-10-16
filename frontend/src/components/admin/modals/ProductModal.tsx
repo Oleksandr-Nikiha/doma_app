@@ -28,6 +28,11 @@ export function ProductModal({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("Розмір файлу не повинен перевищувати 10 МБ");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     setIsUploading(true);
     setUploadError(null);
     try {

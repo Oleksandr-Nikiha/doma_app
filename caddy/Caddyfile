@@ -1,12 +1,19 @@
-# Caddyfile для Mini App: статика зібраного React + проксі /api у FastAPI + Directus CMS.
+# Caddyfile для Mini App та веб-сайтів мережі Doma.
 #
-# За замовчуванням слухає порт 80 (HTTP). Якщо задано змінну оточення APP_DOMAIN
-# (наприклад, APP_DOMAIN=app.example.com), Caddy автоматично отримає та оновить
-# TLS-сертифікат від Let's Encrypt / ZeroSSL.
+# Якщо задано змінну оточення APP_DOMAIN (наприклад, APP_DOMAIN=doma.example.com),
+# Caddy автоматично отримує та оновлює TLS-сертифікат від Let's Encrypt / ZeroSSL,
+# слухає порти 80 та 443, і автоматично перенаправляє весь трафік з HTTP на HTTPS.
+# За відсутності APP_DOMAIN Caddy слухає порт 80 (HTTP) для локальної розробки.
 
 {$APP_DOMAIN::80} {
 	root * /srv
 	encode gzip zstd
+
+	# Примусовий редірект з HTTP на HTTPS при роботі за зовнішнім проксі/CDN/тунелем (X-Forwarded-Proto: http)
+	@insecure_proto {
+		header X-Forwarded-Proto http
+	}
+	redir @insecure_proto https://{host}{uri} permanent
 
 	# Захисні заголовки
 	# УВАГА: Telegram відкриває Mini App у WebView, а на Desktop — в iframe.
@@ -17,10 +24,23 @@
 		Content-Security-Policy "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org;"
 	}
 
-	# Проксі API у контейнер FastAPI
+	# Окремий хендлер для завантаження фотографій адміністратором (дозволяє файли до 12 МБ)
+	@upload path /api/admin/upload
+	handle @upload {
+		request_body {
+			max_size 12MB
+		}
+		reverse_proxy api:8000 {
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 60s
+			}
+		}
+	}
+
+	# Проксі API у контейнер FastAPI (ліміт звичайних клієнтських запитів — 2 МБ)
 	@api path /api /api/*
 	handle @api {
-		# Обмеження розміру клієнтських запитів API
 		request_body {
 			max_size 2MB
 		}
@@ -30,7 +50,6 @@
 		header @uploads Cache-Control "public, max-age=2592000, immutable"
 
 		reverse_proxy api:8000 {
-			header_up X-Forwarded-For {remote_host}
 			transport http {
 				dial_timeout 5s
 				response_header_timeout 30s
@@ -45,7 +64,6 @@
 	handle /croissant/* {
 		reverse_proxy web-croissants:80 {
 			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
 			transport http {
 				dial_timeout 5s
 				response_header_timeout 30s
@@ -59,7 +77,6 @@
 	handle /pizza/* {
 		reverse_proxy web-pizza:80 {
 			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
 			transport http {
 				dial_timeout 5s
 				response_header_timeout 30s
@@ -74,7 +91,6 @@
 	handle /group/* {
 		reverse_proxy web-group:80 {
 			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
 			transport http {
 				dial_timeout 5s
 				response_header_timeout 30s

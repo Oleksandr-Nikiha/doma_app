@@ -8,7 +8,6 @@
 #   - api: FastAPI REST API
 #   - bot: Telegram-бот (aiogram)
 #   - caddy: зворотний проксі, роздача React SPA та автоматичний HTTPS/TLS
-#   - directus (профіль cms): CMS для медіа та контенту (опціонально)
 
 services:
   postgres:

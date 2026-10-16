@@ -106,12 +106,33 @@ def get_minutes_until_scheduled(scheduled_str: str | None) -> float | None:
     return (scheduled_dt - now_kyiv).total_seconds() / 60.0
 
 
+_cached_bot_username: str | None = None
+
+
+def set_bot_username(username: str) -> None:
+    """Зберігає актуальний username бота, отриманий при старті через get_me()."""
+    global _cached_bot_username
+    _cached_bot_username = username
+
+
+def get_bot_username() -> str:
+    """Повертає актуальний username бота з кешу або конфігу."""
+    return (
+        _cached_bot_username
+        or getattr(settings, "bot_username", None)
+        or "ncoffee_app_tst_bot"
+    )
+
+
 def build_order_keyboard(
-    order_id: int, status: str, fulfillment_type: str
+    order_id: int,
+    status: str,
+    fulfillment_type: str,
+    bot_username: str | None = None,
 ) -> InlineKeyboardMarkup | None:
     """Генерує клавіатуру під повідомленням замовлення залежно від поточного статусу."""
-    bot_username = getattr(settings, "bot_username", "ncoffee_app_tst_bot") or "ncoffee_app_tst_bot"
-    app_link = f"https://t.me/{bot_username}?startapp=order_{order_id}"
+    active_bot_username = bot_username or get_bot_username()
+    app_link = f"https://t.me/{active_bot_username}?startapp=order_{order_id}"
 
     buttons: list[list[InlineKeyboardButton]] = []
 

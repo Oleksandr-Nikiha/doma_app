@@ -41,7 +41,7 @@ export function PhoneAuthView({
 
         <div className="pt-1 pb-1">
           <TelegramLoginWidget
-            botName="ncoffee_app_tst_bot"
+            botName={import.meta.env.VITE_TELEGRAM_BOT_USERNAME || "ncoffee_app_tst_bot"}
             onAuth={onTelegramAuth}
             buttonSize="large"
             cornerRadius={20}

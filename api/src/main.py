@@ -49,7 +49,7 @@ async def _periodic_cleanup_task() -> None:
 async def _catalog_notification_listener_task() -> None:
     """
     Слухає PostgreSQL NOTIFY канал 'catalog_cache_invalidate' і миттєво
-    інвалідує кеш Redis при будь-яких змінах у каталозі (включно зі змінами через Directus CMS).
+    інвалідує кеш Redis при будь-яких змінах у каталозі БД.
     """
     settings = get_settings()
     while True:

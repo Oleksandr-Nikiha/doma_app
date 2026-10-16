@@ -147,6 +147,9 @@ async def main() -> None:
         await setup_menu_button(bot, settings.mini_app_url)
         await setup_bot_commands(bot)
         me = await bot.get_me()
+        if me.username:
+            orders.set_bot_username(me.username)
+            settings.bot_username = me.username
         logger.info("Бот @%s запущено, Mini App: %s", me.username, settings.mini_app_url)
 
         scheduler_task = asyncio.create_task(auto_transition_scheduled_orders(bot))

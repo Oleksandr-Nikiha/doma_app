@@ -19,8 +19,10 @@ from src.handlers.orders import (  # noqa: E402
     build_order_keyboard,
     build_time_keyboard,
     calculate_new_time,
+    get_bot_username,
     get_client_status_message,
     get_minutes_until_scheduled,
+    set_bot_username,
     update_admin_message_text,
 )
 
@@ -258,3 +260,23 @@ class TestBotStatusNotificationsAndUI:
 
         kb_all_statuses = build_all_statuses_keyboard(1, "in_progress", "delivery")
         assert kb_all_statuses is not None
+
+        # Перевірка динамічного визначення bot_username для deep link
+        set_bot_username("custom_production_bot")
+        assert get_bot_username() == "custom_production_bot"
+        kb_custom = build_order_keyboard(77, "pending_moderation", "delivery")
+        assert kb_custom is not None
+        edit_btn = [
+            btn for row in kb_custom.inline_keyboard for btn in row if "Редагувати" in btn.text
+        ][0]
+        assert "t.me/custom_production_bot?startapp=order_77" in edit_btn.url
+
+        # Явний переданий параметр має пріоритет
+        kb_explicit = build_order_keyboard(
+            88, "pending_moderation", "delivery", bot_username="explicit_bot"
+        )
+        assert kb_explicit is not None
+        edit_btn_explicit = [
+            btn for row in kb_explicit.inline_keyboard for btn in row if "Редагувати" in btn.text
+        ][0]
+        assert "t.me/explicit_bot?startapp=order_88" in edit_btn_explicit.url

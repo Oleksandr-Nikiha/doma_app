@@ -98,6 +98,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
+    if (res.status === 401 && (path.startsWith("/admin") || path.startsWith("/api/admin"))) {
+      removeAdminToken();
+    }
     // FastAPI віддає помилку як {"detail": "..."} або як список помилок валідації
     let detail = `HTTP ${res.status}`;
     try {
@@ -129,6 +132,9 @@ export const api = {
       body: formData,
     });
     if (!res.ok) {
+      if (res.status === 401 && (path.startsWith("/admin") || path.startsWith("/api/admin"))) {
+        removeAdminToken();
+      }
       let detail = `HTTP ${res.status}`;
       try {
         const body = await res.json();

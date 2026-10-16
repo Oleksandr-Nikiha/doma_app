@@ -1,7 +1,7 @@
 {
-  "name": "Doma Croissants — Перша пекарня задоволення",
-  "short_name": "Doma Croissants",
-  "description": "Великі хрусткі круасани, авторська кава та бенто-піци у Вишгороді. Доставка та самовивіз.",
+  "name": "Doma Pizza & Sushi — Доставка піци та суші",
+  "short_name": "Doma Pizza",
+  "description": "Гаряча піца на пухкому тісті, свіжі суші-сети та крафтові бургери у Вишгороді. Швидка доставка та самовивіз.",
   "start_url": "./",
   "id": "./",
   "display": "standalone",
@@ -25,4 +25,3 @@
   "categories": ["food", "shopping", "lifestyle"],
   "lang": "uk"
 }
-
