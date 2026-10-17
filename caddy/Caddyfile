@@ -24,11 +24,11 @@
 		Content-Security-Policy "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org;"
 	}
 
-	# Окремий хендлер для завантаження фотографій адміністратором (дозволяє файли до 12 МБ)
-	@upload path /api/admin/upload
+	# Окремий хендлер для завантаження фотографій адміністратором (дозволяє файли до 16 МБ)
+	@upload path /api/admin/upload /api/admin/upload/*
 	handle @upload {
 		request_body {
-			max_size 12MB
+			max_size 16MB
 		}
 		reverse_proxy api:8000 {
 			transport http {

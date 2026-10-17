@@ -38,9 +38,9 @@ export function WebHeader({ title, showBack = false, onBack }: WebHeaderProps) {
         {title ? (
           <h2 className="text-base font-bold tracking-tight">{title}</h2>
         ) : (
-          <span className="flex items-center gap-1.5 font-bold tracking-tight text-sm">
-            <span>🍕</span>
-            <span>Doma</span>
+          <span className="flex items-center gap-2 font-bold tracking-tight text-sm">
+            <img src="/logo.svg" alt="Urban Bites" className="h-6 w-6 rounded-full object-cover shadow-xs" />
+            <span>Urban Bites</span>
           </span>
         )}
       </div>

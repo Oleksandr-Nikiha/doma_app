@@ -33,7 +33,8 @@ export function DeliveryAddressSection({
     return (
       <div className="rounded-xl p-3.5 text-xs leading-relaxed" style={{ background: "var(--app-surface-2)" }}>
         <p className="font-semibold">Адреса для самовивозу:</p>
-        <p className="mt-1 opacity-80">{targetLocationAddress || "м. Вишгород"}</p>
+        <p className="mt-1 opacity-80">{targetLocationAddress || "м. Київ"}</p>
+
         <p className="mt-2 opacity-60">
           Ми повідомимо вас у чаті з ботом, щойно замовлення буде готове до видачі.
         </p>

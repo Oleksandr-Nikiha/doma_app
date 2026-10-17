@@ -11,10 +11,11 @@ import {
   effectiveLimits,
   groupCost,
   isFixed,
-  selectionHint,
   unitsIn,
   type Picks,
 } from "@/utils/productOptions";
+import { ProductOptionGroups } from "@/components/product/ProductOptionGroups";
+import { ProductBottomBar } from "@/components/product/ProductBottomBar";
 
 export function ProductPage() {
   const { productId } = useParams();
@@ -136,9 +137,105 @@ export function ProductPage() {
   );
   const total = selected ? selected.price * qty + optionsDelta : 0;
 
+  const handleAddToCart = () => {
+    if (!canAdd) {
+      setShowErrors(true);
+      hapticNotify("warning");
+      return;
+    }
+    if (!selected) return;
+    const options: OptionSelection[] = data.option_groups.flatMap((g) =>
+      Object.entries(picksFor(g))
+        .filter(([_, optionQty]) => optionQty > 0)
+        .map(([optionVariantId, optionQty]) => ({
+          group_id: g.group_id,
+          variant_id: Number(optionVariantId),
+          qty: optionQty,
+        })),
+    );
+    const optionsDetails: CartItemOption[] = [];
+    const groupFreeCount: Record<number, number> = {};
+
+    for (const g of data.option_groups) {
+      groupFreeCount[g.group_id] = g.free_count;
+      const picks = picksFor(g);
+      for (const item of g.items) {
+        const pickedQty = picks[item.variant_id] ?? 0;
+        if (pickedQty > 0) {
+          optionsDetails.push({
+            group_id: g.group_id,
+            variant_id: item.variant_id,
+            name: item.name,
+            label: "порція",
+            price_delta: item.price_delta,
+            qty: pickedQty,
+          });
+        }
+      }
+    }
+
+    const locId = locationState?.location_id ?? 1;
+    const locName =
+      locationState?.location_name ??
+      locations?.find((l) => l.id === locId)?.name ??
+      "Urban Pizza & Sushi";
+
+    if (cartItemToEdit) {
+      updateCartItem.mutate(
+        {
+          itemId: cartItemToEdit.id,
+          variant_id: selected.id,
+          qty,
+          options,
+          guest_meta: {
+            variant_label: selected.label,
+            weight: selected.weight,
+            price: selected.price,
+            options_details: optionsDetails,
+            group_free_count: groupFreeCount,
+          },
+        },
+        {
+          onSuccess: () => {
+            hapticNotify("success");
+            void navigate("/cart");
+          },
+          onError: () => hapticNotify("error"),
+        },
+      );
+    } else {
+      addToCart.mutate(
+        {
+          variant_id: selected.id,
+          qty,
+          options,
+          guest_meta: {
+            product_id: data.id,
+            product_name: data.name,
+            variant_label: selected.label,
+            weight: selected.weight,
+            price: selected.price,
+            location_id: locId,
+            location_name: locName,
+            options_details: optionsDetails,
+            group_free_count: groupFreeCount,
+          },
+        },
+        {
+          onSuccess: () => {
+            hapticNotify("success");
+            setAddedSuccess(true);
+            setTimeout(() => setAddedSuccess(false), 2500);
+          },
+          onError: () => hapticNotify("error"),
+        },
+      );
+    }
+  };
+
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col bg-[var(--tg-theme-bg-color)]">
-      {/* Кнопка "Назад" - фіксована у верхньому лівому куті для швидкого доступу */}
+      {/* Кнопка "Назад" */}
       <button
         type="button"
         onClick={handleBack}
@@ -196,352 +293,35 @@ export function ProductPage() {
             </div>
           )}
 
-          {data.option_groups.map((group) => {
-            const picks = picksFor(group);
-            const fixed = isFixed(group);
-            const { min: effMin, max: effMax } = effectiveLimits(group, qty);
-            const multi = !fixed && effMax > 1;
-            const currentUnits = unitsIn(picks);
-            const isUnfilled = !fixed && currentUnits < effMin;
-            const isFilled = !fixed && effMin > 0 && currentUnits >= effMin;
-            const isUrgentNotice = isUnfilled && showErrors;
-
-            return (
-              <div
-                key={group.group_id}
-                className={`app-rise rounded-2xl transition-all p-3.5 mt-4 ${
-                  isUrgentNotice
-                    ? "ring-2 ring-amber-500/50"
-                    : isUnfilled && effMin > 0
-                      ? ""
-                      : ""
-                }`}
-                style={{
-                  background: isUrgentNotice
-                    ? "color-mix(in srgb, #f59e0b 8%, var(--app-surface))"
-                    : "var(--app-surface)",
-                  border: isUrgentNotice
-                    ? "1px solid color-mix(in srgb, #f59e0b 40%, transparent)"
-                    : "1px solid var(--app-border)",
-                  boxShadow: "var(--app-shadow-sm)",
-                }}
-              >
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                  <div className="flex flex-wrap items-center gap-2 min-w-0">
-                    <p className="text-sm font-bold tracking-tight">{group.name}</p>
-                    {!fixed && isFilled ? (
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide inline-flex items-center gap-1 shrink-0"
-                        style={{
-                          background: "color-mix(in srgb, #22c55e 14%, transparent)",
-                          color: "#22c55e",
-                        }}
-                      >
-                        ✓ Обрано
-                      </span>
-                    ) : !fixed && isUrgentNotice ? (
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide shrink-0"
-                        style={{
-                          background: "color-mix(in srgb, #f59e0b 20%, transparent)",
-                          color: "#d97706",
-                        }}
-                      >
-                        Оберіть варіант
-                      </span>
-                    ) : !fixed && effMin > 0 ? (
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide shrink-0"
-                        style={{
-                          background: "var(--app-tint)",
-                          color: "var(--tg-theme-button-color)",
-                        }}
-                      >
-                        Обов'язково
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="shrink-0 text-xs opacity-60">
-                    {selectionHint(group, qty)}
-                  </p>
-                </div>
-
-                {multi ? (
-                  <div className="space-y-2">
-                    {group.items.map((item) => {
-                      const count = picks[item.variant_id] ?? 0;
-                      return (
-                        <div
-                          key={item.variant_id}
-                          className="flex items-center gap-3 rounded-xl px-3 py-2 transition-all"
-                          style={{
-                            background: count > 0 ? "var(--app-surface-2)" : "transparent",
-                            border: "1px solid var(--app-border)",
-                          }}
-                        >
-                          <span className={`flex-1 text-sm ${count ? "font-semibold" : ""}`}>
-                            {item.name}
-                          </span>
-                          {item.price_delta > 0 && (
-                            <span className="text-xs font-medium opacity-65">
-                              +{formatPrice(item.price_delta)}
-                            </span>
-                          )}
-                          <div
-                            className="flex items-center gap-1.5 rounded-lg px-1 py-0.5"
-                            style={{ background: "var(--app-surface-2)" }}
-                          >
-                            <button
-                              onClick={() => changeQty(group, item.variant_id, -1)}
-                              disabled={count === 0}
-                              className="app-press h-7 w-7 text-base font-bold disabled:opacity-20 flex items-center justify-center rounded-lg"
-                              aria-label={`Менше: ${item.name}`}
-                            >
-                              −
-                            </button>
-                            <span className="w-5 text-center text-xs font-bold">{count}</span>
-                            <button
-                              onClick={() => changeQty(group, item.variant_id, 1)}
-                              className="app-press h-7 w-7 text-base font-bold flex items-center justify-center rounded-lg"
-                              aria-label={`Більше: ${item.name}`}
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {group.items.map((item) => {
-                      const active = Boolean(picks[item.variant_id]);
-                      return (
-                        <button
-                          key={item.variant_id}
-                          disabled={fixed}
-                          onClick={() => pickOne(group, item.variant_id)}
-                          className={`inline-flex items-center justify-center rounded-xl px-3.5 py-2 text-xs font-semibold disabled:opacity-100 transition-all ${
-                            fixed ? "" : "app-press"
-                          }`}
-                          style={chipStyle(active)}
-                        >
-                          {active && (
-                            <span className="app-pop mr-1.5 inline-block text-[11px]" aria-hidden>
-                              ✓
-                            </span>
-                          )}
-                          <span>{item.name}</span>
-                          {item.price_delta > 0 && (
-                            <span className="ml-2 opacity-75">+{formatPrice(item.price_delta)}</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          <ProductOptionGroups
+            optionGroups={data.option_groups}
+            qty={qty}
+            showErrors={showErrors}
+            picksFor={picksFor}
+            onPickOne={pickOne}
+            onChangeQty={changeQty}
+          />
         </div>
       </div>
 
       {/* Фіксована плаваюча панель дії внизу */}
-      <div
-        className="sticky bottom-0 z-30 app-glass border-t p-4"
-        style={{
-          borderColor: "var(--app-border)",
-          paddingBottom: "calc(1rem + env(safe-area-inset-bottom))",
-          boxShadow: "0 -4px 16px -4px rgb(0 0 0 / 8%)",
+      <ProductBottomBar
+        qty={qty}
+        setQty={setQty}
+        total={total}
+        canAdd={canAdd}
+        showErrors={showErrors}
+        unfilledNames={unfilled.map((g) => g.name.toLowerCase())}
+        addedSuccess={addedSuccess}
+        isPending={addToCart.isPending || updateCartItem.isPending}
+        isEdit={Boolean(cartItemToEdit)}
+        errorMessage={addToCart.isError ? addToCart.error.message : null}
+        onAdd={handleAddToCart}
+        onGoToCart={() => {
+          haptic("light");
+          navigate("/cart");
         }}
-      >
-        {addToCart.isError && (
-          <p className="mb-2 text-center text-xs font-semibold text-rose-500">
-            {addToCart.error.message}
-          </p>
-        )}
-
-        {unfilled.length > 0 && showErrors && (
-          <p className="mb-2.5 text-center text-xs font-semibold text-amber-600 dark:text-amber-400">
-            Будь ласка, оберіть: {unfilled.map((g) => g.name.toLowerCase()).join(", ")}
-          </p>
-        )}
-
-        {addedSuccess && (
-          <div className="mb-2.5 flex items-center justify-between rounded-xl bg-emerald-500/15 border border-emerald-500/30 px-3.5 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 app-rise">
-            <span className="flex items-center gap-1.5">
-              <span>✓</span>
-              <span>Додано в кошик!</span>
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                haptic("light");
-                navigate("/cart");
-              }}
-              className="underline hover:opacity-80 font-bold"
-            >
-              Перейти до кошика →
-            </button>
-          </div>
-        )}
-
-        <div className="flex items-center gap-3">
-          {/* Лічильник кількості порцій */}
-          <div
-            className="flex items-center gap-2 rounded-xl px-2 py-1.5 shrink-0"
-            style={{ background: "var(--app-surface-2)", border: "1px solid var(--app-border)" }}
-          >
-            <button
-              onClick={() => {
-                haptic("light");
-                setQty((q) => Math.max(1, q - 1));
-              }}
-              disabled={qty <= 1}
-              className="app-press h-8 w-8 text-lg font-bold disabled:opacity-25 flex items-center justify-center rounded-lg"
-              aria-label="Менше"
-            >
-              −
-            </button>
-            <span className="w-5 text-center text-sm font-bold">{qty}</span>
-            <button
-              onClick={() => {
-                haptic("light");
-                setQty((q) => q + 1);
-              }}
-              className="app-press h-8 w-8 text-lg font-bold flex items-center justify-center rounded-lg"
-              aria-label="Більше"
-            >
-              +
-            </button>
-          </div>
-
-          {/* Головна кнопка додавання */}
-          <button
-            disabled={addToCart.isPending}
-            onClick={() => {
-              if (!canAdd) {
-                setShowErrors(true);
-                hapticNotify("warning");
-                return;
-              }
-              if (!selected) return;
-              const options: OptionSelection[] = data.option_groups.flatMap((g) =>
-                Object.entries(picksFor(g))
-                  .filter(([_, optionQty]) => optionQty > 0)
-                  .map(([optionVariantId, optionQty]) => ({
-                    group_id: g.group_id,
-                    variant_id: Number(optionVariantId),
-                    qty: optionQty,
-                  })),
-              );
-              const optionsDetails: CartItemOption[] = [];
-              const groupFreeCount: Record<number, number> = {};
-
-              for (const g of data.option_groups) {
-                groupFreeCount[g.group_id] = g.free_count;
-                const picks = picksFor(g);
-                for (const item of g.items) {
-                  const pickedQty = picks[item.variant_id] ?? 0;
-                  if (pickedQty > 0) {
-                    optionsDetails.push({
-                      group_id: g.group_id,
-                      variant_id: item.variant_id,
-                      name: item.name,
-                      label: "порція",
-                      price_delta: item.price_delta,
-                      qty: pickedQty,
-                    });
-                  }
-                }
-              }
-
-              const locId = locationState?.location_id ?? 1;
-              const locName =
-                locationState?.location_name ??
-                locations?.find((l) => l.id === locId)?.name ??
-                "Doma Pizza";
-
-              if (cartItemToEdit) {
-                updateCartItem.mutate(
-                  {
-                    itemId: cartItemToEdit.id,
-                    variant_id: selected.id,
-                    qty,
-                    options,
-                    guest_meta: {
-                      variant_label: selected.label,
-                      weight: selected.weight,
-                      price: selected.price,
-                      options_details: optionsDetails,
-                      group_free_count: groupFreeCount,
-                    },
-                  },
-                  {
-                    onSuccess: () => {
-                      hapticNotify("success");
-                      void navigate("/cart");
-                    },
-                    onError: () => hapticNotify("error"),
-                  },
-                );
-              } else {
-                addToCart.mutate(
-                  {
-                    variant_id: selected.id,
-                    qty,
-                    options,
-                    guest_meta: {
-                      product_id: data.id,
-                      product_name: data.name,
-                      variant_label: selected.label,
-                      weight: selected.weight,
-                      price: selected.price,
-                      location_id: locId,
-                      location_name: locName,
-                      options_details: optionsDetails,
-                      group_free_count: groupFreeCount,
-                    },
-                  },
-                  {
-                    onSuccess: () => {
-                      hapticNotify("success");
-                      setAddedSuccess(true);
-                      setTimeout(() => setAddedSuccess(false), 2500);
-                    },
-                    onError: () => hapticNotify("error"),
-                  },
-                );
-              }
-            }}
-            className="app-press flex-1 rounded-xl py-3.5 px-4 font-bold text-sm shadow-md transition-all flex items-center justify-between"
-            style={
-              canAdd
-                ? {
-                    background: addedSuccess ? "#16a34a" : "var(--tg-theme-button-color)",
-                    color: "var(--tg-theme-button-text-color)",
-                    boxShadow: "var(--app-shadow)",
-                  }
-                : {
-                    background: "var(--app-surface-2)",
-                    color: "inherit",
-                    opacity: 0.8,
-                  }
-            }
-          >
-            <span>
-              {addToCart.isPending || updateCartItem.isPending
-                ? "Зберігаємо…"
-                : addedSuccess
-                  ? "✓ Додано в кошик"
-                  : cartItemToEdit
-                    ? "Зберегти зміни"
-                    : "В кошик"}
-            </span>
-            <span className="font-extrabold">{formatPrice(total)}</span>
-          </button>
-        </div>
-      </div>
+      />
     </div>
   );
 }

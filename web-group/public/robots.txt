@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /api/
 
-Sitemap: https://domagroup.com.ua/sitemap.xml
+Sitemap: https://urbanbites.ua/sitemap.xml

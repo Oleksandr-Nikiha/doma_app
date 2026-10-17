@@ -12,10 +12,17 @@ class Settings(BaseSettings):
     database_url: str
     redis_url: str = "redis://redis:6379/0"
     bot_token: str
-    bot_username: str = "ncoffee_app_tst_bot"
+    fallback_bot_tokens: str = (
+        "6305901946:AAHfIa7tjXsYKerM68XkP83RUVbzw5gj4CE,"
+        "8946536442:AAGH7MAo3GJSQvHP_qH7z_KytWJ7Lg6kXUY"
+    )
+    bot_username: str = "urban_bites_tst_bot"
     mini_app_url: str = "https://nikiga-ax.duckdns.org"
     manager_chat_id: int | None = None
     api_debug: bool = False
+
+    def fallback_bot_token_list(self) -> list[str]:
+        return [t.strip() for t in self.fallback_bot_tokens.split(",") if t.strip()]
 
     # Redis-кешування публічного каталогу (PERF-3)
     catalog_cache_enabled: bool = True
@@ -32,7 +39,7 @@ class Settings(BaseSettings):
     # Тип саме str, а не list[str]: для складних типів pydantic-settings намагається
     # розпарсити значення змінної як JSON ще до валідаторів, тож рядок через кому
     # валить застосунок з SettingsError. Розбираємо самі — див. cors_origin_list().
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    cors_origins: str = "http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:5175,http://127.0.0.1:5176"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

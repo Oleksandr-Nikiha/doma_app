@@ -43,7 +43,7 @@ async def _get_bot_username(bot_token: str) -> str:
             return _cached_bot_username
     except Exception as e:
         logger.warning("Не вдалося автоматично визначити username бота: %s", e)
-    return "ncoffee_app_tst_bot"
+    return "urban_bites_tst_bot"
 
 
 class AuthSessionOut(BaseModel):

@@ -1,13 +1,45 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
+  --color-brand-slate: #0F1115;
+  --color-brand-gold: #F59E0B;
+  --color-brand-cashmere: #14171E;
+  --color-brand-surface: #181B22;
+  --color-brand-surface-raised: #1F242D;
+  --color-brand-border: rgba(255, 255, 255, 0.08);
+  --color-brand-text: #F1F5F9;
+  --color-brand-text-muted: #94A3B8;
+}
+
+html {
+  background-color: #0F1115;
 }
 
 @layer base {
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #0F1115;
+    color: #F1F5F9;
+    min-height: 100vh;
+    position: relative;
   }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -10;
+    pointer-events: none;
+    background-color: #0F1115;
+    background-image:
+      radial-gradient(circle at 12% 12%, rgba(211, 69, 40, 0.16) 0%, transparent 48%),
+      radial-gradient(circle at 88% 15%, rgba(245, 158, 11, 0.16) 0%, transparent 50%),
+      radial-gradient(circle at 50% 48%, rgba(230, 154, 56, 0.08) 0%, transparent 60%),
+      radial-gradient(circle at 85% 85%, rgba(198, 139, 89, 0.18) 0%, transparent 50%),
+      radial-gradient(circle at 15% 88%, rgba(51, 65, 85, 0.32) 0%, transparent 52%);
+  }
+
   h1, h2, .font-display {
     font-family: 'Playfair Display', Georgia, serif;
   }
@@ -19,24 +51,24 @@ iframe[src*="oauth.telegram.org"] {
   border-radius: 20px !important;
   overflow: hidden !important;
   background-color: transparent !important;
-  color-scheme: light !important;
+  color-scheme: dark !important;
   border: none !important;
 }
 
-/* Приємний скролбар */
+/* Темний графітовий скролбар */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #FAF7F2;
+  background: #0F1115;
 }
 ::-webkit-scrollbar-thumb {
-  background: #D8C7B0;
+  background: #282F3B;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #BFA88D;
+  background: #3E4856;
 }
 
 /* Приховування скролбару для горизонтальної стрічки категорій */
@@ -47,5 +79,3 @@ iframe[src*="oauth.telegram.org"] {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-
-

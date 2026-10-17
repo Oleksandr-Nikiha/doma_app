@@ -27,18 +27,20 @@ from src.db.connection import (
 router = Router(name="start")
 
 
-def _open_app_keyboard(mini_app_url: str) -> InlineKeyboardMarkup:
+def _open_app_keyboard(mini_app_url: str, is_en: bool = False) -> InlineKeyboardMarkup:
     """Інлайн-кнопка, що відкриває Mini App. URL обов'язково має бути HTTPS."""
+    btn_text = "🍕 Open Menu" if is_en else "🍕 Відкрити меню"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🍕 Відкрити меню",
+                    text=btn_text,
                     web_app=WebAppInfo(url=mini_app_url),
                 )
             ]
         ]
     )
+
 
 
 async def _process_admin_auth(message: Message, payload: str) -> bool:
@@ -171,28 +173,54 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
     settings = get_settings()
     user = await get_user_by_telegram_id(message.from_user.id)
 
+    lang = (message.from_user.language_code or "uk").lower()
+    is_en = lang.startswith("en")
+
     if user:
-        verified_badge = (
-            "✅ Телефон верифіковано"
-            if user.get("is_phone_verified")
-            else "⚠️ Телефон не верифіковано (надішліть /verify)"
-        )
-        text = (
-            f"Вітаємо знову, {user['full_name']}! 👋\n"
-            f"({verified_badge})\n\n"
-            "Обирайте страви з Doma Pizza та Doma Croissants — кошик чекає."
-        )
+        if is_en:
+            verified_badge = (
+                "✅ Phone verified"
+                if user.get("is_phone_verified")
+                else "⚠️ Phone not verified (send /verify)"
+            )
+            text = (
+                f"Welcome back, {user['full_name']}! 👋\n"
+                f"({verified_badge})\n\n"
+                "Explore dishes from <b>Urban Pizza & Sushi</b> "
+                "and <b>Urban Bakery & Coffee</b> — your cart is waiting."
+            )
+        else:
+            verified_badge = (
+                "✅ Телефон верифіковано"
+                if user.get("is_phone_verified")
+                else "⚠️ Телефон не верифіковано (надішліть /verify)"
+            )
+            text = (
+                f"Вітаємо знову, {user['full_name']}! 👋\n"
+                f"({verified_badge})\n\n"
+                "Обирайте страви з <b>Urban Pizza & Sushi</b> "
+                "та <b>Urban Bakery & Coffee</b> — кошик чекає."
+            )
     else:
-        text = (
-            "Вітаємо в <b>Doma</b>! 👋\n\n"
-            "Тут можна замовити їжу з <b>Doma Pizza</b> та <b>Doma Croissants</b>.\n"
-            "Відкрийте меню — на першому екрані попросимо ім'я, телефон і адресу доставки."
-        )
+        if is_en:
+            text = (
+                "Welcome to <b>Urban Bites</b>! 👋\n\n"
+                "Order food from <b>Urban Pizza & Sushi</b> and <b>Urban Bakery & Coffee</b>.\n"
+                "Open the menu to choose delivery or pickup across Kyiv."
+            )
+        else:
+            text = (
+                "Вітаємо в <b>Urban Bites</b>! 👋\n\n"
+                "Тут можна замовити їжу з <b>Urban Pizza & Sushi</b> "
+                "та <b>Urban Bakery & Coffee</b>.\n"
+                "Відкрийте меню — замовляйте швидку доставку або самовивіз по Києву."
+            )
 
     await message.answer(
         text,
-        reply_markup=_open_app_keyboard(settings.mini_app_url),
+        reply_markup=_open_app_keyboard(settings.mini_app_url, is_en=is_en),
     )
+
 
 
 @router.message(Command("verify"))

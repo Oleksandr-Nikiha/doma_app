@@ -42,14 +42,14 @@ export function OrderTimeline({ currentStepInfo, stepsList }: OrderTimelineProps
 
       {/* Візуальний шкальний степер (Timeline) */}
       {!currentStepInfo.isCancelled && (
-        <div className="bg-[#FAF7F2] p-4 sm:p-5 rounded-2xl border border-[#EADFCF] space-y-4">
-          <div className="text-xs font-bold uppercase tracking-wider text-[#8D7B6D]">
+        <div className="bg-[#181B22] p-4 sm:p-5 rounded-2xl border border-white/10 space-y-4">
+          <div className="text-xs font-bold uppercase tracking-wider text-[#94A3B8]">
             Етапи виконання
           </div>
 
           <div className="relative flex items-center justify-between">
             {/* Лінія бекграунду */}
-            <div className="absolute left-4 right-4 top-1/2 -translate-y-1/2 h-1 bg-[#E2D5C3] z-0" />
+            <div className="absolute left-4 right-4 top-1/2 -translate-y-1/2 h-1 bg-[#252A34] z-0" />
 
             {/* Активна лінія прогресу */}
             <div
@@ -78,10 +78,10 @@ export function OrderTimeline({ currentStepInfo, stepsList }: OrderTimelineProps
                   <div
                     className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold transition-all duration-300 ${
                       isPassed
-                        ? "bg-emerald-500 text-white shadow-sm ring-4 ring-[#FAF7F2]"
+                        ? "bg-emerald-500 text-white shadow-sm ring-4 ring-[#181B22]"
                         : isCurrent
-                        ? "bg-[#2C1E14] text-white ring-4 ring-[#2C1E14]/15 shadow-md scale-110"
-                        : "bg-white text-[#8D7B6D] border border-[#D5C7B3] ring-4 ring-[#FAF7F2]"
+                        ? "bg-[#E69A38] text-white ring-4 ring-[#E69A38]/20 shadow-md scale-110"
+                        : "bg-[#14171E] text-[#94A3B8] border border-white/10 ring-4 ring-[#181B22]"
                     }`}
                   >
                     {isPassed ? "✓" : st.icon}
@@ -89,10 +89,10 @@ export function OrderTimeline({ currentStepInfo, stepsList }: OrderTimelineProps
                   <span
                     className={`text-[10px] sm:text-xs font-bold mt-2 whitespace-nowrap text-center ${
                       isCurrent
-                        ? "text-[#2C1E14] font-extrabold"
+                        ? "text-[#F1F5F9] font-extrabold"
                         : isPassed
-                        ? "text-emerald-700"
-                        : "text-[#8D7B6D]"
+                        ? "text-emerald-400"
+                        : "text-[#94A3B8]"
                     }`}
                   >
                     {st.label}

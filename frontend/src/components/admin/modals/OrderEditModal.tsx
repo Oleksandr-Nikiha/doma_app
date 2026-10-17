@@ -16,6 +16,9 @@ import {
   type OrderItemDraft,
   type OrderItemOptionDraft,
 } from "./AddOptionToItemModal";
+import { OrderCustomerFields } from "./orderEdit/OrderCustomerFields";
+import { OrderItemsList } from "./orderEdit/OrderItemsList";
+import { AddDishSubmodal } from "./orderEdit/AddDishSubmodal";
 
 export function OrderEditModal({
   orderId,
@@ -44,8 +47,6 @@ export function OrderEditModal({
   const [isInitialized, setIsInitialized] = useState(false);
 
   const [addDishOpen, setAddDishOpen] = useState(false);
-  const [dishSearch, setDishSearch] = useState("");
-
   const [targetItemIdx, setTargetItemIdx] = useState<number | null>(null);
   const [notified, setNotified] = useState(false);
 
@@ -110,6 +111,19 @@ export function OrderEditModal({
       return sum + calc.itemSubtotal;
     }, 0);
   }, [items, adminProducts]);
+
+  const handleUpdateItemQty = (idx: number, delta: number) => {
+    const next = [...items];
+    const newQty = next[idx].qty + delta;
+    if (newQty > 0) {
+      next[idx].qty = newQty;
+      setItems(next);
+    }
+  };
+
+  const handleRemoveItem = (idx: number) => {
+    setItems(items.filter((_, i) => i !== idx));
+  };
 
   const handleUpdateOptionQty = (
     itemIdx: number,
@@ -297,16 +311,6 @@ export function OrderEditModal({
     );
   }
 
-  const filteredChoices = variantChoices.filter((vc) => {
-    if (!dishSearch) return true;
-    const q = dishSearch.toLowerCase();
-    return (
-      vc.product_name.toLowerCase().includes(q) ||
-      vc.variant_label.toLowerCase().includes(q) ||
-      (vc.category_name && vc.category_name.toLowerCase().includes(q))
-    );
-  });
-
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4 overscroll-contain">
       <div
@@ -370,280 +374,34 @@ export function OrderEditModal({
           </div>
         )}
 
-        {/* Основні параметри */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-          <div>
-            <label className="block mb-1 font-semibold opacity-70">Статус замовлення:</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full rounded-xl border border-[var(--app-border)] p-2.5 font-medium outline-none"
-              style={{ background: "var(--app-surface-2)", color: "var(--tg-theme-text-color)" }}
-            >
-              <option value="pending_moderation">⏳ Очікує підтвердження</option>
-              <option value="confirmed">✅ Підтверджено</option>
-              <option value="in_progress">👨‍🍳 Готується</option>
-              <option value="ready">🛍️ Готове до видачі (самовивіз)</option>
-              <option value="on_the_way">🛵 В дорозі (доставка)</option>
-              <option value="completed">🏁 Виконано</option>
-              <option value="rejected">❌ Відхилено</option>
-              <option value="cancelled">🚫 Скасовано</option>
-            </select>
-          </div>
+        {/* Основні параметри клієнта та доставки */}
+        <OrderCustomerFields
+          status={status}
+          setStatus={setStatus}
+          scheduledTime={scheduledTime}
+          setScheduledTime={setScheduledTime}
+          deliveryAddress={deliveryAddress}
+          setDeliveryAddress={setDeliveryAddress}
+          contactName={contactName}
+          setContactName={setContactName}
+          contactPhone={contactPhone}
+          setContactPhone={setContactPhone}
+          comment={comment}
+          setComment={setComment}
+          fulfillmentType={order.fulfillment_type}
+        />
 
-          <div>
-            <label className="block mb-1 font-semibold opacity-70">
-              ⏰ Бажаний час (10:30-21:30):
-            </label>
-            <input
-              type="time"
-              value={scheduledTime}
-              min="10:30"
-              max="21:30"
-              onChange={(e) => setScheduledTime(e.target.value)}
-              className="w-full rounded-xl border border-[var(--app-border)] p-2.5 font-medium outline-none"
-              style={{ background: "var(--app-surface-2)", color: "var(--tg-theme-text-color)" }}
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2 text-xs">
-          {order.fulfillment_type === "delivery" && (
-            <div>
-              <label className="block mb-1 font-semibold opacity-70">Адреса доставки:</label>
-              <input
-                type="text"
-                value={deliveryAddress}
-                onChange={(e) => setDeliveryAddress(e.target.value)}
-                className="w-full rounded-xl p-2.5 font-medium outline-none"
-                style={{ background: "var(--app-surface-2)" }}
-              />
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block mb-1 font-semibold opacity-70">Ім'я клієнта:</label>
-              <input
-                type="text"
-                value={contactName}
-                onChange={(e) => setContactName(e.target.value)}
-                className="w-full rounded-xl p-2.5 font-medium outline-none"
-                style={{ background: "var(--app-surface-2)" }}
-              />
-            </div>
-            <div>
-              <label className="block mb-1 font-semibold opacity-70">Телефон:</label>
-              <input
-                type="text"
-                value={contactPhone}
-                onChange={(e) => setContactPhone(e.target.value)}
-                className="w-full rounded-xl p-2.5 font-medium outline-none"
-                style={{ background: "var(--app-surface-2)" }}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block mb-1 font-semibold opacity-70">Коментар:</label>
-            <input
-              type="text"
-              value={comment}
-              placeholder="Коментар клієнта або менеджера..."
-              onChange={(e) => setComment(e.target.value)}
-              className="w-full rounded-xl p-2.5 font-medium outline-none"
-              style={{ background: "var(--app-surface-2)" }}
-            />
-          </div>
-        </div>
-
-        {/* Блок страв та позицій */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold uppercase tracking-wider opacity-70">
-              Позиції замовлення ({items.length})
-            </h4>
-            <button
-              onClick={() => {
-                haptic("light");
-                setAddDishOpen(true);
-              }}
-              className="app-press rounded-xl px-2.5 py-1 text-xs font-semibold"
-              style={{ background: "var(--app-tint)", color: "var(--tg-theme-button-color)" }}
-            >
-              + Додати страву
-            </button>
-          </div>
-
-          <div className="space-y-2.5">
-            {items.map((it, idx) => {
-              const rules = getOptionRulesForDraft(it);
-              const calc = calculateItemOptionsWithFreeQuota(
-                it.options,
-                rules,
-                it.unit_price,
-                it.qty
-              );
-
-              return (
-                <div
-                  key={idx}
-                  className="rounded-2xl p-3 border space-y-2 text-xs"
-                  style={{ borderColor: "var(--app-border)", background: "var(--app-surface-2)" }}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-bold">{it.product_name}</p>
-                      <p className="opacity-60 text-[11px]">
-                        {it.variant_label} • {formatPrice(it.unit_price)}/шт
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1.5 rounded-lg bg-black/10 px-2 py-0.5">
-                        <button
-                          onClick={() => {
-                            haptic("light");
-                            if (it.qty > 1) {
-                              const next = [...items];
-                              next[idx].qty -= 1;
-                              setItems(next);
-                            }
-                          }}
-                          className="font-bold px-1"
-                        >
-                          -
-                        </button>
-                        <span className="font-bold px-1">{it.qty}</span>
-                        <button
-                          onClick={() => {
-                            haptic("light");
-                            const next = [...items];
-                            next[idx].qty += 1;
-                            setItems(next);
-                          }}
-                          className="font-bold px-1"
-                        >
-                          +
-                        </button>
-                      </div>
-
-                      <span className="font-bold min-w-[65px] text-right">
-                        {formatPrice(calc.itemSubtotal)}
-                      </span>
-
-                      <button
-                        onClick={() => {
-                          haptic("light");
-                          setItems(items.filter((_, i) => i !== idx));
-                        }}
-                        className="text-red-500 opacity-60 hover:opacity-100 p-1"
-                        title="Видалити"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Додатки до цієї страви */}
-                  {calc.breakdown.length > 0 && (
-                    <div
-                      className="space-y-1.5 pl-2.5 border-l-2 py-0.5"
-                      style={{ borderColor: "var(--tg-theme-button-color)" }}
-                    >
-                      {calc.breakdown.map((b, bIdx) => (
-                        <div
-                          key={bIdx}
-                          className="flex items-center justify-between text-[11px] opacity-80"
-                        >
-                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                            <span className="truncate">
-                              ↳ <b>{b.option_name}</b> {b.qty > 1 ? `×${b.qty}` : ""}
-                              {b.freeQty > 0 && b.paidQty === 0 && (
-                                <span className="ml-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                                  (включено, 0 ₴)
-                                </span>
-                              )}
-                              {b.freeQty > 0 && b.paidQty > 0 && (
-                                <span className="ml-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                                  ({b.freeQty} включено, {b.paidQty} платно)
-                                </span>
-                              )}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="font-semibold text-right min-w-[45px]">
-                              {b.effectiveCost > 0 ? `+${formatPrice(b.effectiveCost)}` : "0 ₴"}
-                            </span>
-
-                            <div className="flex items-center gap-1 rounded bg-black/5 dark:bg-white/10 px-1 py-0.5">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  haptic("light");
-                                  handleUpdateOptionQty(
-                                    idx,
-                                    b.option_group_name,
-                                    b.option_name,
-                                    -1
-                                  );
-                                }}
-                                className="px-1 font-bold text-xs hover:text-red-500"
-                                title="Зменшити кількість"
-                              >
-                                -
-                              </button>
-                              <span className="font-bold text-[10px] px-0.5">{b.qty}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  haptic("light");
-                                  handleUpdateOptionQty(
-                                    idx,
-                                    b.option_group_name,
-                                    b.option_name,
-                                    1
-                                  );
-                                }}
-                                className="px-1 font-bold text-xs hover:text-emerald-500"
-                                title="Збільшити кількість"
-                              >
-                                +
-                              </button>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                haptic("light");
-                                handleRemoveOption(idx, b.option_group_name, b.option_name);
-                              }}
-                              className="text-red-500 opacity-60 hover:opacity-100 px-1"
-                              title="Видалити додаток"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => {
-                      haptic("light");
-                      setTargetItemIdx(idx);
-                    }}
-                    className="text-[11px] font-semibold opacity-75 hover:opacity-100 text-blue-500 inline-flex items-center gap-1"
-                  >
-                    <span>+ Додати опцію / соус до страви</span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        {/* Список страв та додатків */}
+        <OrderItemsList
+          items={items}
+          adminProducts={adminProducts}
+          onUpdateItemQty={handleUpdateItemQty}
+          onRemoveItem={handleRemoveItem}
+          onUpdateOptionQty={handleUpdateOptionQty}
+          onRemoveOption={handleRemoveOption}
+          onOpenAddOption={(idx) => setTargetItemIdx(idx)}
+          onOpenAddDish={() => setAddDishOpen(true)}
+        />
 
         {/* Підсумок */}
         <div
@@ -697,71 +455,27 @@ export function OrderEditModal({
         </div>
 
         {/* Модалка вибору страви для додавання */}
-        {addDishOpen && (
-          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-4 overscroll-contain">
-            <div
-              className="w-full max-h-[85dvh] overflow-y-auto rounded-2xl p-4 max-w-sm space-y-3 overscroll-contain touch-pan-y shadow-2xl"
-              style={{ background: "var(--tg-theme-bg-color, #ffffff)", border: "1px solid var(--app-border)" }}
-            >
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold">Додати страву до замовлення</h4>
-                <button
-                  onClick={() => setAddDishOpen(false)}
-                  className="opacity-50 hover:opacity-100"
-                >
-                  ✕
-                </button>
-              </div>
+        <AddDishSubmodal
+          isOpen={addDishOpen}
+          onClose={() => setAddDishOpen(false)}
+          variantChoices={variantChoices}
+          onSelect={(vc) => {
+            setItems([
+              ...items,
+              {
+                variant_id: vc.variant_id,
+                product_id: vc.product_id,
+                product_name: vc.product_name,
+                variant_label: vc.variant_label,
+                unit_price: vc.price,
+                qty: 1,
+                options: [],
+              },
+            ]);
+          }}
+        />
 
-              <input
-                type="text"
-                placeholder="🔍 Пошук страви..."
-                value={dishSearch}
-                onChange={(e) => setDishSearch(e.target.value)}
-                className="w-full rounded-xl p-2.5 text-xs outline-none"
-                style={{ background: "var(--app-surface-2)" }}
-              />
-
-              <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
-                {filteredChoices.slice(0, 40).map((vc) => (
-                  <button
-                    key={vc.variant_id}
-                    onClick={() => {
-                      haptic("light");
-                      setItems([
-                        ...items,
-                        {
-                          variant_id: vc.variant_id,
-                          product_id: vc.product_id,
-                          product_name: vc.product_name,
-                          variant_label: vc.variant_label,
-                          unit_price: vc.price,
-                          qty: 1,
-                          options: [],
-                        },
-                      ]);
-                      setAddDishOpen(false);
-                      setDishSearch("");
-                    }}
-                    className="app-press flex w-full items-center justify-between rounded-xl p-2 text-left text-xs hover:bg-black/5"
-                    style={{ background: "var(--app-surface-2)" }}
-                  >
-                    <div>
-                      <p className="font-bold">{vc.product_name}</p>
-                      <p className="opacity-60 text-[10px]">
-                        {vc.category_name ? `${vc.category_name} • ` : ""}
-                        {vc.variant_label}
-                      </p>
-                    </div>
-                    <span className="font-bold">{formatPrice(vc.price)}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Модалка додавання опції: прив'язані, з меню або власні */}
+        {/* Модалка додавання опції */}
         {targetItemIdx !== null && items[targetItemIdx] && (
           <AddOptionToItemModal
             item={items[targetItemIdx]}

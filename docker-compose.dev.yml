@@ -56,7 +56,7 @@ services:
       resources:
         limits:
           cpus: "1.0"
-          memory: 512M
+          memory: 768M
 
   bot:
     build:
@@ -79,8 +79,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "1.0"
+          memory: 1G
 
   frontend:
     build:
@@ -115,13 +115,16 @@ services:
       resources:
         limits:
           cpus: "1.0"
-          memory: 768M
+          memory: 1G
 
   web-croissants:
     build:
       context: ./web-croissants
       dockerfile: Dockerfile.dev
     restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+      VITE_TELEGRAM_BOT_USERNAME: ${BOT_USERNAME:-urban_bites_tst_bot}
     ports:
       - "5174:5174"
     volumes:
@@ -136,13 +139,16 @@ services:
       resources:
         limits:
           cpus: "1.0"
-          memory: 768M
+          memory: 1G
 
   web-pizza:
     build:
       context: ./web-pizza
       dockerfile: Dockerfile.dev
     restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+      VITE_TELEGRAM_BOT_USERNAME: ${BOT_USERNAME:-urban_bites_tst_bot}
     ports:
       - "5175:5175"
     volumes:
@@ -157,13 +163,16 @@ services:
       resources:
         limits:
           cpus: "1.0"
-          memory: 768M
+          memory: 1G
 
   web-group:
     build:
       context: ./web-group
       dockerfile: Dockerfile.dev
     restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+      VITE_TELEGRAM_BOT_USERNAME: ${BOT_USERNAME:-urban_bites_tst_bot}
     ports:
       - "5176:5176"
     volumes:
@@ -178,4 +187,4 @@ services:
       resources:
         limits:
           cpus: "1.0"
-          memory: 768M
+          memory: 1G

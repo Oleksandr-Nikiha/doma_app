@@ -15,7 +15,8 @@ def get_telegram_client() -> httpx.AsyncClient:
         _http_client = httpx.AsyncClient(
             timeout=httpx.Timeout(10.0, connect=5.0),
             limits=httpx.Limits(max_keepalive_connections=20, max_connections=50),
-            headers={"User-Agent": "DomaApp-FastAPI/1.0"},
+            headers={"User-Agent": "UrbanBites-FastAPI/1.0"},
+
         )
     return _http_client
 

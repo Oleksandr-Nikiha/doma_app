@@ -14,19 +14,19 @@ export function useScrollSpy({
 }: UseScrollSpyOptions) {
   const rootCategories = categories.filter((c) => c.parent_id === null);
 
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | "all">("all");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [activeNavId, setActiveNavId] = useState<string | number | null>(null);
   const [activeSubcategoryId, setActiveSubcategoryId] = useState<number | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
-  // Встановлення початкової категорії при завантаженні
+  // Встановлення початкової категорії при завантаженні каталогу
   useEffect(() => {
-    if (rootCategories.length > 0 && (selectedCategoryId === "all" || activeNavId === null)) {
+    if (rootCategories.length > 0 && selectedCategoryId === null) {
       const firstId = rootCategories[0].id;
       setSelectedCategoryId(firstId);
       setActiveNavId(firstId);
     }
-  }, [rootCategories]);
+  }, [rootCategories, selectedCategoryId]);
 
   const isProgrammaticScrollRef = useRef(false);
   const scrollTimeoutRef = useRef<number | null>(null);
@@ -40,7 +40,7 @@ export function useScrollSpy({
     return Math.round(headerH + navH);
   }, []);
 
-  // Точний розрахунок Y-координати, де закінчується Hero і починається Меню безпосередньо під липкою навігацією
+  // Точний розрахунок Y-координати початку меню під липкою панеллю
   const getMenuTopScrollY = useCallback(() => {
     const heroEl = document.getElementById("hero");
     const headerEl = document.querySelector<HTMLElement>("header");
@@ -61,25 +61,25 @@ export function useScrollSpy({
     const menuEl = document.getElementById("menu");
     if (menuEl) {
       const menuRect = menuEl.getBoundingClientRect();
-      const navH = document.querySelector("[data-category-nav]")?.getBoundingClientRect().height || 56;
+      const navH =
+        document.querySelector("[data-category-nav]")?.getBoundingClientRect().height || 56;
       return Math.max(0, Math.round(menuRect.top + window.scrollY - headerH - navH));
     }
 
     return 0;
   }, []);
 
-  // Допоміжна функція плавного доведення скролу до меню (без вильоту на Hero чи шапку)
   const scrollToMenuTop = useCallback(() => {
     const targetY = getMenuTopScrollY();
     window.scrollTo({ top: targetY, behavior: "smooth" });
   }, [getMenuTopScrollY]);
 
-  // Scrollspy: точне визначення активної секції та підкатегорії під час скролу
+  // Scrollspy: точне визначення активної секції під час скролу сторінки
   const updateActiveElementsOnScroll = useCallback(() => {
     if (isProgrammaticScrollRef.current) return;
     if (rootCategories.length === 0) return;
 
-    // Якщо доскролили до самого низу сторінки і секція контактів видима -> активні контакти
+    // Якщо доскролили до самого низу сторінки — активні контакти
     const contactsEl = document.getElementById("contacts");
     if (contactsEl) {
       const contactsRect = contactsEl.getBoundingClientRect();
@@ -97,8 +97,8 @@ export function useScrollSpy({
     const stickyHeight = getStickyNavHeight();
     const focalY = stickyHeight + 40;
 
-    // 1. Інформаційні секції (about, delivery, careers, contacts)
-    const infoSections: Array<{ id: string; elementId: string }> = [
+    // 1. Інформаційні секції сайту
+    const infoSections = [
       { id: "about", elementId: "about" },
       { id: "delivery", elementId: "delivery" },
       { id: "careers", elementId: "careers" },
@@ -118,58 +118,38 @@ export function useScrollSpy({
     }
     if (foundInfo) return;
 
-    // 2. Якщо користувач всередині меню
-    if (selectedCategoryId === "all") {
-      let currentRoot: number = rootCategories[0].id;
-      for (const cat of rootCategories) {
-        const el = document.getElementById(`category-${cat.id}`);
+    // 2. Визначення поточної активної категорії в меню
+    let currentRoot: number = rootCategories[0].id;
+    for (const cat of rootCategories) {
+      const el = document.getElementById(`category-${cat.id}`);
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.top <= focalY) {
+        currentRoot = cat.id;
+      }
+    }
+    setActiveNavId(currentRoot);
+    setSelectedCategoryId(currentRoot);
+
+    // Підкатегорії поточної видимої кореневої категорії
+    const subcats = categories.filter((c) => c.parent_id === currentRoot);
+    if (subcats.length > 0) {
+      let currentSub: number | null = null;
+      for (const sub of subcats) {
+        const el = document.getElementById(`subcategory-${sub.id}`);
         if (!el) continue;
         const rect = el.getBoundingClientRect();
         if (rect.top <= focalY) {
-          currentRoot = cat.id;
+          currentSub = sub.id;
         }
       }
-      setActiveNavId(currentRoot);
-
-      // Підкатегорії поточної видимої кореневої категорії
-      const subcats = categories.filter((c) => c.parent_id === currentRoot);
-      if (subcats.length > 0) {
-        let currentSub: number | null = null;
-        for (const sub of subcats) {
-          const el = document.getElementById(`subcategory-${sub.id}`);
-          if (!el) continue;
-          const rect = el.getBoundingClientRect();
-          if (rect.top <= focalY) {
-            currentSub = sub.id;
-          }
-        }
-        setActiveSubcategoryId(currentSub);
-      } else {
-        setActiveSubcategoryId(null);
-      }
+      setActiveSubcategoryId(currentSub);
     } else {
-      // Показується одна конкретна вибрана категорія
-      setActiveNavId(selectedCategoryId);
-
-      const subcats = categories.filter((c) => c.parent_id === selectedCategoryId);
-      if (subcats.length > 0) {
-        let currentSub: number | null = null;
-        for (const sub of subcats) {
-          const el = document.getElementById(`subcategory-${sub.id}`);
-          if (!el) continue;
-          const rect = el.getBoundingClientRect();
-          if (rect.top <= focalY) {
-            currentSub = sub.id;
-          }
-        }
-        setActiveSubcategoryId(currentSub);
-      } else {
-        setActiveSubcategoryId(null);
-      }
+      setActiveSubcategoryId(null);
     }
-  }, [categories, rootCategories, selectedCategoryId, getStickyNavHeight]);
+  }, [categories, rootCategories, getStickyNavHeight]);
 
-  // Зняття програмного блокування при ручному скролі
+  // Зняття програмного блокування при ручному скролі користувача
   useEffect(() => {
     const handleUserInteraction = () => {
       if (isProgrammaticScrollRef.current) {
@@ -191,7 +171,7 @@ export function useScrollSpy({
     };
   }, []);
 
-  // Throttled onScroll
+  // Throttled scroll listener
   useEffect(() => {
     let ticking = false;
 
@@ -214,14 +194,11 @@ export function useScrollSpy({
     };
   }, [updateActiveElementsOnScroll]);
 
-  // Перемикання категорії зі збереженням позиції в меню (anti-jump)
-  const handleSelectCategory = (id: number | "all") => {
+  // Плавний перехід до конкретної категорії меню
+  const handleSelectCategory = (id: number) => {
     if (searchQuery && onClearSearch) {
       onClearSearch();
     }
-
-    const menuTop = getMenuTopScrollY();
-    const isBelowMenuTop = window.scrollY > menuTop + 10;
 
     setSelectedCategoryId(id);
     setActiveNavId(id);
@@ -232,29 +209,31 @@ export function useScrollSpy({
       window.clearTimeout(scrollTimeoutRef.current);
     }
 
-    if (isBelowMenuTop) {
-      // Якщо користувач уже в зоні меню (наприклад, гортав Суші донизу),
-      // миттєво фіксуємо скрол на початку меню перед схлопуванням DOM нової категорії
-      window.scrollTo({ top: menuTop, behavior: "instant" });
+    const target = document.getElementById(`category-${id}`);
+    if (target) {
+      const stickyHeight = getStickyNavHeight();
+      const targetY = Math.max(
+        0,
+        target.getBoundingClientRect().top + window.scrollY - (stickyHeight + 16),
+      );
+      window.scrollTo({ top: targetY, behavior: "smooth" });
     } else {
-      // Якщо користувач дивився банер Hero вище меню - плавно спускаємо до меню
-      window.scrollTo({ top: menuTop, behavior: "smooth" });
+      scrollToMenuTop();
     }
 
     scrollTimeoutRef.current = window.setTimeout(() => {
       isProgrammaticScrollRef.current = false;
       updateActiveElementsOnScroll();
-    }, 400);
+    }, 600);
   };
 
-  // Скрол до головного меню з банера (Hero)
   const handleScrollToMenu = () => {
     scrollToMenuTop();
   };
 
-  // Навігація по посиланнях верхньої або липкої панелі
+  // Навігація по верхніх посиланнях або інформаційних секціях
   const handleSelectNav = (id: string | number) => {
-    if (typeof id === "number" || id === "all") {
+    if (typeof id === "number") {
       handleSelectCategory(id);
       return;
     }
@@ -264,7 +243,6 @@ export function useScrollSpy({
       return;
     }
 
-    // Інформаційні секції (about, delivery, careers, contacts)
     if (searchQuery && onClearSearch) {
       onClearSearch();
     }
@@ -289,10 +267,9 @@ export function useScrollSpy({
     scrollTimeoutRef.current = window.setTimeout(() => {
       isProgrammaticScrollRef.current = false;
       updateActiveElementsOnScroll();
-    }, 850);
+    }, 700);
   };
 
-  // Перехід до конкретної підкатегорії
   const handleSelectSubcategory = (subcatId: number | null) => {
     if (searchQuery && onClearSearch) {
       onClearSearch();
@@ -300,7 +277,11 @@ export function useScrollSpy({
     setActiveSubcategoryId(subcatId);
 
     if (subcatId === null) {
-      scrollToMenuTop();
+      if (selectedCategoryId) {
+        handleSelectCategory(selectedCategoryId);
+      } else {
+        scrollToMenuTop();
+      }
       return;
     }
 

@@ -134,7 +134,8 @@ export function App() {
           <div className="text-5xl">🔒</div>
           <p className="mt-4 font-medium">Не вдалося підтвердити сесію</p>
           <p className="mt-2 text-sm opacity-60">
-            Відкрийте застосунок через кнопку «Меню» в боті Doma.
+            Відкрийте застосунок через кнопку «Меню» в боті Urban Bites.
+
           </p>
           <p className="mt-4 text-xs opacity-40">{error.detail}</p>
         </div>

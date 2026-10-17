@@ -1,7 +1,7 @@
 /**
- * Утиліти для роботи з робочим часом закладу Doma Croissants
- * Пекарня: 08:00 – 20:00 щодня
- * Кур'єрська доставка: 10:00 – 20:00 щодня
+ * Утиліти для роботи з робочим часом закладу Urban Bakery & Coffee
+ * Пекарня: 08:00 – 21:00 щодня
+ * Кур'єрська доставка: 10:00 – 21:00 щодня
  */
 
 export interface WorkingHoursInfo {
@@ -27,11 +27,11 @@ export function getWorkingHoursInfo(): WorkingHoursInfo {
 
     const timeFormatted = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 
-    // Пекарня: 08:00 (480 хв) – 20:00 (1200 хв)
-    const isBakeryOpen = currentTotalMinutes >= 480 && currentTotalMinutes < 1200;
+    // Пекарня: 08:00 (480 хв) – 21:00 (1260 хв)
+    const isBakeryOpen = currentTotalMinutes >= 480 && currentTotalMinutes < 1260;
 
-    // Доставка: 10:00 (600 хв) – 20:00 (1200 хв)
-    const isDeliveryOpen = currentTotalMinutes >= 600 && currentTotalMinutes < 1200;
+    // Доставка: 10:00 (600 хв) – 21:00 (1260 хв)
+    const isDeliveryOpen = currentTotalMinutes >= 600 && currentTotalMinutes < 1260;
 
     if (isDeliveryOpen) {
       return {
@@ -39,7 +39,7 @@ export function getWorkingHoursInfo(): WorkingHoursInfo {
         isDeliveryOpen: true,
         currentKyivTime: timeFormatted,
         statusText: "Відчинено • Доставка та самовивіз працюють",
-        shortStatusText: "Відчинено до 20:00",
+        shortStatusText: "Відчинено до 21:00",
         badgeColor: "emerald",
         checkoutNotice: null,
       };
@@ -54,7 +54,7 @@ export function getWorkingHoursInfo(): WorkingHoursInfo {
         shortStatusText: "Самовивіз (доставка з 10:00)",
         badgeColor: "amber",
         checkoutNotice:
-          "Зверніть увагу: кур'єрська доставка працює з 10:00 до 20:00. Самовивіз доступний прямо зараз!",
+          "Зверніть увагу: кур'єрська доставка працює з 10:00 до 21:00. Самовивіз доступний прямо зараз!",
       };
     }
 
@@ -66,7 +66,7 @@ export function getWorkingHoursInfo(): WorkingHoursInfo {
       shortStatusText: "Зачинено (до 08:00)",
       badgeColor: "amber",
       checkoutNotice:
-        "Пекарня зараз зачинена (працюємо щодня з 08:00 до 20:00). Ваше замовлення буде прийнято як передзамовлення та випечено свіжим зранку!",
+        "Пекарня зараз зачинена (працюємо щодня з 08:00 до 21:00). Ваше замовлення буде прийнято як передзамовлення та випечено свіжим зранку!",
     };
   } catch {
     return {

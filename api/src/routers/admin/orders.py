@@ -368,8 +368,9 @@ async def update_admin_order(
             elif new_status == "completed":
                 client_text = (
                     f"🏁 <b>Замовлення #{order_id} виконано!</b>\n\n"
-                    f"Смачного! Дякуємо, що обираєте Doma. Будемо раді бачити вас знову! ❤️"
+                    f"Смачного! Дякуємо, що обираєте Urban Bites. Будемо раді бачити вас знову! ❤️"
                 )
+
             elif new_status == "rejected":
                 client_text = (
                     f"😔 <b>Замовлення #{order_id} відхилено</b>\n\n"

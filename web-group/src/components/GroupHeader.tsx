@@ -8,11 +8,11 @@ interface GroupHeaderProps {
 
 export function GroupHeader({ onOpenCabinet, userProfile }: GroupHeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const logoSrc = `${import.meta.env.BASE_URL}logo.png`;
+  const logoSrc = `${import.meta.env.BASE_URL}logo.svg`;
 
   const navItems = [
     { label: "Проєкти", href: "#projects" },
-    { label: "DomaClub", href: "#domaclub" },
+    { label: "URBAN CLUB", href: "#urbanclub" },
     { label: "Акції", href: "#promotions" },
     { label: "Партнерство", href: "#partnership" },
     { label: "Вакансії", href: "#careers" },
@@ -29,33 +29,33 @@ export function GroupHeader({ onOpenCabinet, userProfile }: GroupHeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#E8DFC8] shadow-xs">
+    <header className="sticky top-0 z-40 bg-[#0F1115]/90 backdrop-blur-md border-b border-white/10 shadow-xs">
       {/* Інформаційна верхня плашка */}
-      <div className="bg-[#2C1E14] text-[#E8DFC8] text-xs py-2 px-4 sm:px-6">
+      <div className="bg-[#0B0D10] text-[#94A3B8] text-xs py-2 px-4 sm:px-6 border-b border-white/5">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="font-semibold text-amber-300">🌟 DomaGroup Inc.</span>
-            <span className="hidden sm:inline text-[#8D7665]">|</span>
-            <span className="hidden sm:inline text-[#D4C3AC]">Мережа закладів гостинності у Вишгороді</span>
+            <span className="font-semibold text-amber-400">🌟 Urban Bites</span>
+            <span className="hidden sm:inline text-white/20">|</span>
+            <span className="hidden sm:inline text-[#CBD5E1]">Смак великого міста в один клік</span>
           </div>
           <div className="flex items-center gap-4 text-[11px] sm:text-xs">
             <button
               type="button"
               onClick={onOpenCabinet}
-              className="hover:text-amber-300 transition-colors flex items-center gap-1.5 font-semibold cursor-pointer"
+              className="text-[#CBD5E1] hover:text-amber-400 transition-colors flex items-center gap-1.5 font-semibold cursor-pointer"
             >
               <span>🎁</span>
               <span>
                 {userProfile?.bonuses !== undefined && userProfile.bonuses > 0
-                  ? `DomaClub (${userProfile.bonuses} б.)`
-                  : "DomaClub Лояльність"}
+                  ? `URBAN CLUB (${userProfile.bonuses} б.)`
+                  : "URBAN CLUB Лояльність"}
               </span>
             </button>
             <a
-              href="mailto:domagroup.inc@gmail.com"
-              className="hidden md:inline hover:text-white transition-colors"
+              href="mailto:support@urbanbites.ua"
+              className="hidden md:inline text-[#94A3B8] hover:text-white transition-colors"
             >
-              domagroup.inc@gmail.com
+              support@urbanbites.ua
             </a>
           </div>
         </div>
@@ -67,24 +67,21 @@ export function GroupHeader({ onOpenCabinet, userProfile }: GroupHeaderProps) {
         <a href="#top" className="flex items-center gap-3 group">
           <img
             src={logoSrc}
-            alt="DomaGroup"
-            className="h-9 sm:h-11 w-auto object-contain group-hover:scale-102 transition-transform"
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
-            }}
+            alt="Urban Bites"
+            className="h-10 sm:h-12 w-10 sm:w-12 rounded-full object-cover shadow-sm group-hover:scale-105 transition-transform"
           />
           <div>
-            <span className="font-display text-xl sm:text-2xl font-bold text-[#2C1E14] tracking-tight block leading-tight">
-              DomaGroup
+            <span className="font-display text-xl sm:text-2xl font-bold text-white tracking-tight block leading-tight">
+              Urban Bites
             </span>
-            <span className="text-[10px] sm:text-[11px] font-semibold text-[#8D7B6D] tracking-wider uppercase block">
-              Мережа смаку • Вишгород
+            <span className="text-[10px] sm:text-[11px] font-semibold text-[#94A3B8] tracking-wider uppercase block">
+              Мережа смаку • Київ
             </span>
           </div>
         </a>
 
         {/* Десктоп-навігація */}
-        <nav className="hidden lg:flex items-center gap-6 text-sm font-semibold text-[#4A3B32]">
+        <nav className="hidden lg:flex items-center gap-6 text-sm font-semibold text-[#CBD5E1]">
           {navItems.map((item) => (
             <a
               key={item.href}
@@ -93,7 +90,7 @@ export function GroupHeader({ onOpenCabinet, userProfile }: GroupHeaderProps) {
                 e.preventDefault();
                 handleNavClick(item.href);
               }}
-              className="hover:text-[#C8823E] transition-colors py-1"
+              className="hover:text-amber-400 transition-colors py-1"
             >
               {item.label}
             </a>
@@ -102,19 +99,19 @@ export function GroupHeader({ onOpenCabinet, userProfile }: GroupHeaderProps) {
 
         {/* Швидкі кнопки переходу до замовлення та кабінету */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Кнопка кабінету DomaClub */}
+          {/* Кнопка кабінету URBAN CLUB */}
           <button
             type="button"
             onClick={onOpenCabinet}
-            className="inline-flex items-center gap-1.5 bg-[#FFF2DE] hover:bg-[#FCE7C8] text-[#9C5B23] border border-[#ECD9BF] px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
-            title="Особистий кабінет DomaClub"
+            className="inline-flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+            title="Особистий кабінет URBAN CLUB"
           >
             <span>🎁</span>
             <span className="hidden md:inline">
-              {userProfile?.name ? userProfile.name.split(" ")[0] : "DomaClub"}
+              {userProfile?.name ? userProfile.name.split(" ")[0] : "URBAN CLUB"}
             </span>
             {userProfile?.bonuses !== undefined && userProfile.bonuses > 0 && (
-              <span className="bg-[#E29E57] text-white text-[10px] font-extrabold px-1.5 py-0.2 rounded-full">
+              <span className="bg-amber-500 text-[#0F1115] text-[10px] font-extrabold px-1.5 py-0.2 rounded-full">
                 {userProfile.bonuses}
               </span>
             )}
@@ -122,14 +119,14 @@ export function GroupHeader({ onOpenCabinet, userProfile }: GroupHeaderProps) {
 
           <a
             href="/pizza/"
-            className="hidden sm:inline-flex items-center gap-1.5 bg-[#2C1E14] hover:bg-[#3D2C1F] text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shadow-[#2C1E14]/15"
+            className="hidden sm:inline-flex items-center gap-1.5 bg-[#181B22] hover:bg-[#222732] text-white border border-white/10 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-sm"
           >
             <span>🍕</span>
             <span>Піца & Суші</span>
           </a>
           <a
             href="/croissant/"
-            className="hidden sm:inline-flex items-center gap-1.5 bg-[#2C1E14] hover:bg-[#3D2C1F] text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shadow-[#2C1E14]/15"
+            className="hidden sm:inline-flex items-center gap-1.5 bg-[#181B22] hover:bg-[#222732] text-white border border-white/10 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-sm"
           >
             <span>🥐</span>
             <span>Круасани</span>
@@ -139,7 +136,7 @@ export function GroupHeader({ onOpenCabinet, userProfile }: GroupHeaderProps) {
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-2 rounded-xl bg-[#FAF7F2] border border-[#D8C7B0] text-[#2C1E14] hover:bg-[#F3EDE2] cursor-pointer"
+            className="lg:hidden p-2 rounded-xl bg-[#181B22] border border-white/10 text-white hover:bg-[#222732] cursor-pointer"
             aria-label="Меню"
           >
             {mobileMenuOpen ? "✕" : "☰"}
@@ -149,7 +146,7 @@ export function GroupHeader({ onOpenCabinet, userProfile }: GroupHeaderProps) {
 
       {/* Мобільне меню */}
       {mobileMenuOpen && (
-        <div className="lg:hidden border-t border-[#E8DFC8] bg-[#FAF7F2] px-4 py-5 space-y-4 animate-in slide-in-from-top-2">
+        <div className="lg:hidden border-t border-white/10 bg-[#14171E] px-4 py-5 space-y-4 animate-in slide-in-from-top-2">
           {/* Кнопка кабінету в мобільному меню */}
           <button
             type="button"
@@ -157,33 +154,33 @@ export function GroupHeader({ onOpenCabinet, userProfile }: GroupHeaderProps) {
               setMobileMenuOpen(false);
               onOpenCabinet?.();
             }}
-            className="w-full flex items-center justify-center gap-2 bg-[#FFF2DE] text-[#9C5B23] border border-[#ECD9BF] py-2.5 px-3 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 bg-amber-500/10 text-amber-400 border border-amber-500/30 py-2.5 px-3 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer hover:bg-amber-500/20"
           >
             <span>🎁</span>
             <span>
               {userProfile?.name
-                ? `Кабінет DomaClub (${userProfile.name.split(" ")[0]})`
-                : "Особистий кабінет DomaClub"}
+                ? `Кабінет URBAN CLUB (${userProfile.name.split(" ")[0]})`
+                : "Особистий кабінет URBAN CLUB"}
             </span>
           </button>
 
-          <div className="grid grid-cols-2 gap-2 pb-3 border-b border-[#E8DFC8]">
+          <div className="grid grid-cols-2 gap-2 pb-3 border-b border-white/10">
             <a
               href="/pizza/"
-              className="flex items-center justify-center gap-1.5 bg-[#2C1E14] hover:bg-[#3D2C1F] text-white py-2.5 px-3 rounded-xl text-xs font-bold shadow-xs transition-colors"
+              className="flex items-center justify-center gap-1.5 bg-[#181B22] hover:bg-[#222732] border border-white/10 text-white py-2.5 px-3 rounded-xl text-xs font-bold shadow-xs transition-colors"
             >
               <span>🍕</span>
-              <span>Doma Pizza</span>
+              <span>Pizza & Sushi</span>
             </a>
             <a
               href="/croissant/"
-              className="flex items-center justify-center gap-1.5 bg-[#2C1E14] hover:bg-[#3D2C1F] text-white py-2.5 px-3 rounded-xl text-xs font-bold shadow-xs transition-colors"
+              className="flex items-center justify-center gap-1.5 bg-[#181B22] hover:bg-[#222732] border border-white/10 text-white py-2.5 px-3 rounded-xl text-xs font-bold shadow-xs transition-colors"
             >
               <span>🥐</span>
-              <span>Doma Croissants</span>
+              <span>Bakery & Coffee</span>
             </a>
           </div>
-          <nav className="flex flex-col space-y-2.5 text-sm font-semibold text-[#4A3B32]">
+          <nav className="flex flex-col space-y-2.5 text-sm font-semibold text-[#CBD5E1]">
             {navItems.map((item) => (
               <a
                 key={item.href}
@@ -192,7 +189,7 @@ export function GroupHeader({ onOpenCabinet, userProfile }: GroupHeaderProps) {
                   e.preventDefault();
                   handleNavClick(item.href);
                 }}
-                className="py-1.5 hover:text-[#C8823E]"
+                className="py-1.5 hover:text-amber-400 transition-colors"
               >
                 {item.label}
               </a>

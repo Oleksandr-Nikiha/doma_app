@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     """
 
     bot_token: str
-    bot_username: str = "ncoffee_app_tst_bot"
+    bot_username: str = "urban_bites_tst_bot"
     mini_app_url: str
     database_url: str
     manager_chat_id: int | None = None

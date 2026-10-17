@@ -23,16 +23,17 @@ interface AddressSelectorProps {
  * Допоміжний парсер існуючого рядка адреси (для сумісності з раніше збереженими адресами)
  */
 function parseAddressString(raw: string | null | undefined, knownStreets: DeliveryAddress[]): AddressParts {
-  const defaultCity = "Вишгород";
+  const defaultCity = "Київ";
   if (!raw || !raw.trim()) {
     return { city: defaultCity, street: "", house: "", floor: "", apartment: "" };
   }
 
   const trimmed = raw.trim();
   let city = defaultCity;
-  if (trimmed.toLowerCase().includes("вишгород")) {
-    city = "Вишгород";
+  if (trimmed.toLowerCase().includes("київ")) {
+    city = "Київ";
   }
+
 
   // Спробуємо знайти відповідну вулицю зі списку
   let matchedStreet = "";
@@ -85,7 +86,7 @@ export function formatFullAddress(parts: AddressParts): string {
   if (!parts.street.trim() || !parts.house.trim()) {
     return "";
   }
-  const cleanCity = parts.city.trim() || "Вишгород";
+  const cleanCity = parts.city.trim() || "Київ";
   const cleanStreet = parts.street.trim();
   const cleanHouse = parts.house.trim();
   const cleanFloor = parts.floor.trim();
@@ -108,8 +109,9 @@ export function AddressSelector({
   required = true,
   className = "",
 }: AddressSelectorProps) {
-  const { data: cities = ["Вишгород"] } = useDeliveryCities();
-  const [selectedCity, setSelectedCity] = useState("Вишгород");
+  const { data: cities = ["Київ"] } = useDeliveryCities();
+  const [selectedCity, setSelectedCity] = useState("Київ");
+
 
   const { data: addresses = [], isPending: isAddressesLoading } = useDeliveryAddresses(selectedCity);
 
@@ -246,8 +248,9 @@ export function AddressSelector({
             placeholder={
               isAddressesLoading
                 ? "Завантаження довідника..."
-                : "Почніть вводити назву вулиці (напр. Набережна)..."
+                : "Почніть вводити назву вулиці (напр. Сагайдачного, Хрещатик)..."
             }
+
             className={`w-full rounded-xl border p-3 pr-10 text-sm outline-none transition focus:ring-2 focus:ring-blue-500 ${
               selectedStreet
                 ? "border-emerald-500/60 font-medium"

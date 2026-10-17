@@ -89,7 +89,7 @@ class OrderNotifier:
         )
 
         bot_username = (
-            getattr(settings, "bot_username", "ncoffee_app_tst_bot") or "ncoffee_app_tst_bot"
+            getattr(settings, "bot_username", "urban_bites_tst_bot") or "urban_bites_tst_bot"
         )
         mini_app_url = getattr(settings, "mini_app_url", "") or "https://nikiga-ax.duckdns.org"
         app_link = f"https://t.me/{bot_username}?startapp=order_{order_id}"
@@ -210,7 +210,7 @@ class OrderNotifier:
         )
 
         bot_username = (
-            getattr(settings, "bot_username", "ncoffee_app_tst_bot") or "ncoffee_app_tst_bot"
+            getattr(settings, "bot_username", "urban_bites_tst_bot") or "urban_bites_tst_bot"
         )
         app_link = f"https://t.me/{bot_username}?startapp=order_{order_id}"
 

@@ -1,3 +1,4 @@
+import io
 import logging
 import os
 import uuid
@@ -6,6 +7,13 @@ from pathlib import Path
 import aiofiles
 import asyncpg
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+
+try:
+    from PIL import Image, ImageOps
+
+    HAS_PILLOW = True
+except ImportError:
+    HAS_PILLOW = False
 
 from src.auth.deps import get_current_staff
 
@@ -21,7 +29,7 @@ ALLOWED_CONTENT_TYPES = {
     "image/gif",
     "image/svg+xml",
 }
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_FILE_SIZE = 15 * 1024 * 1024  # 15 MB
 
 
 def _get_uploads_dir() -> Path:
@@ -70,31 +78,58 @@ async def upload_image(
             detail=f"Розмір файлу перевищує ліміт {MAX_FILE_SIZE // (1024 * 1024)} МБ",
         )
 
-    # Генеруємо унікальне ім'я файлу
-    unique_name = f"{uuid.uuid4().hex[:16]}{ext}"
     uploads_dir = _get_uploads_dir()
-    file_path = uploads_dir / unique_name
 
-    try:
+    # Якщо це векторна графіка, GIF-анімація або відсутній модуль Pillow — зберігаємо як є
+    if ext in {".svg", ".gif"} or not HAS_PILLOW:
+        unique_name = f"{uuid.uuid4().hex[:16]}{ext}"
+        file_path = uploads_dir / unique_name
         async with aiofiles.open(file_path, "wb") as out_file:
             await out_file.write(content)
-    except Exception as exc:
-        logger.error("Помилка збереження завантаженого файлу %s: %s", unique_name, exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Не вдалося зберегти файл на сервері",
-        ) from exc
+        saved_size = len(content)
+    else:
+        # Авто-стиснення та конвертація растрових зображень у сучасний WebP (800-1000px)
+        unique_name = f"{uuid.uuid4().hex[:16]}.webp"
+        file_path = uploads_dir / unique_name
+
+        try:
+            img = Image.open(io.BytesIO(content))
+            img = ImageOps.exif_transpose(img)
+
+            if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+                img = img.convert("RGBA")
+            else:
+                img = img.convert("RGB")
+
+            # Зменшуємо до макс. 1000x1000 px зі збереженням пропорцій (ідеально для Retina)
+            img.thumbnail((1000, 1000), Image.Resampling.LANCZOS)
+
+            out_buf = io.BytesIO()
+            img.save(out_buf, format="WEBP", quality=82, method=6)
+            optimized_bytes = out_buf.getvalue()
+
+            async with aiofiles.open(file_path, "wb") as out_file:
+                await out_file.write(optimized_bytes)
+            saved_size = len(optimized_bytes)
+        except Exception as exc:
+            logger.warning("Не вдалося конвертувати у WebP, зберігаємо оригінал: %s", exc)
+            unique_name = f"{uuid.uuid4().hex[:16]}{ext}"
+            file_path = uploads_dir / unique_name
+            async with aiofiles.open(file_path, "wb") as out_file:
+                await out_file.write(content)
+            saved_size = len(content)
 
     public_url = f"/api/uploads/{unique_name}"
     logger.info(
-        "Адміністратор %s успішно завантажив зображення: %s (%d байт)",
+        "Адміністратор %s успішно завантажив зображення: %s (було: %d б, стало: %d б)",
         staff["full_name"],
         public_url,
         len(content),
+        saved_size,
     )
 
     return {
         "url": public_url,
         "filename": unique_name,
-        "size": len(content),
+        "size": saved_size,
     }

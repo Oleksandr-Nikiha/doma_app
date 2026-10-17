@@ -26,14 +26,14 @@ async def list_delivery_cities(pool: asyncpg.Pool = Depends(get_pool)):
         ORDER BY city
         """
     )
-    # Якщо таблиця порожня, повертаємо дефолтний Вишгород
+    # Якщо таблиця порожня, повертаємо дефолтний Київ
     cities = [r["city"] for r in rows]
-    return cities if cities else ["Вишгород"]
+    return cities if cities else ["Київ"]
 
 
 @router.get("/addresses", response_model=list[DeliveryAddressOut])
 async def list_active_delivery_addresses(
-    city: str = Query(default="Вишгород", description="Населений пункт"),
+    city: str = Query(default="Київ", description="Населений пункт"),
     pool: asyncpg.Pool = Depends(get_pool),
 ):
     """

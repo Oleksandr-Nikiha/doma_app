@@ -40,6 +40,16 @@ auth_header = APIKeyHeader(
 )
 
 
+def _get_fallback_tokens(settings) -> list[str]:
+    fn = getattr(settings, "fallback_bot_token_list", None)
+    if callable(fn):
+        return fn()
+    raw = getattr(settings, "fallback_bot_tokens", "")
+    if isinstance(raw, str) and raw:
+        return [t.strip() for t in raw.split(",") if t.strip()]
+    return []
+
+
 async def get_init_data(
     init_data_raw: str | None = Depends(init_data_header), settings=Depends(get_settings)
 ) -> dict:
@@ -54,7 +64,11 @@ async def get_init_data(
         )
 
     try:
-        return validate_init_data(init_data=init_data_raw, bot_token=settings.bot_token)
+        return validate_init_data(
+            init_data=init_data_raw,
+            bot_token=settings.bot_token,
+            fallback_tokens=_get_fallback_tokens(settings),
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Помилка авторизації: {e}"
@@ -71,14 +85,21 @@ async def require_telegram_or_staff(
     або для персоналу закладу з валідним токеном адміністратора.
     Усі запити в обхід Telegram без токена персоналу блокуються.
     """
+    fallback_tokens = _get_fallback_tokens(settings)
     if admin_token_raw:
-        telegram_id = verify_admin_token(admin_token_raw, settings.bot_token)
+        telegram_id = verify_admin_token(
+            admin_token_raw, settings.bot_token, fallback_tokens
+        )
         if telegram_id:
             return True
 
     if init_data_raw:
         try:
-            validate_init_data(init_data=init_data_raw, bot_token=settings.bot_token)
+            validate_init_data(
+                init_data=init_data_raw,
+                bot_token=settings.bot_token,
+                fallback_tokens=fallback_tokens,
+            )
             return True
         except ValueError:
             pass
@@ -101,6 +122,8 @@ async def get_current_user(
     Авторизує користувача через X-Admin-Token, X-Telegram-Init-Data,
     X-Auth-Token або Bearer токен. Повертає запис користувача з бази даних.
     """
+    fallback_tokens = _get_fallback_tokens(settings)
+
     # Підтримка Authorization: Bearer <token>
     if isinstance(bearer_raw, str) and bearer_raw.startswith("Bearer "):
         bearer_token = bearer_raw[7:].strip()
@@ -113,38 +136,40 @@ async def get_current_user(
     if isinstance(user_token_raw, str):
         from src.auth.admin_token import verify_user_token
 
-        user_id = verify_user_token(user_token_raw, settings.bot_token)
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Недійсний або прострочений токен веб-сесії (X-Auth-Token)",
-            )
-        async with pool.acquire() as conn:
-            user_row = await conn.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
-        if not user_row:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Користувача не зареєстровано"
-            )
-        return user_row
+        user_id = verify_user_token(
+            user_token_raw, settings.bot_token, fallback_tokens
+        )
+        if user_id:
+            async with pool.acquire() as conn:
+                user_row = await conn.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
+            if user_row:
+                return user_row
 
     # 2. Токен адміністратора (v1.telegram_id...)
     telegram_id: int | None = None
     if isinstance(admin_token_raw, str):
-        telegram_id = verify_admin_token(admin_token_raw, settings.bot_token)
-        if not telegram_id:
+        telegram_id = verify_admin_token(
+            admin_token_raw, settings.bot_token, fallback_tokens
+        )
+        if not telegram_id and not init_data_raw:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Недійсний або прострочений токен адміністратора (X-Admin-Token)",
             )
     elif isinstance(init_data_raw, str):
         try:
-            init_data = validate_init_data(init_data=init_data_raw, bot_token=settings.bot_token)
+            init_data = validate_init_data(
+                init_data=init_data_raw,
+                bot_token=settings.bot_token,
+                fallback_tokens=fallback_tokens,
+            )
             user_data = init_data.get("user", {})
             telegram_id = user_data.get("id")
         except ValueError as e:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Помилка авторизації: {e}"
-            ) from e
+            if not user_token_raw:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Помилка авторизації: {e}"
+                ) from e
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

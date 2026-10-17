@@ -28,12 +28,7 @@ export function ContactsPage() {
 
   const handleOpenMap = (address: string) => {
     haptic("light");
-    // Очищаємо можливі дублювання назви міста "Вишгород"
-    const cleanStreet = address
-      .replace(/^м\.\s*вишгород,?\s*/i, "")
-      .replace(/^вишгород,?\s*/i, "");
-    const fullAddress = `м. Вишгород, ${cleanStreet}`;
-    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 
     try {
       if (openLink.isAvailable()) {
@@ -45,6 +40,7 @@ export function ContactsPage() {
     }
     window.open(mapsUrl, "_blank", "noopener,noreferrer");
   };
+
 
   const handleCall = (phone: string) => {
     haptic("medium");
@@ -88,7 +84,7 @@ export function ContactsPage() {
 
       <div className="app-rise space-y-4 px-4 pt-1">
         {data.map((loc) => {
-          const isCroissant = loc.name.toLowerCase().includes("croissant");
+          const isBakery = loc.name.toLowerCase().includes("bakery") || loc.name.toLowerCase().includes("croissant");
 
           return (
             <section
@@ -96,8 +92,13 @@ export function ContactsPage() {
               className="app-card rounded-2xl p-4 transition-all"
             >
               <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-2xl">{isCroissant ? "🥐" : "🍕"}</span>
+                <div className="flex items-center gap-3">
+                  <img
+                    src={isBakery ? "/logo-bakery.svg" : "/logo-pizza.svg"}
+                    alt={loc.name}
+                    className="h-10 w-10 rounded-full object-cover shadow-sm shrink-0"
+                  />
+
                   <div>
                     <h2 className="font-bold text-base leading-snug">{loc.name}</h2>
                     <p className="mt-0.5 text-xs opacity-70 leading-relaxed">{loc.address}</p>

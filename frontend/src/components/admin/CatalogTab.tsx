@@ -10,8 +10,12 @@ import {
 } from "@/api/queries";
 import { api } from "@/api/client";
 import type { AdminCategory, AdminProduct, AdminVariant, Location } from "@/api/types";
-import { EmptyState, ErrorBox, Spinner, Thumb } from "@/components/ui";
+import { EmptyState, ErrorBox, Spinner } from "@/components/ui";
 import { haptic, hapticNotify } from "@/telegram/sdk";
+import { CategoryBar } from "./catalog/CategoryBar";
+import { SubcategoryBar } from "./catalog/SubcategoryBar";
+import { CatalogProductCard } from "./catalog/CatalogProductCard";
+import { BulkActionsBar } from "./catalog/BulkActionsBar";
 import { ProductOptionsModal } from "./modals/ProductOptionsModal";
 import { BulkProductOptionsModal } from "./modals/BulkProductOptionsModal";
 import { CategoryModal } from "./modals/CategoryModal";
@@ -169,196 +173,46 @@ export function CatalogTab({
 
   return (
     <div className="space-y-6">
-      {/* 1. Блок категорій (Надкатегорії) */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-bold">Категорії ({rootCategories.length})</h2>
-            <p className="text-[11px] opacity-60">Основні розділи меню (Піца, Суші, Закуски...)</p>
-          </div>
-          <button
-            onClick={() => {
-              haptic("light");
-              setEditingCategory(null);
-              setCatModalOpen(true);
-            }}
-            className="app-press flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold"
-            style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
-          >
-            <span>+</span> Категорія
-          </button>
-        </div>
-
-        {/* Скрол списку категорій */}
-        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar md:flex-wrap">
-          <button
-            onClick={() => {
-              haptic("light");
-              setSelectedParentCatId(null);
-              setSelectedSubCatId(null);
-            }}
-            className="app-press shrink-0 rounded-xl px-3.5 py-2 text-xs font-medium transition-all"
-            style={
-              selectedParentCatId === null
-                ? { background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }
-                : { background: "var(--app-surface)", color: "var(--tg-theme-text-color)" }
-            }
-          >
-            Всі розділи
-          </button>
-          {rootCategories.map((c) => {
-            const isSelected = selectedParentCatId === c.id;
-            return (
-              <div
-                key={c.id}
-                className="flex shrink-0 items-center overflow-hidden rounded-xl border text-xs transition-all"
-                style={{
-                  borderColor: isSelected ? "var(--tg-theme-button-color)" : "var(--app-border)",
-                  background: isSelected ? "var(--app-tint)" : "var(--app-surface)",
-                }}
-              >
-                <button
-                  onClick={() => {
-                    haptic("light");
-                    setSelectedParentCatId(c.id);
-                    setSelectedSubCatId(null);
-                  }}
-                  className="px-3 py-2 font-medium flex items-center gap-1"
-                >
-                  {c.icon && <span>{c.icon}</span>}
-                  <span>{c.name}</span>
-                </button>
-                <button
-                  onClick={() => {
-                    haptic("light");
-                    setEditingCategory(c);
-                    setCatModalOpen(true);
-                  }}
-                  title="Редагувати категорію"
-                  className="px-2 py-2 opacity-40 hover:opacity-100"
-                >
-                  ✏️
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      {/* 1. Блок категорій */}
+      <CategoryBar
+        rootCategories={rootCategories}
+        selectedParentCatId={selectedParentCatId}
+        onSelectCategory={(id) => {
+          setSelectedParentCatId(id);
+          setSelectedSubCatId(null);
+        }}
+        onOpenCreate={() => {
+          setEditingCategory(null);
+          setCatModalOpen(true);
+        }}
+        onEditCategory={(cat) => {
+          setEditingCategory(cat);
+          setCatModalOpen(true);
+        }}
+      />
 
       {/* 2. Блок підкатегорій */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-bold">
-              Підкатегорії {selectedParentCat ? `(${selectedParentCat.name})` : `(${subcategories.length})`}
-            </h2>
-            <p className="text-[11px] opacity-60">Підрозділи страв без власних емодзі</p>
-          </div>
-          <button
-            onClick={() => {
-              haptic("light");
-              setEditingSubcategory(null);
-              setSubcatModalOpen(true);
-            }}
-            className="app-press flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold"
-            style={{ background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }}
-          >
-            <span>+</span> Підкатегорія
-          </button>
-        </div>
-
-        {/* Скрол списку підкатегорій */}
-        {(() => {
-          const visibleSubcats = selectedParentCatId
-            ? subcategories.filter((s) => s.parent_id === selectedParentCatId)
-            : subcategories;
-
-          if (selectedParentCatId && visibleSubcats.length === 0) {
-            return (
-              <div
-                className="rounded-xl border border-dashed p-3 text-center text-xs opacity-50"
-                style={{ borderColor: "var(--app-border)" }}
-              >
-                У категорії «{selectedParentCat?.name}» немає підкатегорій. Натисніть «+ Підкатегорія», щоб створити.
-              </div>
-            );
+      <SubcategoryBar
+        subcategories={subcategories}
+        rootCategories={rootCategories}
+        selectedParentCat={selectedParentCat}
+        selectedParentCatId={selectedParentCatId}
+        selectedSubCatId={selectedSubCatId}
+        onSelectSubcategory={(subId, parentId) => {
+          setSelectedSubCatId(subId);
+          if (parentId && selectedParentCatId !== parentId) {
+            setSelectedParentCatId(parentId);
           }
-
-          if (!selectedParentCatId && visibleSubcats.length === 0) {
-            return (
-              <div
-                className="rounded-xl border border-dashed p-3 text-center text-xs opacity-50"
-                style={{ borderColor: "var(--app-border)" }}
-              >
-                Немає створених підкатегорій
-              </div>
-            );
-          }
-
-          return (
-            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar md:flex-wrap">
-              {selectedParentCatId && (
-                <button
-                  onClick={() => {
-                    haptic("light");
-                    setSelectedSubCatId(null);
-                  }}
-                  className="app-press shrink-0 rounded-xl px-3.5 py-2 text-xs font-medium transition-all"
-                  style={
-                    selectedSubCatId === null
-                      ? { background: "var(--tg-theme-button-color)", color: "var(--tg-theme-button-text-color)" }
-                      : { background: "var(--app-surface)", color: "var(--tg-theme-text-color)" }
-                  }
-                >
-                  Всі в {selectedParentCat?.name}
-                </button>
-              )}
-              {visibleSubcats.map((sub) => {
-                const isSelected = selectedSubCatId === sub.id;
-                const parentOfSub = rootCategories.find((r) => r.id === sub.parent_id);
-                return (
-                  <div
-                    key={sub.id}
-                    className="flex shrink-0 items-center overflow-hidden rounded-xl border text-xs transition-all"
-                    style={{
-                      borderColor: isSelected ? "var(--tg-theme-button-color)" : "var(--app-border)",
-                      background: isSelected ? "var(--app-tint)" : "var(--app-surface)",
-                    }}
-                  >
-                    <button
-                      onClick={() => {
-                        haptic("light");
-                        setSelectedSubCatId(sub.id);
-                        if (sub.parent_id && selectedParentCatId !== sub.parent_id) {
-                          setSelectedParentCatId(sub.parent_id);
-                        }
-                      }}
-                      className="px-3 py-2 font-medium flex items-center"
-                    >
-                      {!selectedParentCatId && parentOfSub && (
-                        <span className="opacity-50 mr-1">{parentOfSub.name} →</span>
-                      )}
-                      <span>{sub.name}</span>
-                      <span className="ml-1 opacity-50">({sub.products_count})</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        haptic("light");
-                        setEditingSubcategory(sub);
-                        setSubcatModalOpen(true);
-                      }}
-                      title="Редагувати підкатегорію"
-                      className="px-2 py-2 opacity-40 hover:opacity-100"
-                    >
-                      ✏️
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-      </section>
+        }}
+        onOpenCreate={() => {
+          setEditingSubcategory(null);
+          setSubcatModalOpen(true);
+        }}
+        onEditSubcategory={(sub) => {
+          setEditingSubcategory(sub);
+          setSubcatModalOpen(true);
+        }}
+      />
 
       {/* 3. Блок страв */}
       <section className="space-y-3">
@@ -453,286 +307,61 @@ export function CatalogTab({
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredProducts.map((p) => {
-              const isSelected = selectedProductIds.includes(p.id);
-              return (
-                <div
-                  key={p.id}
-                  className="app-card rounded-2xl p-3.5 transition-all"
-                  style={{
-                    border: isSelected
-                      ? "2px solid var(--tg-theme-button-color)"
-                      : "1px solid var(--app-border)",
-                    background: isSelected
-                      ? "color-mix(in srgb, var(--tg-theme-button-color) 7%, var(--app-surface))"
-                      : "var(--app-surface)",
-                    opacity: p.is_available ? 1 : 0.65,
-                  }}
-                >
-                  <div className="flex gap-3 items-start">
-                    <div className="pt-1 shrink-0">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => {
-                          haptic("light");
-                          toggleSelectProduct(p.id);
-                        }}
-                        className="h-4 w-4 rounded cursor-pointer accent-[var(--tg-theme-button-color)]"
-                      />
-                    </div>
-                    <div
-                      className="relative h-16 w-16 shrink-0 cursor-pointer group"
-                      onClick={() => triggerPhotoUpload(p.id)}
-                      title="Натисніть, щоб змінити фото"
-                    >
-                      <Thumb src={p.image_url} className="h-16 w-16" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center rounded-xl transition-opacity">
-                        <span className="text-base">📷</span>
-                      </div>
-                      {uploadingProdId === p.id && (
-                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-xl">
-                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-1">
-                      <p className="truncate text-sm font-bold">{p.name}</p>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => triggerPhotoUpload(p.id)}
-                          disabled={uploadingProdId === p.id}
-                          className="app-press rounded-lg p-1 text-xs opacity-60 hover:opacity-100"
-                          title="Додати або змінити фото"
-                        >
-                          📷
-                        </button>
-                        <button
-                          onClick={() => {
-                            haptic("light");
-                            setEditingProduct(p);
-                            setProdModalOpen(true);
-                          }}
-                          className="app-press rounded-lg p-1 text-xs opacity-60 hover:opacity-100"
-                          title="Редагувати"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (window.confirm(`Видалити страву "${p.name}"?`)) {
-                              hapticNotify("warning");
-                              deleteProduct.mutate(p.id);
-                            }
-                          }}
-                          className="app-press rounded-lg p-1 text-xs opacity-60 hover:opacity-100"
-                          title="Видалити"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
-                    {p.description && (
-                      <p className="line-clamp-2 mt-0.5 text-xs opacity-60">{p.description}</p>
-                    )}
-                    <div className="mt-1 flex items-center gap-2 text-[11px] opacity-50">
-                      <span>{p.category_name}</span>
-                      {p.location_name && <span>• 📍 {p.location_name}</span>}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Варіанти цін (розміри / порції) */}
-                <div className="mt-3 border-t pt-2.5" style={{ borderColor: "var(--app-border)" }}>
-                  <div className="flex items-center justify-between text-xs font-semibold opacity-70">
-                    <span>Розміри та ціни:</span>
-                    <button
-                      onClick={() => {
-                        haptic("light");
-                        setTargetProductForVariant(p.id);
-                        setEditingVariant(null);
-                        setVariantModalOpen(true);
-                      }}
-                      className="text-[var(--tg-theme-button-color)] hover:underline"
-                    >
-                      + Додати розмір
-                    </button>
-                  </div>
-
-                  <div className="mt-1.5 space-y-1.5">
-                    {p.variants.map((v) => (
-                      <div
-                        key={v.id}
-                        className="flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs"
-                        style={{
-                          background: "var(--app-surface-2)",
-                          opacity: v.is_available ? 1 : 0.5,
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{v.label}</span>
-                          {v.weight && <span className="opacity-50">({v.weight})</span>}
-                          {!v.is_available && (
-                            <span className="rounded bg-red-500/20 px-1 py-0.2 text-[10px] text-red-500 font-bold">
-                              СТОП
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold">{v.price.toFixed(0)} ₴</span>
-                          <button
-                            onClick={() => {
-                              haptic("light");
-                              setTargetProductForVariant(p.id);
-                              setEditingVariant(v);
-                              setVariantModalOpen(true);
-                            }}
-                            className="opacity-50 hover:opacity-100 text-[11px]"
-                          >
-                            ✏️
-                          </button>
-                          {p.variants.length > 1 && (
-                            <button
-                              onClick={() => {
-                                if (window.confirm(`Видалити варіант "${v.label}"?`)) {
-                                  hapticNotify("warning");
-                                  deleteVariant.mutate(v.id);
-                                }
-                              }}
-                              className="opacity-50 hover:opacity-100 text-[11px]"
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Додатки (Модифікатори до страви) */}
-                <div className="mt-2.5 border-t pt-2" style={{ borderColor: "var(--app-border)" }}>
-                  <div className="flex items-center justify-between text-xs font-semibold opacity-70">
-                    <span>Додатки до страви:</span>
-                    <button
-                      onClick={() => {
-                        haptic("light");
-                        setTargetProductForOptions(p);
-                        setOptionsModalOpen(true);
-                      }}
-                      className="text-[var(--tg-theme-button-color)] hover:underline"
-                    >
-                      ⚙️ Налаштувати
-                    </button>
-                  </div>
-
-                  {p.option_groups && p.option_groups.length > 0 ? (
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {p.option_groups.map((og) => (
-                        <span
-                          key={og.group_id}
-                          className="rounded-lg px-2.5 py-1 text-[11px] font-medium"
-                          style={{ background: "var(--app-surface-2)" }}
-                        >
-                          🧩 {og.group_name}{" "}
-                          <span className="opacity-60">
-                            ({og.min_select}–{og.max_select}
-                            {og.free_count > 0 ? `, б/к: ${og.free_count}` : ""})
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-1 text-[11px] opacity-40">Немає додатків (натисніть Налаштувати)</p>
-                  )}
-                </div>
-              </div>
-            );})}
+            {filteredProducts.map((p) => (
+              <CatalogProductCard
+                key={p.id}
+                product={p}
+                isSelected={selectedProductIds.includes(p.id)}
+                uploadingProdId={uploadingProdId}
+                onToggleSelect={toggleSelectProduct}
+                onTriggerPhotoUpload={triggerPhotoUpload}
+                onEditProduct={(prod) => {
+                  setEditingProduct(prod);
+                  setProdModalOpen(true);
+                }}
+                onDeleteProduct={(id) => {
+                  deleteProduct.mutate(id);
+                }}
+                onAddVariant={(productId) => {
+                  setTargetProductForVariant(productId);
+                  setEditingVariant(null);
+                  setVariantModalOpen(true);
+                }}
+                onEditVariant={(productId, variant) => {
+                  setTargetProductForVariant(productId);
+                  setEditingVariant(variant);
+                  setVariantModalOpen(true);
+                }}
+                onDeleteVariant={(variantId) => {
+                  deleteVariant.mutate(variantId);
+                }}
+                onConfigureOptions={(prod) => {
+                  setTargetProductForOptions(prod);
+                  setOptionsModalOpen(true);
+                }}
+              />
+            ))}
           </div>
         )}
       </section>
 
       {/* Плаваюча панель масових дій */}
-      {selectedProductIds.length > 0 && (
-        <div className="fixed bottom-4 left-4 right-4 z-40 mx-auto max-w-lg">
-          <div
-            className="app-card rounded-2xl p-3 shadow-2xl border flex flex-col gap-2.5 backdrop-blur-md"
-            style={{
-              background: "color-mix(in srgb, var(--tg-theme-bg-color) 94%, black)",
-              borderColor: "var(--tg-theme-button-color)",
-            }}
-          >
-            <div className="flex items-center justify-between text-xs px-1">
-              <span className="font-bold">
-                Обрано страв: <span className="text-[var(--tg-theme-button-color)] font-extrabold">{selectedProductIds.length}</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedProductIds([])}
-                className="opacity-60 hover:opacity-100 font-medium"
-              >
-                ✕ Зняти вибір
-              </button>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                disabled={bulkAvailability.isPending}
-                onClick={() => {
-                  haptic("medium");
-                  bulkAvailability.mutate(
-                    { product_ids: selectedProductIds, is_available: false },
-                    {
-                      onSuccess: () => {
-                        hapticNotify("success");
-                      },
-                    },
-                  );
-                }}
-                className="app-press rounded-xl py-2 px-2 text-xs font-bold text-center border border-red-500/30 bg-red-500/10 text-red-500 disabled:opacity-50"
-              >
-                ⛔ На стоп
-              </button>
-
-              <button
-                type="button"
-                disabled={bulkAvailability.isPending}
-                onClick={() => {
-                  haptic("medium");
-                  bulkAvailability.mutate(
-                    { product_ids: selectedProductIds, is_available: true },
-                    {
-                      onSuccess: () => {
-                        hapticNotify("success");
-                      },
-                    },
-                  );
-                }}
-                className="app-press rounded-xl py-2 px-2 text-xs font-bold text-center border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 disabled:opacity-50"
-              >
-                ✓ Доступно
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  haptic("light");
-                  setBulkOptionsModalOpen(true);
-                }}
-                className="app-press rounded-xl py-2 px-2 text-xs font-bold text-center"
-                style={{
-                  background: "var(--tg-theme-button-color)",
-                  color: "var(--tg-theme-button-text-color)",
-                }}
-              >
-                🧩 Додатки
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <BulkActionsBar
+        selectedCount={selectedProductIds.length}
+        isPending={bulkAvailability.isPending}
+        onClearSelection={() => setSelectedProductIds([])}
+        onSetAvailability={(available) => {
+          bulkAvailability.mutate(
+            { product_ids: selectedProductIds, is_available: available },
+            {
+              onSuccess: () => {
+                hapticNotify("success");
+              },
+            },
+          );
+        }}
+        onOpenBulkOptions={() => setBulkOptionsModalOpen(true)}
+      />
 
       {/* Модальне вікно масового налаштування додатків */}
       {bulkOptionsModalOpen && selectedProductIds.length > 0 && (
@@ -809,6 +438,7 @@ export function CatalogTab({
           }}
         />
       )}
+
       {/* Прихований інпут для швидкої зміни фото страв */}
       <input
         ref={catalogFileInputRef}

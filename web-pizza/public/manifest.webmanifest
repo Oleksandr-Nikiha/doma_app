@@ -1,7 +1,7 @@
 {
-  "name": "Doma Pizza & Sushi — Доставка піци та суші",
-  "short_name": "Doma Pizza",
-  "description": "Гаряча піца на пухкому тісті, свіжі суші-сети та крафтові бургери у Вишгороді. Швидка доставка та самовивіз.",
+  "name": "Urban Pizza & Sushi — Доставка піци та суші",
+  "short_name": "Urban Pizza",
+  "description": "Гаряча піца на пухкому тісті, свіжі суші-сети та крафтові бургери у Києві. Швидка доставка та самовивіз.",
   "start_url": "./",
   "id": "./",
   "display": "standalone",
@@ -16,9 +16,9 @@
       "purpose": "any maskable"
     },
     {
-      "src": "./logo.png",
-      "sizes": "192x192 512x512",
-      "type": "image/png",
+      "src": "./logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ],

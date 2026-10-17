@@ -54,6 +54,8 @@ export function ProfileSettingsTab({
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || "urban_bites_tst_bot";
+
   useEffect(() => {
     setFirstName(profile.first_name || profile.name.split(" ")[0] || "");
     setLastName(
@@ -100,12 +102,11 @@ export function ProfileSettingsTab({
     }
 
     const cleanPhone = phone ? normalizeE164Phone(phone) : "";
-    const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
-    const isPhoneVerified = Boolean(profile.is_phone_verified || profile.telegram_id);
+    const isPhoneVerified = cleanPhone === profile.phone ? profile.is_phone_verified : false;
 
     const updated: UserProfile = {
       ...profile,
-      name: fullName,
+      name: `${firstName.trim()} ${lastName.trim()}`.trim(),
       first_name: firstName.trim(),
       last_name: lastName.trim() || undefined,
       phone: cleanPhone,
@@ -114,7 +115,7 @@ export function ProfileSettingsTab({
       apartment: apartment.trim(),
       additional_address: additionalAddress.trim() || undefined,
       is_phone_verified: isPhoneVerified,
-      client_code: profile.client_code || `DM-${profile.telegram_id || "77"}`,
+      client_code: profile.client_code || `UB-${profile.telegram_id || "77"}`,
     };
 
     onSaveProfile(updated);
@@ -124,49 +125,49 @@ export function ProfileSettingsTab({
     setTimeout(() => setSavedSuccess(false), 2500);
   };
 
-  const clientCode = profile.client_code || `DM-${profile.telegram_id || "77"}`;
+  const clientCode = profile.client_code || `UB-${profile.telegram_id || "77"}`;
   const bonusBalance = profile.bonuses ?? 50;
 
   return (
-    <form onSubmit={handleSave} className="space-y-5 animate-in fade-in duration-150">
+    <form onSubmit={handleSave} className="space-y-5 animate-in fade-in duration-150 text-[#F1F5F9]">
       {savedSuccess && (
-        <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm font-bold flex items-center gap-2">
+        <div className="p-3.5 rounded-2xl bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-xs sm:text-sm font-bold flex items-center gap-2">
           <span>✓</span>
           <span>Дані успішно збережено</span>
         </div>
       )}
 
       {error && (
-        <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs sm:text-sm font-semibold flex items-center gap-2">
+        <div className="p-3.5 rounded-2xl bg-red-950/50 border border-red-500/30 text-red-300 text-xs sm:text-sm font-semibold flex items-center gap-2">
           <span>⚠️</span>
           <span>{error}</span>
         </div>
       )}
 
-      {/* Секція: Мої замовлення (Ідентична до TG WebApp) */}
+      {/* Секція: Мої замовлення */}
       <section>
         <div
           onClick={onOpenOrders}
-          className="flex items-center justify-between rounded-2xl p-4 cursor-pointer transition-all bg-white border border-[#EADFCF] hover:border-[#C8823E]/50 shadow-2xs group"
+          className="flex items-center justify-between rounded-2xl p-4 cursor-pointer transition-all bg-[#181B22] border border-white/10 hover:border-amber-500/40 shadow-lg group"
         >
           <div className="flex items-center gap-3.5">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl bg-[#F7F2EB] group-hover:scale-105 transition-transform">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl bg-[#1E232B] group-hover:scale-105 transition-transform border border-white/5">
               📦
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <p className="text-sm font-bold text-[#2C1E14]">Мої замовлення</p>
+                <p className="text-sm font-bold text-white">Мої замовлення</p>
                 {activeOrdersCount > 0 ? (
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-amber-950/60 text-amber-300 border border-amber-500/30 animate-pulse">
                     {formatActiveBadge(activeOrdersCount)}
                   </span>
                 ) : ordersCount > 0 ? (
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#F3EDE2] text-[#6B533E]">
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#1E232B] text-[#CBD5E1] border border-white/5">
                     {ordersCount}
                   </span>
                 ) : null}
               </div>
-              <p className="text-xs text-[#7A695C] mt-0.5">
+              <p className="text-xs text-[#94A3B8] mt-0.5">
                 {ordersCount > 0
                   ? `Історія та статус ${ordersCount} ${ordersCount === 1 ? "замовлення" : "замовлень"}`
                   : "Історія та статус замовлень"}
@@ -174,23 +175,23 @@ export function ProfileSettingsTab({
             </div>
           </div>
 
-          <div className="flex items-center gap-1 text-[#C8823E] font-bold text-sm group-hover:translate-x-1 transition-transform">
+          <div className="flex items-center gap-1 text-amber-400 font-bold text-sm group-hover:translate-x-1 transition-transform">
             <span>Переглянути</span>
             <span>→</span>
           </div>
         </div>
       </section>
 
-      {/* Секція 1: Мої дані (Ідентично до TG WebApp) */}
+      {/* Секція 1: Мої дані */}
       <section className="space-y-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-[#8D7B6D] px-1">
+        <p className="text-xs font-bold uppercase tracking-wider text-amber-400 px-1">
           Мої дані
         </p>
 
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[#EADFCF] space-y-3.5 shadow-2xs">
+        <div className="bg-[#181B22] p-4 sm:p-5 rounded-2xl border border-white/10 space-y-3.5 shadow-lg">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-[#6B533E] mb-1">
+              <label className="block text-xs font-semibold text-[#94A3B8] mb-1">
                 Прізвище
               </label>
               <input
@@ -198,12 +199,12 @@ export function ProfileSettingsTab({
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 placeholder="Шевченко"
-                className="w-full bg-[#FAF7F2] border border-[#D8C7B0] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8823E]/30"
+                className="w-full bg-[#121417] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-[#64748B] focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#6B533E] mb-1">
+              <label className="block text-xs font-semibold text-[#94A3B8] mb-1">
                 Імʼя *
               </label>
               <input
@@ -212,7 +213,7 @@ export function ProfileSettingsTab({
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="Олександр"
-                className="w-full bg-[#FAF7F2] border border-[#D8C7B0] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8823E]/30"
+                className="w-full bg-[#121417] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-[#64748B] focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
               />
             </div>
           </div>
@@ -220,13 +221,13 @@ export function ProfileSettingsTab({
           {/* Номер телефону з бейджем верифікації */}
           <div className="space-y-1.5 pt-1">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[#6B533E]">№ Телефону</span>
+              <span className="text-xs font-semibold text-[#94A3B8]">№ Телефону</span>
               {profile.is_phone_verified || Boolean(profile.telegram_id) ? (
-                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                <span className="text-[11px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
                   ✓ Верифіковано (🔒 закріплено)
                 </span>
               ) : (
-                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 flex items-center gap-1">
+                <span className="text-[11px] font-bold text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
                   ⚠️ Не верифіковано
                 </span>
               )}
@@ -239,24 +240,24 @@ export function ProfileSettingsTab({
               onKeyDown={handlePhoneKeyDown}
               disabled={Boolean(profile.is_phone_verified || profile.telegram_id)}
               placeholder="+380 (XX) XXX-XX-XX"
-              className={`w-full bg-[#FAF7F2] border border-[#D8C7B0] rounded-xl px-3.5 py-2.5 text-sm font-mono tracking-tight ${
+              className={`w-full bg-[#121417] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm font-mono tracking-tight text-white placeholder:text-[#64748B] ${
                 profile.is_phone_verified || Boolean(profile.telegram_id)
-                  ? "opacity-75 cursor-not-allowed bg-[#F5EFE6]"
-                  : "focus:outline-none focus:ring-2 focus:ring-[#C8823E]/30"
+                  ? "opacity-60 cursor-not-allowed bg-[#0F1115]"
+                  : "focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
               }`}
             />
 
             {!(profile.is_phone_verified || Boolean(profile.telegram_id)) && (
-              <div className="rounded-xl p-3 bg-amber-50/90 border border-amber-200/90 text-xs text-amber-900 space-y-2 mt-2 shadow-2xs">
+              <div className="rounded-xl p-3 bg-amber-950/30 border border-amber-500/30 text-xs text-amber-300 space-y-2 mt-2 shadow-sm">
                 <p className="leading-relaxed text-[11px]">
                   Номер не верифіковано. Ви можете змінити його вище та зберегти профіль, або підтвердити поточний номер через наш Telegram-бот.
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <a
-                    href="https://t.me/ncoffee_app_tst_bot?start=verify_phone"
+                    href={`https://t.me/${botUsername}?start=verify_phone`}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center justify-center gap-1.5 bg-[#2C1E14] hover:bg-[#3D2C1F] text-white px-3.5 py-1.5 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-[#0F1115] px-3.5 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
                   >
                     <span>📱</span>
                     <span>Підтвердити телефон у боті →</span>
@@ -265,10 +266,10 @@ export function ProfileSettingsTab({
                     <button
                       type="button"
                       onClick={onOpenPhoneAuth}
-                      className="flex items-center gap-1 bg-white border border-[#D8C7B0] text-[#6B533E] hover:text-[#2C1E14] px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
+                      className="flex items-center gap-1 bg-[#1E232B] border border-white/10 text-[#CBD5E1] hover:text-white hover:bg-[#282F3B] px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
                     >
                       <span>🔑</span>
-                      <span>Вхід за кодом / паролем</span>
+                      <span>Вхід за телефоном / Telegram</span>
                     </button>
                   )}
                 </div>
@@ -278,28 +279,28 @@ export function ProfileSettingsTab({
         </div>
       </section>
 
-      {/* Секція 2: Мої адреси доставки (Ідентично до TG WebApp) */}
+      {/* Секція 2: Мої адреси доставки */}
       <section className="space-y-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-[#8D7B6D] px-1">
+        <p className="text-xs font-bold uppercase tracking-wider text-amber-400 px-1">
           Мої адреси доставки
         </p>
 
         <div className="space-y-3">
           {/* 1. Основна адреса */}
           {isEditingMainAddress ? (
-            <div className="bg-white rounded-2xl border border-[#EADFCF] p-4 space-y-3.5 shadow-2xs">
-              <div className="flex items-center justify-between border-b pb-2 border-[#F0E6D8]">
+            <div className="bg-[#181B22] rounded-2xl border border-white/10 p-4 space-y-3.5 shadow-lg">
+              <div className="flex items-center justify-between border-b pb-2 border-white/10">
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm">📍</span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#6B533E]">
-                    Основна адреса доставки (м. Вишгород)
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#CBD5E1]">
+                    Основна адреса доставки (м. Київ)
                   </span>
                 </div>
                 {street && (
                   <button
                     type="button"
                     onClick={() => setIsEditingMainAddress(false)}
-                    className="text-xs font-semibold text-[#9C5B23] hover:underline cursor-pointer"
+                    className="text-xs font-semibold text-amber-400 hover:underline cursor-pointer"
                   >
                     Згорнути ✕
                   </button>
@@ -307,7 +308,7 @@ export function ProfileSettingsTab({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#6B533E] mb-1">
+                <label className="block text-xs font-bold text-[#94A3B8] mb-1">
                   Вулиця
                 </label>
                 <input
@@ -316,7 +317,7 @@ export function ProfileSettingsTab({
                   value={street}
                   onChange={(e) => setStreet(e.target.value)}
                   placeholder="Введіть або оберіть вулицю..."
-                  className="w-full bg-[#FAF7F2] border border-[#D8C7B0] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8823E]/30"
+                  className="w-full bg-[#121417] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-[#64748B] focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
                 />
                 <datalist id="cabinet-streets-datalist">
                   {streetsList.map((s) => (
@@ -327,7 +328,7 @@ export function ProfileSettingsTab({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-[#6B533E] mb-1">
+                  <label className="block text-xs font-bold text-[#94A3B8] mb-1">
                     Будинок
                   </label>
                   <input
@@ -335,11 +336,11 @@ export function ProfileSettingsTab({
                     value={house}
                     onChange={(e) => setHouse(e.target.value)}
                     placeholder="Напр. 15, 2Д"
-                    className="w-full bg-[#FAF7F2] border border-[#D8C7B0] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8823E]/30"
+                    className="w-full bg-[#121417] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-[#64748B] focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-[#6B533E] mb-1">
+                  <label className="block text-xs font-bold text-[#94A3B8] mb-1">
                     Квартира / Офіс
                   </label>
                   <input
@@ -347,33 +348,33 @@ export function ProfileSettingsTab({
                     value={apartment}
                     onChange={(e) => setApartment(e.target.value)}
                     placeholder="Опціонально"
-                    className="w-full bg-[#FAF7F2] border border-[#D8C7B0] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8823E]/30"
+                    className="w-full bg-[#121417] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-[#64748B] focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
                   />
                 </div>
               </div>
             </div>
           ) : (
-            <div className="bg-white flex items-center justify-between rounded-2xl p-3.5 border border-[#EADFCF] shadow-2xs">
+            <div className="bg-[#181B22] flex items-center justify-between rounded-2xl p-3.5 border border-white/10 shadow-lg">
               <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-600">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-950/40 text-lg text-blue-400 border border-blue-500/20">
                   📍
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-[#8D7B6D]">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-[#94A3B8]">
                       Основна адреса
                     </span>
                     {fullDeliveryAddress ? (
-                      <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.2 text-[10px] font-bold text-emerald-700">
+                      <span className="rounded-full bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.2 text-[10px] font-bold text-emerald-400">
                         Збережено
                       </span>
                     ) : (
-                      <span className="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.2 text-[10px] font-semibold text-amber-700">
+                      <span className="rounded-full bg-amber-950/60 border border-amber-500/30 px-2 py-0.2 text-[10px] font-semibold text-amber-400">
                         Не вказано
                       </span>
                     )}
                   </div>
-                  <p className="mt-0.5 text-sm font-medium text-[#2C1E14] truncate">
+                  <p className="mt-0.5 text-sm font-medium text-white truncate">
                     {fullDeliveryAddress || "Вкажіть адресу для швидкого замовлення"}
                   </p>
                 </div>
@@ -381,7 +382,7 @@ export function ProfileSettingsTab({
               <button
                 type="button"
                 onClick={() => setIsEditingMainAddress(true)}
-                className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold border border-[#D8C7B0] bg-[#FAF7F2] hover:bg-[#F3EDE2] text-[#9C5B23] cursor-pointer"
+                className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold border border-white/10 bg-[#1E232B] hover:bg-[#282F3B] text-amber-400 cursor-pointer transition-colors"
               >
                 {fullDeliveryAddress ? "Змінити" : "+ Додати"}
               </button>
@@ -390,11 +391,11 @@ export function ProfileSettingsTab({
 
           {/* 2. Додаткова адреса */}
           {isEditingAdditionalAddress ? (
-            <div className="bg-white rounded-2xl border border-[#EADFCF] p-4 space-y-3.5 shadow-2xs">
-              <div className="flex items-center justify-between border-b pb-2 border-[#F0E6D8]">
+            <div className="bg-[#181B22] rounded-2xl border border-white/10 p-4 space-y-3.5 shadow-lg">
+              <div className="flex items-center justify-between border-b pb-2 border-white/10">
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm">🏢</span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#6B533E]">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#CBD5E1]">
                     Додаткова адреса (робота, рідні)
                   </span>
                 </div>
@@ -402,7 +403,7 @@ export function ProfileSettingsTab({
                   <button
                     type="button"
                     onClick={() => setIsEditingAdditionalAddress(false)}
-                    className="text-xs font-semibold text-[#9C5B23] hover:underline cursor-pointer"
+                    className="text-xs font-semibold text-amber-400 hover:underline cursor-pointer"
                   >
                     Згорнути ✕
                   </button>
@@ -410,40 +411,40 @@ export function ProfileSettingsTab({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#6B533E] mb-1">
+                <label className="block text-xs font-bold text-[#94A3B8] mb-1">
                   Адреса
                 </label>
                 <input
                   type="text"
                   value={additionalAddress}
                   onChange={(e) => setAdditionalAddress(e.target.value)}
-                  placeholder="Напр. м. Вишгород, вул. Набережна, 4, офіс 12"
-                  className="w-full bg-[#FAF7F2] border border-[#D8C7B0] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8823E]/30"
+                  placeholder="Напр. м. Київ, вул. Велика Васильківська, 24, офіс 5"
+                  className="w-full bg-[#121417] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-[#64748B] focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
                 />
               </div>
             </div>
           ) : (
-            <div className="bg-white flex items-center justify-between rounded-2xl p-3.5 border border-[#EADFCF] shadow-2xs">
+            <div className="bg-[#181B22] flex items-center justify-between rounded-2xl p-3.5 border border-white/10 shadow-lg">
               <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-50 text-lg text-purple-600">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-950/40 text-lg text-purple-400 border border-purple-500/20">
                   🏢
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-[#8D7B6D]">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-[#94A3B8]">
                       Додаткова адреса
                     </span>
                     {additionalAddress ? (
-                      <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.2 text-[10px] font-bold text-emerald-700">
+                      <span className="rounded-full bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.2 text-[10px] font-bold text-emerald-400">
                         Збережено
                       </span>
                     ) : (
-                      <span className="rounded-full bg-slate-100 px-2 py-0.2 text-[10px] font-semibold text-slate-600">
+                      <span className="rounded-full bg-[#1E232B] px-2 py-0.2 text-[10px] font-semibold text-[#94A3B8] border border-white/5">
                         Не вказано
                       </span>
                     )}
                   </div>
-                  <p className="mt-0.5 text-sm font-medium text-[#2C1E14] truncate">
+                  <p className="mt-0.5 text-sm font-medium text-white truncate">
                     {additionalAddress || "Офіс, робота або адреса рідних"}
                   </p>
                 </div>
@@ -451,7 +452,7 @@ export function ProfileSettingsTab({
               <button
                 type="button"
                 onClick={() => setIsEditingAdditionalAddress(true)}
-                className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold border border-[#D8C7B0] bg-[#FAF7F2] hover:bg-[#F3EDE2] text-[#9C5B23] cursor-pointer"
+                className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold border border-white/10 bg-[#1E232B] hover:bg-[#282F3B] text-amber-400 cursor-pointer transition-colors"
               >
                 {additionalAddress ? "Змінити" : "+ Додати"}
               </button>
@@ -460,9 +461,9 @@ export function ProfileSettingsTab({
         </div>
       </section>
 
-      {/* Секція 3: Картка клієнта (Ідентично до TG WebApp) */}
+      {/* Секція 3: Картка клієнта */}
       <section className="space-y-2">
-        <p className="text-xs font-bold uppercase tracking-wider text-[#8D7B6D] px-1">
+        <p className="text-xs font-bold uppercase tracking-wider text-amber-400 px-1">
           Картка клієнта
         </p>
 
@@ -471,23 +472,23 @@ export function ProfileSettingsTab({
           role={onOpenLoyalty ? "button" : undefined}
           tabIndex={onOpenLoyalty ? 0 : undefined}
           onKeyDown={onOpenLoyalty ? (e) => (e.key === "Enter" || e.key === " " ? onOpenLoyalty() : null) : undefined}
-          className={`relative overflow-hidden rounded-3xl p-5 shadow-lg bg-gradient-to-br from-[#2C1E14] via-[#4A3B32] to-[#2C1E14] text-white border border-[#5A4535] text-left ${
-            onOpenLoyalty ? "cursor-pointer hover:border-[#E29E57]/60 hover:shadow-xl transition-all" : ""
+          className={`relative overflow-hidden rounded-3xl p-5 shadow-xl bg-gradient-to-br from-[#181B22] via-[#201D17] to-[#14171E] text-white border border-white/10 text-left ${
+            onOpenLoyalty ? "cursor-pointer hover:border-amber-500/60 hover:shadow-2xl transition-all" : ""
           }`}
         >
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-extrabold uppercase tracking-widest text-[#E29E57]">
-                  DOMA CLUB
+                <span className="text-xs font-extrabold uppercase tracking-widest text-amber-400">
+                  URBAN CLUB
                 </span>
                 <span className="text-xs">✨</span>
               </div>
-              <p className="mt-1 text-lg font-bold tracking-tight">
-                {profile.name || "Гість клубу"}
+              <p className="mt-1 text-lg font-bold tracking-tight text-white">
+                {profile.name || "Гість"}
               </p>
             </div>
-            <div className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold bg-[#E29E57]/20 text-[#E29E57] border border-[#E29E57]/30">
+            <div className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
               <span>●</span>
               <span>Active</span>
             </div>
@@ -495,30 +496,30 @@ export function ProfileSettingsTab({
 
           <div className="mt-8 flex items-end justify-between">
             <div>
-              <p className="text-[10px] uppercase tracking-wider opacity-60">
+              <p className="text-[10px] uppercase tracking-wider text-[#94A3B8]">
                 Номер картки
               </p>
-              <p className="font-mono text-sm font-bold tracking-widest text-[#EADFCF]">
+              <p className="font-mono text-sm font-bold tracking-widest text-[#CBD5E1]">
                 {clientCode}
               </p>
             </div>
 
             <div className="text-right">
-              <p className="text-[10px] uppercase tracking-wider opacity-60">
+              <p className="text-[10px] uppercase tracking-wider text-[#94A3B8]">
                 Бонуси
               </p>
-              <p className="text-xl font-extrabold text-[#E29E57]">
+              <p className="text-xl font-extrabold text-amber-400">
                 {bonusBalance} <span className="text-xs font-semibold opacity-70">бал.</span>
               </p>
             </div>
           </div>
 
           <div className="mt-4 border-t border-white/10 pt-2.5 flex items-center justify-between">
-            <p className="text-[11px] opacity-60 leading-relaxed">
-              Єдиний бонусний рахунок у мережі закладів DomaGroup.
+            <p className="text-[11px] text-[#94A3B8] leading-relaxed">
+              Бонусна програма: нарахування та оплата замовлень балами у закладах Urban Bites.
             </p>
             {onOpenLoyalty && (
-              <span className="text-[11px] font-bold text-[#E29E57] shrink-0 ml-2 hover:underline">
+              <span className="text-[11px] font-bold text-amber-400 shrink-0 ml-2 hover:underline">
                 Деталі →
               </span>
             )}
@@ -530,18 +531,18 @@ export function ProfileSettingsTab({
       <div className="pt-2">
         <button
           type="submit"
-          className="w-full bg-[#2C1E14] hover:bg-[#3D2C1F] text-white py-3 rounded-xl font-bold text-sm shadow-md transition-transform active:scale-95 cursor-pointer"
+          className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-[#0F1115] py-3.5 rounded-xl font-extrabold text-sm shadow-lg shadow-amber-500/20 transition-transform active:scale-95 cursor-pointer"
         >
           Зберегти зміни
         </button>
       </div>
 
       {/* Дії облікового запису */}
-      <div className="flex items-center justify-between gap-3 pt-2 border-t border-[#EADFCF] text-xs">
+      <div className="flex items-center justify-between gap-3 pt-2 border-t border-white/10 text-xs">
         <button
           type="button"
           onClick={onLogout}
-          className="text-red-600 hover:text-red-700 font-semibold cursor-pointer"
+          className="text-red-400 hover:text-red-300 font-semibold cursor-pointer transition-colors"
         >
           Вийти з профілю
         </button>
@@ -550,7 +551,7 @@ export function ProfileSettingsTab({
           <button
             type="button"
             onClick={onDisconnectTelegram}
-            className="text-zinc-500 hover:text-zinc-700 font-semibold cursor-pointer"
+            className="text-slate-400 hover:text-slate-200 font-semibold cursor-pointer transition-colors"
           >
             Від'єднати Telegram (@{profile.username || profile.telegram_id})
           </button>
@@ -558,7 +559,7 @@ export function ProfileSettingsTab({
           <button
             type="button"
             onClick={onOpenPhoneAuth}
-            className="text-[#9C5B23] hover:underline font-bold cursor-pointer"
+            className="text-amber-400 hover:underline font-bold cursor-pointer"
           >
             Увійти через інший акаунт →
           </button>

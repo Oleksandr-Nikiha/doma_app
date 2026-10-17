@@ -49,12 +49,22 @@ async def list_categories(
         WHERE c.is_visible = true
           AND ($1::int IS NULL OR c.location_id = $1)
           AND (
-              c.parent_id IS NULL
-              OR EXISTS (
+              EXISTS (
                   SELECT 1
                   FROM products p
                   JOIN product_variants v ON v.product_id = p.id
                   WHERE p.category_id = c.id
+                    AND p.is_available = true
+                    AND v.is_available = true
+              )
+              OR
+              EXISTS (
+                  SELECT 1
+                  FROM categories sub
+                  JOIN products p ON p.category_id = sub.id
+                  JOIN product_variants v ON v.product_id = p.id
+                  WHERE sub.parent_id = c.id
+                    AND sub.is_visible = true
                     AND p.is_available = true
                     AND v.is_available = true
               )

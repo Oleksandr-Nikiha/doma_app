@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { PIZZA_LOCATION_ID, fetchDeliveryAddresses, submitWebOrder } from "../api/client.ts";
+import { PIZZA_LOCATION_ID, fetchDeliveryAddresses, submitWebOrder, updateWebProfile } from "../api/client.ts";
 import { useCart } from "../context/CartContext.tsx";
 import type { DeliveryAddress } from "../types/catalog.ts";
 import type { OrderOut, WebOrderCreatePayload, WebOrderItemPayload } from "../types/order.ts";
@@ -9,7 +9,7 @@ import { AddressFields } from "./checkout/AddressFields.tsx";
 import { CustomerInfoFields } from "./checkout/CustomerInfoFields.tsx";
 import { useModalBehavior } from "../hooks/useModalBehavior.ts";
 import { LAST_ORDER_STORAGE_KEY, ORDERS_HISTORY_STORAGE_KEY } from "./OrderTrackingModal.tsx";
-import { isUserAuthenticated, USER_PROFILE_STORAGE_KEY, type UserProfile } from "../types/user.ts";
+import { isUserAuthenticated, saveSharedProfile, USER_PROFILE_STORAGE_KEY, type UserProfile } from "../types/user.ts";
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -56,6 +56,7 @@ export function CheckoutModal({
   const [comment, setComment] = useState("");
   const [saveDetails, setSaveDetails] = useState(true);
   const [isAutofilled, setIsAutofilled] = useState(false);
+  const [useBonuses, setUseBonuses] = useState(false);
 
   const [streetsList, setStreetsList] = useState<DeliveryAddress[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -63,10 +64,19 @@ export function CheckoutModal({
 
   const hoursInfo = getWorkingHoursInfo();
 
+  const userBonusBalance = userProfile?.bonuses ?? 0;
+  // Дозволяємо сплатити бонусами до 30% вартості замовлення або до суми балансу (щонайменше 1 грн до сплати)
+  const maxBonusDiscount = Math.min(
+    userBonusBalance,
+    Math.min(Math.floor(totalPrice * 0.3), Math.max(0, totalPrice - 1))
+  );
+  const bonusDiscount = useBonuses ? maxBonusDiscount : 0;
+  const finalPrice = Math.max(0, totalPrice - bonusDiscount);
+
   // Завантаження збережених контактів та адресного довідника
   useEffect(() => {
     if (isOpen) {
-      fetchDeliveryAddresses("Вишгород")
+      fetchDeliveryAddresses("Київ")
         .then(setStreetsList)
         .catch(() => setStreetsList([]));
 
@@ -179,7 +189,7 @@ export function CheckoutModal({
         setError("Вкажіть номер будинку");
         return;
       }
-      fullAddress = `м. Вишгород, ${street.trim()}, буд. ${house.trim()}${
+      fullAddress = `м. Київ, ${street.trim()}, буд. ${house.trim()}${
         apartment.trim() ? `, кв./офіс ${apartment.trim()}` : ""
       }`;
     }
@@ -203,6 +213,12 @@ export function CheckoutModal({
       } catch {}
     }
 
+    let finalComment = comment.trim();
+    if (bonusDiscount > 0) {
+      const bonusNote = `[Оплачено бонусами URBAN CLUB: -${bonusDiscount} ₴, до сплати: ${finalPrice} ₴]`;
+      finalComment = finalComment ? `${finalComment} • ${bonusNote}` : bonusNote;
+    }
+
     const payload: WebOrderCreatePayload = {
       telegram_id: tgId,
       location_id: PIZZA_LOCATION_ID,
@@ -212,7 +228,7 @@ export function CheckoutModal({
       contact_phone: cleanPhone,
       payment_method: paymentMethod,
       scheduled_time: isAsap ? null : scheduledTime.trim() || null,
-      comment: comment.trim() || null,
+      comment: finalComment || null,
       source: "web_pizza",
       items: orderItems,
     };
@@ -248,10 +264,14 @@ export function CheckoutModal({
         ).slice(0, 10);
         localStorage.setItem(ORDERS_HISTORY_STORAGE_KEY, JSON.stringify(updated));
 
-        // Оновлюємо профіль користувача в localStorage
+        // Оновлюємо бонуси: списуємо використані та нараховуємо кешбек 5% від сплаченої суми
+        const cashbackEarned = Math.floor(finalPrice * 0.05);
         const prevProfStr = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
         const prevProf = prevProfStr ? JSON.parse(prevProfStr) : {};
-        const updatedProf = {
+        const prevBonus = typeof prevProf.bonuses === "number" ? prevProf.bonuses : 50;
+        const newBonusBalance = Math.max(0, prevBonus - bonusDiscount) + cashbackEarned;
+
+        const updatedProf: UserProfile = {
           ...prevProf,
           name: name.trim(),
           phone: cleanPhone,
@@ -259,15 +279,23 @@ export function CheckoutModal({
           house: house.trim(),
           apartment: apartment.trim(),
           telegram_id: createdOrder.telegram_id || prevProf.telegram_id || null,
-          bonuses: prevProf.bonuses || 0,
-          client_code: prevProf.client_code || (createdOrder.telegram_id ? `DM-${createdOrder.telegram_id}` : undefined),
+          bonuses: newBonusBalance,
+          client_code: prevProf.client_code || (createdOrder.telegram_id ? `UB-${createdOrder.telegram_id}` : undefined),
           is_phone_verified: Boolean(createdOrder.telegram_id || prevProf.is_phone_verified),
-          isAuthenticated: Boolean(prevProf.isAuthenticated || createdOrder.telegram_id),
+          isAuthenticated: Boolean(prevProf.isAuthenticated || createdOrder.telegram_id || cleanPhone),
         };
-        localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(updatedProf));
+        saveSharedProfile(updatedProf);
+
+        if (updatedProf.phone || updatedProf.telegram_id) {
+          void updateWebProfile({
+            phone: updatedProf.phone,
+            telegram_id: updatedProf.telegram_id,
+            bonus_balance: newBonusBalance,
+          });
+        }
 
         // Сповіщаємо інші компоненти (кабінет, відстеження) про нове замовлення
-        window.dispatchEvent(new CustomEvent("doma:order_created", { detail: createdOrder }));
+        window.dispatchEvent(new CustomEvent("urban:order_created", { detail: createdOrder }));
 
         if (onAuthSuccess && isUserAuthenticated(updatedProf)) {
           onAuthSuccess(updatedProf);
@@ -288,21 +316,21 @@ export function CheckoutModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative bg-white rounded-t-3xl sm:rounded-3xl max-w-xl w-full max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden shadow-2xl border border-[#E8DFC8] animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-200">
+      <div className="relative bg-[#14171E] rounded-t-3xl sm:rounded-3xl max-w-xl w-full max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden shadow-2xl border border-white/10 animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-200 text-[#F1F5F9]">
         {/* Хедер модалки */}
-        <div className="shrink-0 p-4 sm:p-5 border-b border-[#EADFCF] flex items-center justify-between bg-[#FAF7F2]">
+        <div className="shrink-0 p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-[#181B22]">
           <div>
-            <h2 className="font-display text-xl sm:text-2xl font-bold text-[#2C1E14]">
+            <h2 className="font-display text-xl sm:text-2xl font-bold text-white">
               Оформлення замовлення
             </h2>
-            <p className="text-[11px] sm:text-xs text-[#7A695C] mt-0.5">
-              Doma Pizza & Sushi • Вишгород, вул. Набережна, 8Д
+            <p className="text-[11px] sm:text-xs text-[#94A3B8] mt-0.5">
+              Urban Pizza & Sushi • м. Київ, вул. Набережна, 12
             </p>
           </div>
           <button
             onClick={onClose}
             type="button"
-            className="w-9 h-9 rounded-full bg-white hover:bg-[#F3EDE2] text-[#2C1E14] border border-[#E2D5C3] flex items-center justify-center font-bold text-sm cursor-pointer shadow-xs active:scale-95"
+            className="w-9 h-9 rounded-full bg-[#1E232B] hover:bg-[#282F3B] text-white border border-white/10 flex items-center justify-center font-bold text-sm cursor-pointer shadow-xs active:scale-95"
           >
             ✕
           </button>
@@ -312,18 +340,18 @@ export function CheckoutModal({
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 overscroll-contain">
             {!isAuthenticated && onRequireAuth && (
-              <div className="p-3.5 rounded-2xl bg-[#F8F4EC] border border-[#E5DAC8] flex items-center justify-between gap-3 text-xs text-[#6B533E]">
+              <div className="p-3.5 rounded-2xl bg-[#181B22] border border-white/10 flex items-center justify-between gap-3 text-xs text-[#CBD5E1]">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span className="text-base shrink-0">🎁</span>
                   <span>
                     Маєте акаунт?{" "}
-                    <span className="font-semibold text-[#2C1E14]">Увійдіть для нарахування бонусів</span>
+                    <span className="font-semibold text-white">Увійдіть для нарахування бонусів</span>
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={onRequireAuth}
-                  className="shrink-0 bg-[#2C1E14] hover:bg-[#3D2C1F] text-white text-xs font-semibold px-3 py-1.5 rounded-xl cursor-pointer transition-colors active:scale-95"
+                  className="shrink-0 bg-[#222731] hover:bg-[#2A313C] border border-white/10 text-white text-xs font-semibold px-3 py-1.5 rounded-xl cursor-pointer transition-colors active:scale-95"
                 >
                   Увійти
                 </button>
@@ -331,7 +359,7 @@ export function CheckoutModal({
             )}
 
             {hoursInfo.checkoutNotice && (
-              <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200/80 text-amber-900 text-xs sm:text-sm flex items-start gap-3">
+              <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/30 text-amber-200 text-xs sm:text-sm flex items-start gap-3">
                 <span className="text-lg shrink-0">🌙</span>
                 <div className="leading-relaxed font-medium">
                   {hoursInfo.checkoutNotice}
@@ -340,14 +368,14 @@ export function CheckoutModal({
             )}
 
             {error && (
-              <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs sm:text-sm font-medium flex items-center gap-2">
+              <div className="p-3.5 rounded-2xl bg-red-950/40 border border-red-500/30 text-red-300 text-xs sm:text-sm font-medium flex items-center gap-2">
                 <span>⚠️</span>
                 <span>{error}</span>
               </div>
             )}
 
             {isAutofilled && (
-              <div className="flex items-center justify-between bg-[#F8F4EC] border border-[#E5DAC8] px-3.5 py-2 rounded-xl text-xs text-[#6B533E]">
+              <div className="flex items-center justify-between bg-[#181B22] border border-white/10 px-3.5 py-2 rounded-xl text-xs text-[#CBD5E1]">
                 <span className="flex items-center gap-1.5">
                   <span>✨</span>
                   <span>Ваші дані автозаповнено для швидкого замовлення</span>
@@ -355,7 +383,7 @@ export function CheckoutModal({
                 <button
                   type="button"
                   onClick={handleClearSavedData}
-                  className="text-[#9C5B23] hover:underline font-semibold text-[11px] cursor-pointer"
+                  className="text-[#E2583E] hover:underline font-semibold text-[11px] cursor-pointer"
                 >
                   Очистити
                 </button>
@@ -364,17 +392,17 @@ export function CheckoutModal({
 
             {/* Спосіб отримання */}
             <div className="space-y-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#7A695C]">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#94A3B8]">
                 Спосіб отримання
               </label>
-              <div className="grid grid-cols-2 gap-3 p-1.5 bg-[#F3EDE2] rounded-2xl">
+              <div className="grid grid-cols-2 gap-3 p-1.5 bg-[#121417] rounded-2xl border border-white/10">
                 <button
                   type="button"
                   onClick={() => setFulfillmentType("delivery")}
                   className={`py-3 px-4 rounded-xl text-sm font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
                     fulfillmentType === "delivery"
-                      ? "bg-[#2C1E14] text-white shadow-sm"
-                      : "text-[#6B533E] hover:text-[#2C1E14]"
+                      ? "bg-[#222731] text-white shadow-sm border border-white/10"
+                      : "text-[#94A3B8] hover:text-white"
                   }`}
                 >
                   <span>🛵</span>
@@ -385,8 +413,8 @@ export function CheckoutModal({
                   onClick={() => setFulfillmentType("pickup")}
                   className={`py-3 px-4 rounded-xl text-sm font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
                     fulfillmentType === "pickup"
-                      ? "bg-[#2C1E14] text-white shadow-sm"
-                      : "text-[#6B533E] hover:text-[#2C1E14]"
+                      ? "bg-[#222731] text-white shadow-sm border border-white/10"
+                      : "text-[#94A3B8] hover:text-white"
                   }`}
                 >
                   <span>🛍️</span>
@@ -426,21 +454,65 @@ export function CheckoutModal({
               setComment={setComment}
               isPhoneVerified={Boolean(userProfile?.is_phone_verified)}
             />
+
+            {/* Бонуси URBAN CLUB */}
+            {isAuthenticated && userBonusBalance > 0 && (
+              <div className="p-4 rounded-2xl bg-[#181B22] border border-white/10 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">✨</span>
+                    <div>
+                      <div className="text-xs font-bold text-white">Бонуси URBAN CLUB</div>
+                      <div className="text-[11px] text-[#94A3B8]">
+                        Доступно: <strong className="text-[#E2583E] font-bold">{userBonusBalance} ₴</strong> (до -{maxBonusDiscount} ₴ на це замовлення)
+                      </div>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useBonuses}
+                      onChange={(e) => setUseBonuses(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-[#222731] border border-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#D34528]"></div>
+                  </label>
+                </div>
+                {useBonuses && (
+                  <div className="pt-2 border-t border-white/10 flex items-center justify-between text-xs text-[#CBD5E1] font-semibold">
+                    <span>Списання бонусів:</span>
+                    <span className="text-emerald-400 font-bold">-{bonusDiscount} ₴</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Підсумок і кнопка відправки */}
-          <div className="shrink-0 p-4 sm:p-5 border-t border-[#EADFCF] bg-[#FAF7F2] flex items-center justify-between gap-4">
+          <div className="shrink-0 p-4 sm:p-5 border-t border-white/10 bg-[#181B22] flex items-center justify-between gap-4">
             <div>
-              <div className="text-[11px] text-[#7A695C]">Разом до сплати:</div>
-              <div className="text-xl sm:text-2xl font-extrabold text-[#2C1E14]">
-                {totalPrice} ₴
+              <div className="text-[11px] text-[#94A3B8]">Разом до сплати:</div>
+              <div className="flex items-baseline gap-2">
+                <div className="text-xl sm:text-2xl font-extrabold text-white">
+                  {finalPrice} ₴
+                </div>
+                {bonusDiscount > 0 && (
+                  <span className="text-xs text-[#94A3B8] line-through font-medium">
+                    {totalPrice} ₴
+                  </span>
+                )}
               </div>
+              {finalPrice > 0 && (
+                <div className="text-[10px] text-emerald-400 font-medium">
+                  + {Math.floor(finalPrice * 0.05)} бонусів кешбеку (5%)
+                </div>
+              )}
             </div>
 
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 max-w-xs bg-[#2C1E14] hover:bg-[#3D2C1F] disabled:opacity-50 text-white py-3 sm:py-3.5 px-5 rounded-2xl font-bold text-sm sm:text-base shadow-lg shadow-[#2C1E14]/15 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+              className="flex-1 max-w-xs bg-[#D34528] hover:bg-[#B8351B] disabled:opacity-50 text-white py-3 sm:py-3.5 px-5 rounded-2xl font-bold text-sm sm:text-base shadow-lg shadow-[#D34528]/25 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
             >
               {submitting ? (
                 <>

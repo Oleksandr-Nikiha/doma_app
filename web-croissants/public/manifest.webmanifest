@@ -1,7 +1,7 @@
 {
-  "name": "Doma Croissants — Перша пекарня задоволення",
-  "short_name": "Doma Croissants",
-  "description": "Великі хрусткі круасани, авторська кава та бенто-піци у Вишгороді. Доставка та самовивіз.",
+  "name": "Urban Bakery & Coffee — Свіжі круасани, артизанський хліб, спешелті-кава",
+  "short_name": "Urban Bakery",
+  "description": "Великі хрусткі круасани, авторська specialty кава та свіжа випічка у Києві. Доставка та самовивіз.",
   "start_url": "./",
   "id": "./",
   "display": "standalone",
@@ -16,13 +16,12 @@
       "purpose": "any maskable"
     },
     {
-      "src": "./logo.png",
-      "sizes": "192x192 512x512",
-      "type": "image/png",
+      "src": "./logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ],
   "categories": ["food", "shopping", "lifestyle"],
   "lang": "uk"
 }
-

@@ -20,8 +20,8 @@ interface HeaderProps {
 
 export function Header({
   onOpenCart,
-  phone = "+380 93 112 77 33",
-  address = "Вишгород, просп. Шевченка, 2Д",
+  phone = "+380 (44) 222-00-22",
+  address = "м. Київ, вул. Велика Васильківська, 24",
   activeNavId,
   onSelectNav,
   lastOrderId,
@@ -83,12 +83,12 @@ export function Header({
     window.scrollTo({ top: targetY, behavior: "smooth" });
   };
 
-  const logoSrc = `${import.meta.env.BASE_URL}logo.png`;
+  const logoSrc = `${import.meta.env.BASE_URL}logo.svg`;
 
   return (
     <header
       ref={headerRef}
-      className="sticky top-0 z-40 bg-[#FAF7F2] border-b border-[#E8DFC8] shadow-xs"
+      className="sticky top-0 z-40 bg-[#121417]/85 backdrop-blur-md border-b border-white/10 shadow-lg shadow-black/20"
     >
       {/* Верхня інформаційна стрічка */}
       <TopBar phone={phone} address={address} />
@@ -99,28 +99,28 @@ export function Header({
         <a href="#top" className="flex items-center gap-2.5 sm:gap-3 group">
           <img
             src={logoSrc}
-            alt="Doma Croissants"
-            className="h-8 sm:h-11 w-auto object-contain group-hover:scale-102 transition-transform"
+            alt="Urban Bakery & Coffee"
+            className="h-10 sm:h-12 w-10 sm:w-12 rounded-full object-cover shadow-xs group-hover:scale-105 transition-transform"
           />
-          <div className="border-l border-[#E2D5C3] pl-2 hidden sm:block">
-            <div className="text-[10px] sm:text-[11px] font-bold tracking-wider uppercase text-[#9C5B23] leading-tight">
-              Перша пекарня задоволення
+          <div className="border-l border-white/15 pl-2 hidden sm:block">
+            <div className="text-[10px] sm:text-[11px] font-bold tracking-wider uppercase text-[#E69A38] leading-tight">
+              Urban Bakery & Coffee
             </div>
-            <div className="text-[10px] text-[#7A695C] leading-none mt-0.5">
-              м. Вишгород
+            <div className="text-[10px] text-[#94A3B8] leading-none mt-0.5">
+              м. Київ • вул. Велика Васильківська, 24
             </div>
           </div>
         </a>
 
         {/* Навігація десктоп */}
-        <nav className="hidden lg:flex items-center gap-5 xl:gap-6 text-sm font-semibold text-[#4A3B32]">
+        <nav className="hidden lg:flex items-center gap-5 xl:gap-6 text-sm font-semibold text-[#94A3B8]">
           <a
             href="#menu"
             onClick={(e) => handleNavClick(e, "menu")}
             className={`transition-colors py-1 ${
               typeof activeNavId === "number" || activeNavId === "menu"
-                ? "text-[#C8823E] font-bold border-b-2 border-[#C8823E]"
-                : "hover:text-[#C8823E]"
+                ? "text-[#E69A38] font-bold border-b-2 border-[#E69A38]"
+                : "hover:text-[#E69A38]"
             }`}
           >
             Меню
@@ -130,8 +130,8 @@ export function Header({
             onClick={(e) => handleNavClick(e, "about")}
             className={`transition-colors py-1 ${
               activeNavId === "about"
-                ? "text-[#C8823E] font-bold border-b-2 border-[#C8823E]"
-                : "hover:text-[#C8823E]"
+                ? "text-[#E69A38] font-bold border-b-2 border-[#E69A38]"
+                : "hover:text-[#E69A38]"
             }`}
           >
             Про пекарню
@@ -141,8 +141,8 @@ export function Header({
             onClick={(e) => handleNavClick(e, "delivery")}
             className={`transition-colors py-1 ${
               activeNavId === "delivery"
-                ? "text-[#C8823E] font-bold border-b-2 border-[#C8823E]"
-                : "hover:text-[#C8823E]"
+                ? "text-[#E69A38] font-bold border-b-2 border-[#E69A38]"
+                : "hover:text-[#E69A38]"
             }`}
           >
             Доставка
@@ -152,8 +152,8 @@ export function Header({
             onClick={(e) => handleNavClick(e, "careers")}
             className={`transition-colors py-1 ${
               activeNavId === "careers"
-                ? "text-[#C8823E] font-bold border-b-2 border-[#C8823E]"
-                : "hover:text-[#C8823E]"
+                ? "text-[#E69A38] font-bold border-b-2 border-[#E69A38]"
+                : "hover:text-[#E69A38]"
             }`}
           >
             Вакансії
@@ -163,8 +163,8 @@ export function Header({
             onClick={(e) => handleNavClick(e, "contacts")}
             className={`transition-colors py-1 ${
               activeNavId === "contacts"
-                ? "text-[#C8823E] font-bold border-b-2 border-[#C8823E]"
-                : "hover:text-[#C8823E]"
+                ? "text-[#E69A38] font-bold border-b-2 border-[#E69A38]"
+                : "hover:text-[#E69A38]"
             }`}
           >
             Контакти
@@ -178,7 +178,7 @@ export function Header({
             <button
               onClick={onOpenCabinet}
               type="button"
-              className="flex items-center gap-1.5 sm:gap-2 bg-[#FAF7F2] hover:bg-[#F3EDE2] text-[#2C1E14] border border-[#E2D5C3] px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl font-bold transition-all active:scale-95 cursor-pointer text-xs sm:text-sm shadow-2xs shrink-0 whitespace-nowrap"
+              className="flex items-center gap-1.5 sm:gap-2 bg-[#181B22] hover:bg-[#1E232B] text-[#F1F5F9] border border-white/10 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl font-bold transition-all active:scale-95 cursor-pointer text-xs sm:text-sm shadow-xs shrink-0 whitespace-nowrap"
             >
               {isAuthenticated ? (
                 <>
@@ -201,7 +201,7 @@ export function Header({
             <button
               onClick={onOpenTracking}
               type="button"
-              className="flex items-center gap-1.5 sm:gap-2 bg-[#F3EDE2] hover:bg-[#EADFCF] text-[#2C1E14] border border-[#E2D5C3] px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl font-bold transition-all active:scale-95 cursor-pointer text-xs sm:text-sm shadow-2xs shrink-0 whitespace-nowrap"
+              className="flex items-center gap-1.5 sm:gap-2 bg-[#1E232B] hover:bg-[#252A34] text-[#F1F5F9] border border-white/10 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl font-bold transition-all active:scale-95 cursor-pointer text-xs sm:text-sm shadow-xs shrink-0 whitespace-nowrap"
             >
               <span className="relative flex h-2 w-2 shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -217,16 +217,16 @@ export function Header({
           <button
             onClick={onOpenCart}
             type="button"
-            className="relative flex items-center gap-1.5 sm:gap-2 bg-[#2C1E14] hover:bg-[#3D2C1F] text-white px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl font-semibold shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer text-xs sm:text-sm shrink-0 whitespace-nowrap"
+            className="relative flex items-center gap-1.5 sm:gap-2 bg-[#E69A38] hover:bg-[#D48927] text-[#0F1115] px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl font-bold shadow-lg shadow-[#E69A38]/20 hover:shadow-xl transition-all active:scale-95 cursor-pointer text-xs sm:text-sm shrink-0 whitespace-nowrap"
           >
             <span className="text-base sm:text-lg">🛍️</span>
             <span className="hidden sm:inline">Кошик</span>
             {totalQty > 0 ? (
-              <span className="bg-[#E29E57] text-[#2C1E14] font-bold text-xs px-2 py-0.5 rounded-full shrink-0">
+              <span className="bg-[#0F1115]/20 text-[#0F1115] font-extrabold text-xs px-2 py-0.5 rounded-full shrink-0">
                 {totalQty} • {totalPrice} ₴
               </span>
             ) : (
-              <span className="text-xs text-[#A8988B] hidden sm:inline">порожній</span>
+              <span className="text-xs text-[#0F1115]/70 hidden sm:inline">порожній</span>
             )}
           </button>
 
@@ -235,7 +235,7 @@ export function Header({
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             type="button"
             aria-label="Меню сайту"
-            className="lg:hidden w-9 h-9 rounded-xl bg-white border border-[#E2D5C3] text-[#2C1E14] flex items-center justify-center font-bold text-base hover:bg-[#F3EDE2] active:scale-95 transition-all cursor-pointer shadow-2xs shrink-0"
+            className="lg:hidden w-9 h-9 rounded-xl bg-[#181B22] border border-white/10 text-[#F1F5F9] flex items-center justify-center font-bold text-base hover:bg-[#1E232B] active:scale-95 transition-all cursor-pointer shadow-xs shrink-0"
           >
             {isMobileMenuOpen ? "✕" : "☰"}
           </button>

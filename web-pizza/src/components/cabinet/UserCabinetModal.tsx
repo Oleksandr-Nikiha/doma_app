@@ -11,7 +11,14 @@ import { useCart } from "../../context/CartContext.tsx";
 import { useModalBehavior } from "../../hooks/useModalBehavior.ts";
 import type { DeliveryAddress, ProductVariant } from "../../types/catalog.ts";
 import type { OrderOut } from "../../types/order.ts";
-import { isUserAuthenticated, USER_PROFILE_STORAGE_KEY, type UserProfile } from "../../types/user.ts";
+import {
+  clearSharedProfile,
+  getSharedCookie,
+  isUserAuthenticated,
+  loadSavedProfile,
+  saveSharedProfile,
+  type UserProfile,
+} from "../../types/user.ts";
 import { CUSTOMER_STORAGE_KEY, type SavedCustomer } from "../CheckoutModal.tsx";
 import { ORDERS_HISTORY_STORAGE_KEY } from "../OrderTrackingModal.tsx";
 import { UserAvatar } from "../ui/UserAvatar.tsx";
@@ -51,7 +58,7 @@ export function UserCabinetModal({
     street: "",
     house: "",
     apartment: "",
-    bonuses: 0,
+    bonuses: 50,
     isAuthenticated: false,
   });
   const [orders, setOrders] = useState<OrderOut[]>([]);
@@ -74,72 +81,87 @@ export function UserCabinetModal({
     if (!isOpen) return;
 
     if (isAuthenticated) {
-      fetchDeliveryAddresses("Вишгород")
+      fetchDeliveryAddresses("Київ")
         .then(setStreetsList)
         .catch(() => setStreetsList([]));
     }
 
     try {
-      const savedProf = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
+      let savedProf = loadSavedProfile();
       let currentProfile: UserProfile = {
         name: "",
         phone: "",
         street: "",
         house: "",
         apartment: "",
-        bonuses: 0,
+        bonuses: 50,
         isAuthenticated: false,
       };
 
-      if (savedProf) {
-        const parsed: UserProfile = JSON.parse(savedProf);
-        if (isUserAuthenticated(parsed)) {
-          const isVerified = Boolean(parsed.is_phone_verified || parsed.telegram_id);
-          currentProfile = {
-            ...currentProfile,
-            ...parsed,
-            is_phone_verified: isVerified,
-            bonuses: parsed.bonuses ?? 50,
+      if (!savedProf) {
+        const cookiePhone = getSharedCookie("urban_auth_phone");
+        const cookieTg = getSharedCookie("urban_auth_tg");
+        if (cookiePhone || cookieTg) {
+          savedProf = {
+            name: "Клієнт",
+            phone: cookiePhone || "",
+            telegram_id: cookieTg ? Number(cookieTg) : null,
+            street: "",
+            house: "",
+            apartment: "",
+            bonuses: 50,
             isAuthenticated: true,
           };
-          setProfile(currentProfile);
-
-          // Синхронізуємо актуальні дані з сервера (верифікація, збережені адреси, ПІБ)
-          if (currentProfile.telegram_id || currentProfile.phone) {
-            void fetchWebProfile({
-              telegram_id: currentProfile.telegram_id,
-              phone: currentProfile.phone,
-            }).then((serverUser) => {
-              if (serverUser) {
-                setProfile((prev) => {
-                  const merged: UserProfile = {
-                    ...prev,
-                    name: serverUser.full_name || prev.name,
-                    first_name: serverUser.first_name || prev.first_name,
-                    last_name: serverUser.last_name || prev.last_name,
-                    phone: serverUser.phone || prev.phone,
-                    telegram_id: serverUser.telegram_id || prev.telegram_id,
-                    is_phone_verified:
-                      serverUser.is_phone_verified ||
-                      Boolean(serverUser.telegram_id) ||
-                      Boolean(prev.telegram_id),
-                    street: prev.street || serverUser.delivery_address || "",
-                    additional_address: prev.additional_address || serverUser.additional_address || "",
-                    client_code: serverUser.client_code || prev.client_code,
-                  };
-                  localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(merged));
-                  if (onProfileUpdated) onProfileUpdated(merged);
-                  return merged;
-                });
-              }
-            });
-          }
-
-          if (isAuthenticated) {
-            void loadOrders(currentProfile.phone, currentProfile.telegram_id, false);
-          }
-          return;
         }
+      }
+
+      if (savedProf && isUserAuthenticated(savedProf)) {
+        const isVerified = Boolean(savedProf.is_phone_verified || savedProf.telegram_id);
+        currentProfile = {
+          ...currentProfile,
+          ...savedProf,
+          is_phone_verified: isVerified,
+          bonuses: savedProf.bonuses ?? 50,
+          isAuthenticated: true,
+        };
+        setProfile(currentProfile);
+
+        // Синхронізуємо актуальні дані з сервера (верифікація, збережені адреси, ПІБ, бонуси)
+        if (currentProfile.telegram_id || currentProfile.phone) {
+          void fetchWebProfile({
+            telegram_id: currentProfile.telegram_id,
+            phone: currentProfile.phone,
+          }).then((serverUser) => {
+            if (serverUser) {
+              setProfile((prev) => {
+                const merged: UserProfile = {
+                  ...prev,
+                  name: serverUser.full_name || prev.name,
+                  first_name: serverUser.first_name || prev.first_name,
+                  last_name: serverUser.last_name || prev.last_name,
+                  phone: serverUser.phone || prev.phone,
+                  telegram_id: serverUser.telegram_id || prev.telegram_id,
+                  is_phone_verified:
+                    serverUser.is_phone_verified ||
+                    Boolean(serverUser.telegram_id) ||
+                    Boolean(prev.telegram_id),
+                  street: prev.street || serverUser.delivery_address || "",
+                  additional_address: prev.additional_address || serverUser.additional_address || "",
+                  client_code: serverUser.client_code || prev.client_code,
+                  bonuses: serverUser.bonus_balance ?? prev.bonuses ?? 50,
+                };
+                saveSharedProfile(merged);
+                if (onProfileUpdated) onProfileUpdated(merged);
+                return merged;
+              });
+            }
+          });
+        }
+
+        if (isAuthenticated) {
+          void loadOrders(currentProfile.phone, currentProfile.telegram_id, false);
+        }
+        return;
       }
 
       setProfile(currentProfile);
@@ -167,11 +189,11 @@ export function UserCabinetModal({
       void loadOrders(profile.phone, profile.telegram_id, true);
     };
 
-    window.addEventListener("doma:order_created", handleOrderCreated);
+    window.addEventListener("urban:order_created", handleOrderCreated);
 
     return () => {
       clearInterval(timer);
-      window.removeEventListener("doma:order_created", handleOrderCreated);
+      window.removeEventListener("urban:order_created", handleOrderCreated);
     };
   }, [isOpen, isAuthenticated, profile.phone, profile.telegram_id]);
 
@@ -238,8 +260,8 @@ export function UserCabinetModal({
       is_phone_verified: isVerified,
     };
     setProfile(toSave);
+    saveSharedProfile(toSave);
     try {
-      localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(toSave));
       const cust: SavedCustomer = {
         name: toSave.name,
         phone: toSave.phone,
@@ -265,6 +287,7 @@ export function UserCabinetModal({
           full_name: toSave.name || null,
           delivery_address: fullAddress || null,
           additional_address: toSave.additional_address || null,
+          bonus_balance: toSave.bonuses,
         });
         if (userOut) {
           setProfile((prev) => {
@@ -275,8 +298,9 @@ export function UserCabinetModal({
                 Boolean(userOut.telegram_id) ||
                 Boolean(prev.telegram_id),
               client_code: userOut.client_code || prev.client_code,
+              bonuses: userOut.bonus_balance ?? prev.bonuses ?? 50,
             };
-            localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(synced));
+            saveSharedProfile(synced);
             if (onProfileUpdated) onProfileUpdated(synced);
             return synced;
           });
@@ -291,6 +315,18 @@ export function UserCabinetModal({
     }
   };
 
+  const handlePhoneAuthSuccess = (updatedProfile: UserProfile) => {
+    setProfile(updatedProfile);
+    saveSharedProfile(updatedProfile);
+    if (onProfileUpdated) onProfileUpdated(updatedProfile);
+    if (onAuthSuccess) {
+      onAuthSuccess(updatedProfile);
+    } else {
+      setCurrentView("profile");
+      void loadOrders(updatedProfile.phone, updatedProfile.telegram_id, false);
+    }
+  };
+
   const handleTelegramAuth = async (user: TelegramUser) => {
     try {
       const userOut = await authTelegramWidget(user);
@@ -301,15 +337,17 @@ export function UserCabinetModal({
         telegram_id: userOut.telegram_id,
         username: user.username,
         avatar_url: user.photo_url || profile.avatar_url,
-        bonuses: Math.max(profile.bonuses, userOut.bonus_balance || 50),
-        client_code: userOut.client_code || `DM-${userOut.telegram_id}`,
+        bonuses: Math.max(profile.bonuses, userOut.bonus_balance ?? 50),
+        client_code: userOut.client_code || `UB-${userOut.telegram_id}`,
         is_phone_verified: true,
         isAuthenticated: true,
       };
       if (userOut.delivery_address && !profile.street) {
         updatedProfile.street = userOut.delivery_address;
       }
-      handleSaveProfile(updatedProfile);
+      setProfile(updatedProfile);
+      saveSharedProfile(updatedProfile);
+      if (onProfileUpdated) onProfileUpdated(updatedProfile);
       if (onAuthSuccess) {
         onAuthSuccess(updatedProfile);
       } else {
@@ -320,7 +358,6 @@ export function UserCabinetModal({
       console.error("Помилка авторизації Telegram віджета:", err);
     }
   };
-
 
   const handleDisconnectTelegram = () => {
     const updated: UserProfile = {
@@ -335,8 +372,8 @@ export function UserCabinetModal({
   };
 
   const handleLogout = () => {
+    clearSharedProfile();
     try {
-      localStorage.removeItem(USER_PROFILE_STORAGE_KEY);
       localStorage.removeItem(CUSTOMER_STORAGE_KEY);
     } catch {}
     const empty: UserProfile = {
@@ -412,15 +449,15 @@ export function UserCabinetModal({
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
       <div className="fixed inset-0" onClick={onClose} />
 
-      <div className="relative bg-[#FAF7F2] rounded-t-3xl sm:rounded-3xl max-w-xl w-full max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden shadow-2xl border border-[#E8DFC8] z-10 animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-200">
+      <div className="relative bg-[#14171E] rounded-t-3xl sm:rounded-3xl max-w-xl w-full max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden shadow-2xl border border-white/10 z-10 animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-200 text-[#F1F5F9]">
         {/* Хедер модалки */}
-        <div className="shrink-0 p-4 sm:p-5 border-b border-[#EADFCF] flex items-center justify-between bg-white shadow-2xs">
+        <div className="shrink-0 p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-[#181B22] shadow-2xs">
           <div className="flex items-center gap-3">
             {isAuthenticated && currentView !== "profile" ? (
               <button
                 type="button"
                 onClick={() => setCurrentView("profile")}
-                className="w-9 h-9 rounded-full bg-[#FAF7F2] hover:bg-[#F3EDE2] text-[#2C1E14] border border-[#E2D5C3] flex items-center justify-center font-bold text-sm cursor-pointer shadow-2xs active:scale-95 transition-all"
+                className="w-9 h-9 rounded-full bg-[#1E232B] hover:bg-[#282F3B] text-white border border-white/10 flex items-center justify-center font-bold text-sm cursor-pointer shadow-2xs active:scale-95 transition-all"
                 title="Назад до профілю"
               >
                 ←
@@ -432,12 +469,12 @@ export function UserCabinetModal({
                 size="md"
               />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-[#FFF8EE] border border-[#EADFCF] flex items-center justify-center text-lg shrink-0">
+              <div className="w-10 h-10 rounded-full bg-[#1E232B] border border-white/10 flex items-center justify-center text-lg shrink-0 text-white">
                 {authReason === "checkout" ? "🛍️" : "🔐"}
               </div>
             )}
             <div>
-              <h2 className="font-display text-lg sm:text-xl font-bold text-[#2C1E14]">
+              <h2 className="font-display text-lg sm:text-xl font-bold text-white">
                 {!isAuthenticated
                   ? authReason === "checkout"
                     ? "Вхід для замовлення"
@@ -453,20 +490,20 @@ export function UserCabinetModal({
                   : "Особистий кабінет"}
               </h2>
               <div className="flex items-center gap-2 mt-0.5">
-                <p className="text-xs text-[#7A695C]">
+                <p className="text-xs text-[#94A3B8]">
                   {!isAuthenticated
                     ? authReason === "checkout"
                       ? "Авторизуйтесь, щоб оформити замовлення"
                       : "Авторизуйтесь для перегляду профілю"
-                    : profile.phone ? profile.phone : "Профіль клієнта Doma"}
+                    : profile.phone ? profile.phone : "Профіль клієнта Urban Bites"}
                 </p>
                 {isAuthenticated && profile.telegram_id && (
-                  <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 font-semibold px-2 py-0.2 rounded-full">
+                  <span className="text-[10px] bg-blue-950/60 text-blue-300 border border-blue-500/30 font-semibold px-2 py-0.2 rounded-full">
                     Telegram ✓
                   </span>
                 )}
                 {isAuthenticated && (profile.is_phone_verified || Boolean(profile.telegram_id)) && (
-                  <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold px-2 py-0.2 rounded-full">
+                  <span className="text-[10px] bg-emerald-950/60 text-emerald-300 border border-emerald-500/30 font-semibold px-2 py-0.2 rounded-full">
                     Верифіковано ✓
                   </span>
                 )}
@@ -478,7 +515,7 @@ export function UserCabinetModal({
             onClick={onClose}
             type="button"
             aria-label="Закрити"
-            className="w-9 h-9 rounded-full bg-[#FAF7F2] hover:bg-[#F3EDE2] text-[#2C1E14] border border-[#E2D5C3] flex items-center justify-center font-bold text-sm cursor-pointer shadow-xs active:scale-95 transition-all"
+            className="w-9 h-9 rounded-full bg-[#1E232B] hover:bg-[#282F3B] text-white border border-white/10 flex items-center justify-center font-bold text-sm cursor-pointer shadow-xs active:scale-95 transition-all"
           >
             ✕
           </button>
@@ -490,6 +527,7 @@ export function UserCabinetModal({
             <PhoneAuthView
               authReason={authReason}
               onTelegramAuth={handleTelegramAuth}
+              onPhoneAuthSuccess={handlePhoneAuthSuccess}
               onCancel={isAuthenticated ? () => setCurrentView("profile") : undefined}
             />
           ) : currentView === "orders" ? (
@@ -507,6 +545,7 @@ export function UserCabinetModal({
             <LoyaltyBonusTab
               bonuses={profile.bonuses ?? 50}
               phone={profile.phone}
+              clientCode={profile.client_code}
             />
           ) : (
             <ProfileSettingsTab
@@ -526,10 +565,10 @@ export function UserCabinetModal({
         </div>
 
         {/* Футер */}
-        <div className="shrink-0 p-3 sm:p-4 border-t border-[#EADFCF] bg-white flex items-center justify-between">
-          <div className="text-[11px] text-[#8D7B6D]">
+        <div className="shrink-0 p-3 sm:p-4 border-t border-white/10 bg-[#181B22] flex items-center justify-between">
+          <div className="text-[11px] text-[#94A3B8]">
             {currentView === "orders" ? (
-              <span className="flex items-center gap-1.5 font-semibold text-emerald-700">
+              <span className="flex items-center gap-1.5 font-semibold text-emerald-400">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
@@ -537,14 +576,14 @@ export function UserCabinetModal({
                 Авто-оновлення статусів активне
               </span>
             ) : (
-              <span>Doma Pizza & Sushi • м. Вишгород</span>
+              <span>Urban Pizza & Sushi • м. Київ</span>
             )}
           </div>
 
           <button
             onClick={onClose}
             type="button"
-            className="bg-[#2C1E14] hover:bg-[#3D2C1F] text-white py-2 px-6 rounded-xl font-bold text-xs sm:text-sm shadow-xs transition-transform active:scale-95 cursor-pointer"
+            className="bg-[#222731] hover:bg-[#2A313C] text-white py-2 px-6 rounded-xl font-bold text-xs sm:text-sm shadow-xs transition-transform active:scale-95 cursor-pointer border border-white/10"
           >
             Закрити
           </button>

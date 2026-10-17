@@ -73,6 +73,7 @@ export interface User {
   client_code?: string | null;
   bonus_balance?: number;
   bot_username?: string | null;
+  auth_token?: string | null;
 }
 
 export interface UserUpdatePayload {

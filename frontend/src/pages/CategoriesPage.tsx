@@ -56,12 +56,16 @@ export function CategoriesPage() {
     <div className="pb-6">
       <ScreenTitle>Меню</ScreenTitle>
       {groupByLocation(data).map((group) => {
-        const isCroissant = group.name.toLowerCase().includes("croissant");
+        const isBakery = group.name.toLowerCase().includes("bakery") || group.name.toLowerCase().includes("croissant");
         return (
           <section key={group.name} className="mb-6 last:mb-0">
             <SectionHeading>
-              <span className="flex items-center gap-1.5">
-                <span>{isCroissant ? "🥐" : "🍕"}</span>
+              <span className="flex items-center gap-2">
+                <img
+                  src={isBakery ? "/logo-bakery.svg" : "/logo-pizza.svg"}
+                  alt=""
+                  className="h-6 w-6 rounded-full object-cover shadow-xs"
+                />
                 <span>{group.name}</span>
               </span>
             </SectionHeading>
@@ -83,8 +87,9 @@ export function CategoriesPage() {
                       className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl shadow-sm"
                       style={{ background: "var(--app-surface-2)" }}
                     >
-                      {category.icon ?? (isCroissant ? "🥐" : "🍕")}
+                      {category.icon ?? (isBakery ? "🥐" : "🍕")}
                     </div>
+
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-base leading-tight truncate">
                         {category.name}

@@ -226,10 +226,13 @@ export function AdminLoginPage() {
       <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900/90 p-8 shadow-2xl backdrop-blur-xl">
         {/* Логотип */}
         <div className="flex flex-col items-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 text-3xl shadow-inner border border-amber-500/20">
-            🍕
-          </div>
-          <h1 className="mt-4 text-2xl font-bold tracking-tight">Doma Admin</h1>
+          <img
+            src="/logo.svg"
+            alt="Urban Bites"
+            className="h-16 w-16 rounded-2xl shadow-inner object-cover border border-amber-500/20"
+          />
+          <h1 className="mt-4 text-2xl font-bold tracking-tight">Urban Bites Admin</h1>
+
           <p className="mt-1 text-xs text-zinc-400">
             Панель керування меню та закладами
           </p>

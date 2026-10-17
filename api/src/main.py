@@ -22,6 +22,7 @@ from src.routers import (
     locations,
     orders,
     users,
+    web_auth,
 )
 from src.services.cache import invalidate_catalog_cache
 
@@ -106,7 +107,8 @@ async def lifespan(app: FastAPI):
     await disconnect_db()
 
 
-app = FastAPI(title="Doma Mini App API", lifespan=lifespan)
+app = FastAPI(title="Urban Bites API", lifespan=lifespan)
+
 
 # Mini App віддається з іншого origin, ніж API (у dev — Vite на :5173,
 # у проді — домен за caddy), тож CORS обов'язковий. Заголовок
@@ -149,6 +151,7 @@ async def auto_invalidate_catalog_cache_middleware(request: Request, call_next):
 
 app.include_router(catalog.router)
 app.include_router(users.router)
+app.include_router(web_auth.router)
 app.include_router(cart.router)
 app.include_router(orders.router)
 app.include_router(locations.router)

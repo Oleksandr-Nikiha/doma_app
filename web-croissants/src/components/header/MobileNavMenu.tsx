@@ -48,7 +48,7 @@ export function MobileNavMenu({
   ];
 
   return (
-    <div className="md:hidden border-t border-[#E8DFC8] bg-[#FAF7F2] p-4 shadow-lg animate-in slide-in-from-top-4 duration-200">
+    <div className="md:hidden border-t border-white/10 bg-[#14171E] p-4 shadow-2xl animate-in slide-in-from-top-4 duration-200">
       {/* Кнопка особистого кабінету у мобільному меню */}
       {onOpenCabinet && (
         <div className="mb-2.5">
@@ -58,7 +58,7 @@ export function MobileNavMenu({
               onOpenCabinet();
             }}
             type="button"
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-white border border-[#E2D5C3] text-[#2C1E14] font-bold text-xs active:scale-98 transition-transform shadow-xs cursor-pointer"
+            className="w-full flex items-center justify-between p-3 rounded-xl bg-[#181B22] border border-white/10 text-[#F1F5F9] font-bold text-xs active:scale-98 transition-transform shadow-xs cursor-pointer"
           >
             <span className="flex items-center gap-2.5">
               {isAuthenticated ? (
@@ -73,7 +73,7 @@ export function MobileNavMenu({
                 </>
               )}
             </span>
-            <span className="text-xs text-[#9C5B23] font-bold">
+            <span className="text-xs text-[#E69A38] font-bold">
               {isAuthenticated ? "Мій профіль →" : "Увійти →"}
             </span>
           </button>
@@ -89,7 +89,7 @@ export function MobileNavMenu({
               onOpenTracking();
             }}
             type="button"
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-[#FFF8EE] border border-[#E8DFC8] text-[#2C1E14] font-bold text-xs active:scale-98 transition-transform shadow-xs cursor-pointer"
+            className="w-full flex items-center justify-between p-3 rounded-xl bg-[#181B22] border border-white/10 text-[#F1F5F9] font-bold text-xs active:scale-98 transition-transform shadow-xs cursor-pointer"
           >
             <span className="flex items-center gap-2">
               <span className="relative flex h-2 w-2">
@@ -98,7 +98,7 @@ export function MobileNavMenu({
               </span>
               <span>Активне замовлення #{lastOrderId}</span>
             </span>
-            <span className="text-xs text-[#C8823E] font-bold">Відстежити ➔</span>
+            <span className="text-xs text-[#E69A38] font-bold">Відстежити ➔</span>
           </button>
         </div>
       )}
@@ -114,8 +114,8 @@ export function MobileNavMenu({
               onClick={(e) => handleLinkClick(e, link.id)}
               className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-bold text-sm transition-colors ${
                 isActive
-                  ? "bg-[#C8823E] text-white shadow-xs"
-                  : "text-[#4A3B32] hover:bg-[#F3EDE2] hover:text-[#C8823E]"
+                  ? "bg-[#E69A38] text-[#0F1115] shadow-md shadow-[#E69A38]/20"
+                  : "text-[#94A3B8] hover:bg-[#1E232B] hover:text-[#F1F5F9]"
               }`}
             >
               <span className="text-base">{link.icon}</span>

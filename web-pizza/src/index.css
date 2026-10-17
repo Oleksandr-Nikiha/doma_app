@@ -1,13 +1,46 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
+  --color-brand-tomato: #D34528;
+  --color-brand-tomato-light: #E2583E;
+  --color-brand-nori: #1E3A2F;
+  --color-brand-graphite: #121417;
+  --color-brand-surface: #181B22;
+  --color-brand-surface-raised: #1F242D;
+  --color-brand-border: rgba(255, 255, 255, 0.08);
+  --color-brand-text: #F1F5F9;
+  --color-brand-text-muted: #94A3B8;
+}
+
+html {
+  background-color: #0F1115;
 }
 
 @layer base {
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #0F1115;
+    color: #F1F5F9;
+    min-height: 100vh;
+    position: relative;
   }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -10;
+    pointer-events: none;
+    background-color: #0F1115;
+    background-image:
+      radial-gradient(circle at 10% 10%, rgba(211, 69, 40, 0.20) 0%, transparent 45%),
+      radial-gradient(circle at 90% 15%, rgba(30, 58, 47, 0.32) 0%, transparent 50%),
+      radial-gradient(circle at 50% 50%, rgba(211, 69, 40, 0.10) 0%, transparent 60%),
+      radial-gradient(circle at 85% 85%, rgba(30, 58, 47, 0.28) 0%, transparent 50%),
+      radial-gradient(circle at 15% 90%, rgba(51, 65, 85, 0.30) 0%, transparent 50%);
+  }
+
   h1, h2, .font-display {
     font-family: 'Playfair Display', Georgia, serif;
   }
@@ -19,24 +52,23 @@ iframe[src*="oauth.telegram.org"] {
   border-radius: 20px !important;
   overflow: hidden !important;
   background-color: transparent !important;
-  color-scheme: light !important;
   border: none !important;
 }
 
-/* Приємний скролбар */
+/* Приємний темний графітовий скролбар */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #FAF7F2;
+  background: #121417;
 }
 ::-webkit-scrollbar-thumb {
-  background: #D8C7B0;
+  background: #252A34;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #BFA88D;
+  background: #363D4B;
 }
 
 /* Приховування скролбару для горизонтальної стрічки категорій */

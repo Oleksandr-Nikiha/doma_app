@@ -2,5 +2,5 @@ User-agent: *
 Allow: /
 Disallow: /api/
 
-Sitemap: https://croissants.doma.ua/sitemap.xml
+Sitemap: https://urbanbites.ua/pizza/sitemap.xml
 

@@ -12,6 +12,7 @@ from .orders import router as orders_router
 from .products import router as products_router
 from .upload import router as upload_router
 from .users import router as users_router
+from .variants import router as variants_router
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -20,6 +21,7 @@ router.include_router(upload_router)
 router.include_router(managers_router)
 router.include_router(categories_router)
 router.include_router(products_router)
+router.include_router(variants_router)
 router.include_router(option_groups_router)
 router.include_router(locations_delivery_router)
 router.include_router(users_router)

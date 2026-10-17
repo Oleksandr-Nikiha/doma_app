@@ -22,7 +22,14 @@ import { MenuSection } from "./components/sections/MenuSection.tsx";
 import { useScrollSpy } from "./hooks/useScrollSpy.ts";
 import type { Category, LocationInfo, ProductListItem } from "./types/catalog.ts";
 import type { OrderOut } from "./types/order.ts";
-import { isUserAuthenticated, USER_PROFILE_STORAGE_KEY, type UserProfile } from "./types/user.ts";
+import {
+  getSharedCookie,
+  isUserAuthenticated,
+  loadSavedProfile,
+  saveSharedProfile,
+  USER_PROFILE_STORAGE_KEY,
+  type UserProfile,
+} from "./types/user.ts";
 
 export function App() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -83,53 +90,69 @@ export function App() {
         }
       }
 
-      const savedUser = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
-      if (savedUser) {
-        const parsedUser: UserProfile = JSON.parse(savedUser);
-        if (isUserAuthenticated(parsedUser)) {
-          const isVerified = Boolean(parsedUser.is_phone_verified || parsedUser.telegram_id);
-          const initialUser: UserProfile = {
-            ...parsedUser,
-            is_phone_verified: isVerified,
+      let savedUser = loadSavedProfile();
+      if (!savedUser) {
+        const cookiePhone = getSharedCookie("urban_auth_phone");
+        const cookieTg = getSharedCookie("urban_auth_tg");
+        if (cookiePhone || cookieTg) {
+          savedUser = {
+            name: "Клієнт",
+            phone: cookiePhone || "",
+            telegram_id: cookieTg ? Number(cookieTg) : null,
+            street: "",
+            house: "",
+            apartment: "",
+            bonuses: 50,
+            isAuthenticated: true,
           };
-          setUserProfile(initialUser);
-          if (parsedUser.name) {
-            setUserName(parsedUser.name);
-          }
-          if (parsedUser.avatar_url) {
-            setUserAvatarUrl(parsedUser.avatar_url);
-          }
+        }
+      }
 
-          // Синхронізуємо профіль із сервером (верифікація, адреса, бонуси)
-          if (parsedUser.telegram_id || parsedUser.phone) {
-            void fetchWebProfile({
-              telegram_id: parsedUser.telegram_id,
-              phone: parsedUser.phone,
-            }).then((serverUser) => {
-              if (serverUser) {
-                setUserProfile((prev) => {
-                  const synced: UserProfile = {
-                    ...(prev || parsedUser),
-                    name: serverUser.full_name || prev?.name || parsedUser.name,
-                    first_name: serverUser.first_name || prev?.first_name,
-                    last_name: serverUser.last_name || prev?.last_name,
-                    phone: serverUser.phone || prev?.phone || parsedUser.phone,
-                    telegram_id: serverUser.telegram_id || prev?.telegram_id || parsedUser.telegram_id,
-                    is_phone_verified:
-                      serverUser.is_phone_verified ||
-                      Boolean(serverUser.telegram_id) ||
-                      Boolean(prev?.telegram_id),
-                    street: prev?.street || serverUser.delivery_address || "",
-                    additional_address: prev?.additional_address || serverUser.additional_address || "",
-                    client_code: serverUser.client_code || prev?.client_code,
-                  };
-                  localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(synced));
-                  if (synced.name) setUserName(synced.name);
-                  return synced;
-                });
-              }
-            });
-          }
+      if (savedUser && isUserAuthenticated(savedUser)) {
+        const isVerified = Boolean(savedUser.is_phone_verified || savedUser.telegram_id);
+        const initialUser: UserProfile = {
+          ...savedUser,
+          is_phone_verified: isVerified,
+          bonuses: savedUser.bonuses ?? 50,
+        };
+        setUserProfile(initialUser);
+        if (savedUser.name) {
+          setUserName(savedUser.name);
+        }
+        if (savedUser.avatar_url) {
+          setUserAvatarUrl(savedUser.avatar_url);
+        }
+
+        // Синхронізуємо профіль із сервером (верифікація, адреса, бонуси)
+        if (savedUser.telegram_id || savedUser.phone) {
+          void fetchWebProfile({
+            telegram_id: savedUser.telegram_id,
+            phone: savedUser.phone,
+          }).then((serverUser) => {
+            if (serverUser) {
+              setUserProfile((prev) => {
+                const synced: UserProfile = {
+                  ...(prev || savedUser),
+                  name: serverUser.full_name || prev?.name || savedUser.name,
+                  first_name: serverUser.first_name || prev?.first_name,
+                  last_name: serverUser.last_name || prev?.last_name,
+                  phone: serverUser.phone || prev?.phone || savedUser.phone,
+                  telegram_id: serverUser.telegram_id || prev?.telegram_id || savedUser.telegram_id,
+                  is_phone_verified:
+                    serverUser.is_phone_verified ||
+                    Boolean(serverUser.telegram_id) ||
+                    Boolean(prev?.telegram_id),
+                  street: prev?.street || serverUser.delivery_address || "",
+                  additional_address: prev?.additional_address || serverUser.additional_address || "",
+                  client_code: serverUser.client_code || prev?.client_code,
+                  bonuses: serverUser.bonus_balance ?? prev?.bonuses ?? 50,
+                };
+                saveSharedProfile(synced);
+                if (synced.name) setUserName(synced.name);
+                return synced;
+              });
+            }
+          });
         }
       }
     } catch {}
@@ -270,7 +293,10 @@ export function App() {
     };
   }, []);
 
-  const rootCategories = categories.filter((c) => c.parent_id === null);
+  const rootCategories = useMemo(
+    () => categories.filter((c) => c.parent_id === null),
+    [categories],
+  );
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
   const filteredProductsByCategory = useMemo(() => {
@@ -301,20 +327,16 @@ export function App() {
         (cat) => (filteredProductsByCategory[cat.id]?.length || 0) > 0,
       );
     }
-    if (selectedCategoryId === "all") {
-      return rootCategories;
-    }
-    const found = rootCategories.find((cat) => cat.id === selectedCategoryId);
-    return found ? [found] : rootCategories.slice(0, 1);
-  }, [rootCategories, filteredProductsByCategory, normalizedSearch, selectedCategoryId]);
+    return rootCategories;
+  }, [rootCategories, filteredProductsByCategory, normalizedSearch]);
 
   return (
-    <div id="top" className="min-h-screen flex flex-col bg-[#FAF7F2]">
+    <div id="top" className="min-h-screen flex flex-col bg-transparent text-[#F1F5F9]">
       {/* Шапка сайту */}
       <Header
         onOpenCart={() => setIsCartOpen(true)}
-        phone={locationInfo?.phones[0] || "+380 67 112 77 33"}
-        address={locationInfo?.address || "м. Вишгород, вул. Набережна, 8Д"}
+        phone={locationInfo?.phones[0] || "+380 (44) 222-00-11"}
+        address={locationInfo?.address || "м. Київ, вул. Набережна, 12"}
         activeNavId={activeNavId}
         onSelectNav={handleSelectNav}
         lastOrderId={lastOrderId}
@@ -430,7 +452,7 @@ export function App() {
           type="button"
           onClick={scrollToTop}
           aria-label="Піднятися нагору"
-          className="fixed bottom-6 right-5 sm:bottom-8 sm:right-8 z-30 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-[#2C1E14] text-white shadow-xl hover:bg-[#3D2C1F] flex items-center justify-center font-bold text-base sm:text-lg active:scale-90 transition-all cursor-pointer border border-[#E8DFC8]/40 animate-in fade-in zoom-in-75 duration-200"
+          className="fixed bottom-6 right-5 sm:bottom-8 sm:right-8 z-30 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-[#1E232B] text-white shadow-2xl hover:bg-[#2A313C] flex items-center justify-center font-bold text-base sm:text-lg active:scale-90 transition-all cursor-pointer border border-white/15 animate-in fade-in zoom-in-75 duration-200"
         >
           ⬆️
         </button>

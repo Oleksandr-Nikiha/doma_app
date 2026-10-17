@@ -1,45 +1,50 @@
 export function Footer() {
-  const logoSrc = `${import.meta.env.BASE_URL}logo.png`;
+  const logoSrc = `${import.meta.env.BASE_URL}logo.svg`;
 
   return (
     <footer
       id="contacts"
-      className="bg-[#2C1E14] text-[#E8DFC8] pt-16 pb-12 border-t border-[#3D2C1F]"
+      className="bg-[#0B0D10] text-[#94A3B8] pt-16 pb-12 border-t border-white/10"
       style={{
         scrollMarginTop:
           "calc(var(--header-height, 96px) + var(--category-nav-height, 56px) + 16px)",
       }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-10 pb-12 border-b border-[#4A3B32]">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-10 pb-12 border-b border-white/10">
           {/* Колонка 1: Про нас */}
           <div className="md:col-span-5 space-y-4">
             <div className="flex items-center gap-3">
               <img
                 src={logoSrc}
-                alt="Doma Pizza & Sushi"
-                className="h-10 w-auto object-contain brightness-0 invert"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                }}
+                alt="Urban Pizza & Sushi"
+                className="h-12 w-12 rounded-full object-cover shadow-md border border-white/10"
               />
+              <div>
+                <div className="font-bold text-white text-base leading-tight">
+                  Urban Pizza & Sushi
+                </div>
+                <div className="text-xs text-[#E2583E] font-medium">
+                  Wood Fired Pizza & Craft Sushi
+                </div>
+              </div>
             </div>
-            <div className="text-xs uppercase text-[#E29E57] tracking-wider font-bold">
-              Перша швидка доставка задоволення
+            <div className="text-xs uppercase text-[#E2583E] tracking-wider font-bold">
+              Неаполітанська піца, авторські роли, сучасний стрітфуд
             </div>
-            <p className="text-sm text-[#B8A796] leading-relaxed max-w-sm">
-              Справжня італійська піца на фірмовому тісті, свіжі роли з щедрим шаром лосося,
-              соковиті бургери та закуски. Доставляємо гарячим по всьому Вишгороду.
+            <p className="text-sm text-[#94A3B8] leading-relaxed max-w-sm">
+              Справжня італійська піца на фірмовому тісті, авторські роли з щедрим шаром лосося,
+              крафтові бургери та боули. Доставляємо гарячим по Києву.
             </p>
             <div className="flex items-center gap-3 pt-2">
               <a
-                href="https://www.instagram.com/domapizza.sushi/"
+                href="https://www.instagram.com/urbanpizza.sushi/"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 bg-[#3D2C1F] hover:bg-[#4E3928] text-white px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors"
+                className="inline-flex items-center gap-2 bg-[#1A1D24] hover:bg-[#D34528] text-white px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors border border-white/10"
               >
                 <span>📷</span>
-                <span>Instagram: @domapizza.sushi</span>
+                <span>Instagram: @urbanpizza.sushi</span>
               </a>
             </div>
           </div>
@@ -49,7 +54,7 @@ export function Footer() {
             <h3 className="font-display text-lg font-bold text-white">
               Локація та контакти
             </h3>
-            <ul className="space-y-2.5 text-sm text-[#D4C3AC]">
+            <ul className="space-y-2.5 text-sm text-[#CBD5E1]">
               <li className="flex items-start gap-2.5">
                 <span>📍</span>
                 <div>
@@ -59,9 +64,9 @@ export function Footer() {
                     rel="noreferrer"
                     className="hover:text-white underline underline-offset-2 transition-colors"
                   >
-                    м. Вишгород, вул. Набережна, 8Д
+                    м. Київ, вул. Набережна, 12
                   </a>
-                  <div className="text-xs text-[#9E8B79]">На мапі міста</div>
+                  <div className="text-xs text-[#94A3B8]">На мапі міста</div>
                 </div>
               </li>
               <li className="flex items-center gap-2.5">
@@ -74,38 +79,31 @@ export function Footer() {
               </li>
               <li className="flex items-center gap-2.5">
                 <span>📞</span>
-                <div className="flex flex-col sm:flex-row sm:gap-3">
+                <div>
                   <a
-                    href="tel:+380671127733"
+                    href="tel:+380442220011"
                     className="hover:text-white font-semibold transition-colors"
                   >
-                    +380 67 112 77 33
-                  </a>
-                  <span className="hidden sm:inline text-[#8D7665]">|</span>
-                  <a
-                    href="tel:+380631127733"
-                    className="hover:text-white font-semibold transition-colors"
-                  >
-                    +380 63 112 77 33
+                    +380 (44) 222-00-11
                   </a>
                 </div>
               </li>
             </ul>
           </div>
 
-          {/* Колонка 3: Мережа DomaGroup & Вакансії */}
+          {/* Колонка 3: Мережа Urban Bites & Вакансії */}
           <div className="md:col-span-3 space-y-3">
             <h3 className="font-display text-lg font-bold text-white">
-              DomaGroup & Мережа
+              Urban Bites & Мережа
             </h3>
-            <ul className="space-y-2 text-sm text-[#D4C3AC]">
+            <ul className="space-y-2 text-sm text-[#CBD5E1]">
               <li>
                 <a
                   href="/croissant/"
                   className="hover:text-white transition-colors flex items-center gap-1.5"
                 >
                   <span>🥐</span>
-                  <span>Doma Croissants</span>
+                  <span>Urban Bakery & Coffee</span>
                 </a>
               </li>
               <li>
@@ -114,14 +112,12 @@ export function Footer() {
                   className="hover:text-white transition-colors flex items-center gap-1.5"
                 >
                   <span>🌐</span>
-                  <span>Мережа DomaGroup</span>
+                  <span>Мережа Urban Bites</span>
                 </a>
               </li>
               <li>
                 <a
-                  href="https://domagroup.com.ua/coop"
-                  target="_blank"
-                  rel="noreferrer"
+                  href="/group/#partnership"
                   className="hover:text-white transition-colors flex items-center gap-1.5"
                 >
                   <span>🤝</span>
@@ -141,10 +137,8 @@ export function Footer() {
               </li>
               <li className="pt-1">
                 <a
-                  href="https://domagroup.com.ua/offer"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-[#8D7665] hover:text-[#B8A796] underline"
+                  href="/group/#offer"
+                  className="text-xs text-[#64748B] hover:text-[#94A3B8] underline"
                 >
                   Публічний договір (оферта)
                 </a>
@@ -154,12 +148,12 @@ export function Footer() {
         </div>
 
         {/* Нижній копірайт */}
-        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#8D7665]">
+        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#64748B]">
           <div>
-            © {new Date().getFullYear()} Doma Pizza & Sushi (Дома Піца та Суші). Усі права захищено.
+            © {new Date().getFullYear()} Urban Pizza & Sushi. Усі права захищено.
           </div>
           <div>
-            Перша швидка доставка задоволення • м. Вишгород
+            Мережа смаку Urban Bites • м. Київ
           </div>
         </div>
       </div>

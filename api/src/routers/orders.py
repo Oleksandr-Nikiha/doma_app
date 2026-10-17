@@ -99,17 +99,25 @@ async def create_web_order(
 
 @router.get("/web/history", response_model=list[OrderOut])
 async def get_web_orders_history(
-    phone: str = Query(..., description="Номер телефону клієнта у форматі E.164"),
+    phone: str | None = Query(None, description="Номер телефону клієнта"),
+    telegram_id: int | None = Query(None, description="Telegram ID клієнта"),
     limit: int = Query(25, ge=1, le=50),
     pool: asyncpg.Pool = Depends(get_pool),
 ):
     """
-    Отримує історію замовлень для публічного сайту за номером телефону.
-    Не вимагає авторизації Telegram.
+    Отримує історію замовлень для публічного сайту за номером телефону або telegram_id.
     """
-    clean_phone = phone.strip()
-    if not clean_phone:
+    clean_phone = phone.strip() if phone else None
+    if not clean_phone and not telegram_id:
         return []
+
+    norm_phone = clean_phone
+    if clean_phone:
+        from src.schemas.user import normalize_phone
+        try:
+            norm_phone = normalize_phone(clean_phone)
+        except Exception:
+            norm_phone = clean_phone
 
     async with pool.acquire() as conn:
         order_rows = await conn.fetch(
@@ -118,11 +126,14 @@ async def get_web_orders_history(
                    contact_name, contact_phone, payment_method, scheduled_time,
                    comment, total_price, created_at, COALESCE(source, 'web') AS source
             FROM orders
-            WHERE contact_phone = $1
+            WHERE ($1::text IS NOT NULL AND (contact_phone = $1 OR contact_phone = $2))
+               OR ($3::bigint IS NOT NULL AND telegram_id = $3)
             ORDER BY id DESC
-            LIMIT $2
+            LIMIT $4
             """,
             clean_phone,
+            norm_phone,
+            telegram_id,
             limit,
         )
         return await OrderService.fetch_orders_batch(conn, order_rows)

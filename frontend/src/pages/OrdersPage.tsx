@@ -185,8 +185,8 @@ export function OrdersPage() {
       <div className="app-rise space-y-3 px-4 pt-1">
         {orders.map((order: Order) => {
           const badge = getStatusBadge(order.status, order.fulfillment_type);
-          const locationName = order.groups[0]?.location_name || "Doma";
-          const isCroissant = locationName.toLowerCase().includes("croissant");
+          const locationName = order.groups[0]?.location_name || "Urban Bites";
+          const isBakery = locationName.toLowerCase().includes("bakery") || locationName.toLowerCase().includes("croissant");
           const allItems = order.groups.flatMap((g) => g.items);
 
           return (
@@ -202,12 +202,13 @@ export function OrdersPage() {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="font-extrabold text-base flex items-center gap-1.5">
-                    <span>{isCroissant ? "🥐" : "🍕"}</span>
+                    <span>{isBakery ? "🥐" : "🍕"}</span>
                     <span>Замовлення #{order.id}</span>
                   </p>
                   <p className="text-[11px] opacity-50 mt-0.5">
                     {formatDate(order.created_at)} · {locationName}
                   </p>
+
                 </div>
 
                 <span

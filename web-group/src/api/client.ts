@@ -1,7 +1,7 @@
 import type { DeliveryAddress } from "../types/catalog.ts";
 import type { OrderOut } from "../types/order.ts";
 
-export async function fetchDeliveryAddresses(city: string = "Вишгород"): Promise<DeliveryAddress[]> {
+export async function fetchDeliveryAddresses(city: string = "Київ"): Promise<DeliveryAddress[]> {
   const res = await fetch(`/api/delivery/addresses?city=${encodeURIComponent(city)}`);
   if (!res.ok) return [];
   return res.json();
@@ -90,6 +90,7 @@ export interface WebProfileUpdatePayload {
   last_name?: string | null;
   delivery_address?: string | null;
   additional_address?: string | null;
+  bonus_balance?: number | null;
 }
 
 export async function fetchWebProfile(params: {
@@ -124,3 +125,23 @@ export async function updateWebProfile(payload: WebProfileUpdatePayload): Promis
   }
   return res.json();
 }
+
+export async function authPhoneLogin(payload: {
+  phone: string;
+  full_name?: string;
+  telegram_id?: number | null;
+}): Promise<UserOut> {
+  const res = await fetch("/api/auth/phone-login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Не вдалося увійти за номером телефону");
+  }
+  return res.json();
+}
+

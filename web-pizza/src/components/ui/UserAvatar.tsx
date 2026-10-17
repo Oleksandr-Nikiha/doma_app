@@ -41,7 +41,7 @@ export function UserAvatar({
   if (avatarUrl && !imgError) {
     return (
       <div
-        className={`relative inline-flex shrink-0 items-center justify-center rounded-full overflow-hidden border-2 border-[#C8823E]/50 shadow-xs bg-[#FAF7F2] ${sizeClasses} ${className}`}
+        className={`relative inline-flex shrink-0 items-center justify-center rounded-full overflow-hidden border-2 border-[#D34528]/50 shadow-xs bg-[#181B22] ${sizeClasses} ${className}`}
       >
         <img
           src={avatarUrl}
@@ -58,7 +58,7 @@ export function UserAvatar({
   // Якщо фото немає або помилка завантаження -> дизайнерська заглушка з монограмою або іконкою
   return (
     <div
-      className={`relative inline-flex shrink-0 items-center justify-center rounded-full select-none font-bold tracking-tight shadow-xs border-2 border-[#E8DFC8] bg-gradient-to-br from-[#3D2C1F] via-[#634832] to-[#C8823E] text-white ${sizeClasses} ${className}`}
+      className={`relative inline-flex shrink-0 items-center justify-center rounded-full select-none font-bold tracking-tight shadow-xs border-2 border-white/10 bg-gradient-to-br from-[#252525] via-[#4A3B32] to-[#D34528] text-white ${sizeClasses} ${className}`}
       title={name || "Профіль користувача"}
     >
       {initials ? (

@@ -149,9 +149,9 @@ BEGIN
 END $$;
 
 -- 6. Права доступу на нові таблиці та послідовності для сервісного користувача
-GRANT USAGE, SELECT ON SEQUENCE size_presets_id_seq TO svc_doma_app;
-GRANT USAGE, SELECT ON SEQUENCE size_preset_items_id_seq TO svc_doma_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON size_presets TO svc_doma_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON size_preset_items TO svc_doma_app;
+GRANT USAGE, SELECT ON SEQUENCE size_presets_id_seq TO svc_urban_bites;
+GRANT USAGE, SELECT ON SEQUENCE size_preset_items_id_seq TO svc_urban_bites;
+GRANT SELECT, INSERT, UPDATE, DELETE ON size_presets TO svc_urban_bites;
+GRANT SELECT, INSERT, UPDATE, DELETE ON size_preset_items TO svc_urban_bites;
 
 COMMIT;

@@ -36,7 +36,7 @@
 --   * «Чотири сири»: 60-см піца підписана як XL — виправлено на 3XL за діаметром,
 --     інакше в товарі було б дві мітки XL
 --   * Напої на /deserty/ і /napiy/ мають різні ціни; узято прайс із /napiy/
---   * Doma Croissants: 57 позицій завантажено з menu_import.xlsx
+--   * Urban Bakery & Coffee: 57 позицій завантажено з menu_import.xlsx
 --   * Одруки в назвах виправлено лише там, де на назву посилаються групи опцій:
 --     «Картоплая» → «Картопля», «Вишгоордський» → «Вишгородський», а також
 --     зведено різнобій тире в чотирьох «Хенд – рол» → «Хенд-рол».
@@ -46,99 +46,99 @@ BEGIN;
 
 -- --- Заклади ---
 INSERT INTO locations (name, address, phones) VALUES
-    ('Doma Pizza', 'Вишгород, вул. Набережна, 8Д', ARRAY['+380671127733','+380631127733']),
+    ('Urban Pizza & Sushi', 'м. Київ, вул. Набережна, 12', ARRAY['+380442220011']),
     -- адреса й телефон узяті з попереднього сиду: сайт закладу на реконструкції
-    ('Doma Croissants', 'Вишгород, просп. Шевченка, 2Д', ARRAY['+380931127733']);
+    ('Urban Bakery & Coffee', 'м. Київ, вул. Велика Васильківська, 24', ARRAY['+380442220022']);
 
 -- --- Кореневі категорії ---
 INSERT INTO categories (location_id, parent_id, name, icon, is_visible, sort_order)
-SELECT id, NULL::INTEGER, 'Піца', '🍕', true, 1 FROM locations WHERE name = 'Doma Pizza'
+SELECT id, NULL::INTEGER, 'Піца', '🍕', true, 1 FROM locations WHERE name = 'Urban Pizza & Sushi'
 UNION ALL
-SELECT id, NULL::INTEGER, 'Суші та роли', '🍣', true, 2 FROM locations WHERE name = 'Doma Pizza'
+SELECT id, NULL::INTEGER, 'Суші та роли', '🍣', true, 2 FROM locations WHERE name = 'Urban Pizza & Sushi'
 UNION ALL
-SELECT id, NULL::INTEGER, 'Боули та салати', '🥗', true, 3 FROM locations WHERE name = 'Doma Pizza'
+SELECT id, NULL::INTEGER, 'Боули та салати', '🥗', true, 3 FROM locations WHERE name = 'Urban Pizza & Sushi'
 UNION ALL
-SELECT id, NULL::INTEGER, 'Закуски', '🍟', true, 4 FROM locations WHERE name = 'Doma Pizza'
+SELECT id, NULL::INTEGER, 'Закуски', '🍟', true, 4 FROM locations WHERE name = 'Urban Pizza & Sushi'
 UNION ALL
-SELECT id, NULL::INTEGER, 'Десерти', '🍰', true, 5 FROM locations WHERE name = 'Doma Pizza'
+SELECT id, NULL::INTEGER, 'Десерти', '🍰', true, 5 FROM locations WHERE name = 'Urban Pizza & Sushi'
 UNION ALL
-SELECT id, NULL::INTEGER, 'Напої', '🥤', true, 6 FROM locations WHERE name = 'Doma Pizza'
+SELECT id, NULL::INTEGER, 'Напої', '🥤', true, 6 FROM locations WHERE name = 'Urban Pizza & Sushi'
 UNION ALL
-SELECT id, NULL::INTEGER, 'Прибори', '🥢', false, 98 FROM locations WHERE name = 'Doma Pizza'
+SELECT id, NULL::INTEGER, 'Прибори', '🥢', false, 98 FROM locations WHERE name = 'Urban Pizza & Sushi'
 UNION ALL
-SELECT id, NULL::INTEGER, 'Соуси', '🥫', false, 99 FROM locations WHERE name = 'Doma Pizza'
+SELECT id, NULL::INTEGER, 'Соуси', '🥫', false, 99 FROM locations WHERE name = 'Urban Pizza & Sushi'
 UNION ALL
-SELECT id, NULL::INTEGER, 'Круасани', '🥐', true, 1 FROM locations WHERE name = 'Doma Croissants'
+SELECT id, NULL::INTEGER, 'Круасани', '🥐', true, 1 FROM locations WHERE name = 'Urban Bakery & Coffee'
 UNION ALL
-SELECT id, NULL::INTEGER, 'Бургери', '🍔', true, 2 FROM locations WHERE name = 'Doma Croissants'
+SELECT id, NULL::INTEGER, 'Бургери', '🍔', true, 2 FROM locations WHERE name = 'Urban Bakery & Coffee'
 UNION ALL
-SELECT id, NULL::INTEGER, 'Ролліни', '🌯', true, 3 FROM locations WHERE name = 'Doma Croissants'
+SELECT id, NULL::INTEGER, 'Ролліни', '🌯', true, 3 FROM locations WHERE name = 'Urban Bakery & Coffee'
 UNION ALL
-SELECT id, NULL::INTEGER, 'Бенто піци', '🍕', true, 4 FROM locations WHERE name = 'Doma Croissants'
+SELECT id, NULL::INTEGER, 'Бенто піци', '🍕', true, 4 FROM locations WHERE name = 'Urban Bakery & Coffee'
 UNION ALL
-SELECT id, NULL::INTEGER, 'Напої', '🥤', true, 5 FROM locations WHERE name = 'Doma Croissants';
+SELECT id, NULL::INTEGER, 'Напої', '🥤', true, 5 FROM locations WHERE name = 'Urban Bakery & Coffee';
 
 -- --- Підкатегорії ---
 INSERT INTO categories (location_id, parent_id, name, sort_order)
-SELECT p.location_id, p.id, 'Фірмові', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Піца'
+SELECT p.location_id, p.id, 'Фірмові', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Піца'
 UNION ALL
-SELECT p.location_id, p.id, 'Мікс на чотири', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Піца'
+SELECT p.location_id, p.id, 'Мікс на чотири', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Піца'
 UNION ALL
-SELECT p.location_id, p.id, 'Особливі смаки', 3 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Піца'
+SELECT p.location_id, p.id, 'Особливі смаки', 3 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Піца'
 UNION ALL
-SELECT p.location_id, p.id, 'Класичні смаки', 4 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Піца'
+SELECT p.location_id, p.id, 'Класичні смаки', 4 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Піца'
 UNION ALL
-SELECT p.location_id, p.id, 'Сети з ролів', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
+SELECT p.location_id, p.id, 'Сети з ролів', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
 UNION ALL
-SELECT p.location_id, p.id, 'Роли Спрінг чіз', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
+SELECT p.location_id, p.id, 'Роли Спрінг чіз', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
 UNION ALL
-SELECT p.location_id, p.id, 'Роли запечені', 3 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
+SELECT p.location_id, p.id, 'Роли запечені', 3 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
 UNION ALL
-SELECT p.location_id, p.id, 'Роли Fresh', 4 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
+SELECT p.location_id, p.id, 'Роли Fresh', 4 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
 UNION ALL
-SELECT p.location_id, p.id, 'Роли Філадельфія', 5 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
+SELECT p.location_id, p.id, 'Роли Філадельфія', 5 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
 UNION ALL
-SELECT p.location_id, p.id, 'Роли Каліфорнія', 6 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
+SELECT p.location_id, p.id, 'Роли Каліфорнія', 6 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
 UNION ALL
-SELECT p.location_id, p.id, 'Роли Макі', 7 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
+SELECT p.location_id, p.id, 'Роли Макі', 7 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
 UNION ALL
-SELECT p.location_id, p.id, 'Особливі роли', 8 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
+SELECT p.location_id, p.id, 'Особливі роли', 8 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
 UNION ALL
-SELECT p.location_id, p.id, 'Роли Дракон', 9 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
+SELECT p.location_id, p.id, 'Роли Дракон', 9 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Суші та роли'
 UNION ALL
-SELECT p.location_id, p.id, 'Боули', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Боули та салати'
+SELECT p.location_id, p.id, 'Боули', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Боули та салати'
 UNION ALL
-SELECT p.location_id, p.id, 'Салати', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Боули та салати'
+SELECT p.location_id, p.id, 'Салати', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Боули та салати'
 UNION ALL
-SELECT p.location_id, p.id, 'Хенд-роли', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Закуски'
+SELECT p.location_id, p.id, 'Хенд-роли', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Закуски'
 UNION ALL
-SELECT p.location_id, p.id, 'Ролліни', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Закуски'
+SELECT p.location_id, p.id, 'Ролліни', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Закуски'
 UNION ALL
-SELECT p.location_id, p.id, 'Бокси', 3 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Закуски'
+SELECT p.location_id, p.id, 'Бокси', 3 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Закуски'
 UNION ALL
-SELECT p.location_id, p.id, 'Фокачі', 4 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Закуски'
+SELECT p.location_id, p.id, 'Фокачі', 4 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Закуски'
 UNION ALL
-SELECT p.location_id, p.id, 'Картопля', 5 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Закуски'
+SELECT p.location_id, p.id, 'Картопля', 5 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Закуски'
 UNION ALL
-SELECT p.location_id, p.id, 'Газовані', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Напої'
+SELECT p.location_id, p.id, 'Газовані', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Напої'
 UNION ALL
-SELECT p.location_id, p.id, 'Соки', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Напої'
+SELECT p.location_id, p.id, 'Соки', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Напої'
 UNION ALL
-SELECT p.location_id, p.id, 'Вода', 3 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Напої'
+SELECT p.location_id, p.id, 'Вода', 3 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Напої'
 UNION ALL
-SELECT p.location_id, p.id, 'Енергетики', 4 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Pizza' AND p.parent_id IS NULL AND p.name = 'Напої'
+SELECT p.location_id, p.id, 'Енергетики', 4 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Pizza & Sushi' AND p.parent_id IS NULL AND p.name = 'Напої'
 UNION ALL
-SELECT p.location_id, p.id, 'Сендвіч-круасани', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Croissants' AND p.parent_id IS NULL AND p.name = 'Круасани'
+SELECT p.location_id, p.id, 'Сендвіч-круасани', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Bakery & Coffee' AND p.parent_id IS NULL AND p.name = 'Круасани'
 UNION ALL
-SELECT p.location_id, p.id, 'Солодкі круасани', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Croissants' AND p.parent_id IS NULL AND p.name = 'Круасани'
+SELECT p.location_id, p.id, 'Солодкі круасани', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Bakery & Coffee' AND p.parent_id IS NULL AND p.name = 'Круасани'
 UNION ALL
-SELECT p.location_id, p.id, 'Кавові', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Croissants' AND p.parent_id IS NULL AND p.name = 'Напої'
+SELECT p.location_id, p.id, 'Кавові', 1 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Bakery & Coffee' AND p.parent_id IS NULL AND p.name = 'Напої'
 UNION ALL
-SELECT p.location_id, p.id, 'Шоколадні', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Croissants' AND p.parent_id IS NULL AND p.name = 'Напої'
+SELECT p.location_id, p.id, 'Шоколадні', 2 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Bakery & Coffee' AND p.parent_id IS NULL AND p.name = 'Напої'
 UNION ALL
-SELECT p.location_id, p.id, 'Чаї', 3 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Croissants' AND p.parent_id IS NULL AND p.name = 'Напої'
+SELECT p.location_id, p.id, 'Чаї', 3 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Bakery & Coffee' AND p.parent_id IS NULL AND p.name = 'Напої'
 UNION ALL
-SELECT p.location_id, p.id, 'Літні напої bDOMA', 4 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Doma Croissants' AND p.parent_id IS NULL AND p.name = 'Напої';
+SELECT p.location_id, p.id, 'Літні напої', 4 FROM categories p JOIN locations l ON l.id = p.location_id WHERE l.name = 'Urban Bakery & Coffee' AND p.parent_id IS NULL AND p.name = 'Напої';
 
 -- ========== Піца / Фірмові ==========
 
@@ -149,7 +149,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Фірмові'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Фірмові'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -168,7 +168,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Фірмові'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Фірмові'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -187,7 +187,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Фірмові'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Фірмові'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -206,7 +206,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Фірмові'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Фірмові'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -223,7 +223,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Фірмові'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Фірмові'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -242,7 +242,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Фірмові'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Фірмові'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -263,7 +263,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Мікс на чотири'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Мікс на чотири'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -282,7 +282,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Мікс на чотири'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Мікс на чотири'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -301,7 +301,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Мікс на чотири'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Мікс на чотири'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -322,7 +322,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -341,7 +341,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -360,7 +360,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -379,7 +379,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -398,7 +398,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -417,7 +417,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -436,7 +436,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -455,7 +455,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -474,7 +474,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -493,7 +493,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -512,7 +512,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -531,7 +531,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -550,7 +550,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Особливі смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -571,7 +571,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Класичні смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Класичні смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -590,7 +590,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Класичні смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Класичні смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -609,7 +609,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Піца' AND c.name = 'Класичні смаки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Піца' AND c.name = 'Класичні смаки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -630,7 +630,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Хенд-роли'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Хенд-роли'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -646,7 +646,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Хенд-роли'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Хенд-роли'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -662,7 +662,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Хенд-роли'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Хенд-роли'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -678,7 +678,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Хенд-роли'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Хенд-роли'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -696,7 +696,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Особливі роли'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Особливі роли'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -712,7 +712,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Особливі роли'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Особливі роли'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -728,7 +728,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Особливі роли'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Особливі роли'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -744,7 +744,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Особливі роли'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Особливі роли'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -760,7 +760,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Особливі роли'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Особливі роли'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -769,21 +769,6 @@ FROM new_product, (VALUES
         ('8 шт.', '300 г', 250, 1)
     ) AS v(label, weight, price, sort_order);
 
-WITH new_product AS (
-    INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'DomaMaguro (ДомаМагуро)', 'рис, сир філадельфія, тунець запечений, цибуля зелена, огірок, ікра тобіко',
-           'https://domapizza.com.ua/wp-content/uploads/2021/07/photo_2021-07-15_14-41-30-400x400.jpg', 6
-    FROM categories c
-    JOIN categories parent ON parent.id = c.parent_id
-    JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Особливі роли'
-    RETURNING id
-)
-INSERT INTO product_variants (product_id, label, weight, price, sort_order)
-SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
-FROM new_product, (VALUES
-        ('8 шт.', '245 г', 190, 1)
-    ) AS v(label, weight, price, sort_order);
 
 -- ========== Суші та роли / Сети з ролів ==========
 
@@ -794,7 +779,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -810,7 +795,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -826,7 +811,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -842,7 +827,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -858,7 +843,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -874,7 +859,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -890,7 +875,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -906,7 +891,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -922,7 +907,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -938,7 +923,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -947,21 +932,6 @@ FROM new_product, (VALUES
         ('32 шт.', '1400 г', 950, 1)
     ) AS v(label, weight, price, sort_order);
 
-WITH new_product AS (
-    INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'DomaFresh (ДомаФреш)', 'Рол ФрешЛайф, Рол ФрешРед, Рол ФрешБоніто (Склад ролів зазанчено нижче до кожного рола окремо)',
-           'https://domapizza.com.ua/wp-content/uploads/2021/07/photo_2021-07-28_18-42-31-400x400.jpg', 11
-    FROM categories c
-    JOIN categories parent ON parent.id = c.parent_id
-    JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
-    RETURNING id
-)
-INSERT INTO product_variants (product_id, label, weight, price, sort_order)
-SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
-FROM new_product, (VALUES
-        ('24 шт.', '740 г', 650, 1)
-    ) AS v(label, weight, price, sort_order);
 
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
@@ -970,7 +940,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -986,7 +956,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Сети з ролів'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1004,7 +974,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Спрінг чіз'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Спрінг чіз'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1020,7 +990,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Спрінг чіз'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Спрінг чіз'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1036,7 +1006,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Спрінг чіз'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Спрінг чіз'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1054,7 +1024,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли запечені'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли запечені'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1070,7 +1040,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли запечені'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли запечені'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1086,7 +1056,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли запечені'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли запечені'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1102,7 +1072,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли запечені'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли запечені'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1120,7 +1090,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Fresh'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Fresh'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1136,7 +1106,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Fresh'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Fresh'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1152,7 +1122,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Fresh'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Fresh'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1170,7 +1140,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Філадельфія'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Філадельфія'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1186,7 +1156,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Філадельфія'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Філадельфія'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1202,7 +1172,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Філадельфія'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Філадельфія'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1218,7 +1188,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Філадельфія'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Філадельфія'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1236,7 +1206,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Каліфорнія'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Каліфорнія'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1252,7 +1222,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Каліфорнія'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Каліфорнія'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1268,7 +1238,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Каліфорнія'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Каліфорнія'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1284,7 +1254,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Каліфорнія'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Каліфорнія'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1302,7 +1272,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Макі'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Макі'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1318,7 +1288,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Макі'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Макі'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1334,7 +1304,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Макі'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Макі'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1350,7 +1320,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Макі'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Макі'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1366,7 +1336,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Макі'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Макі'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1384,7 +1354,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Боули та салати' AND c.name = 'Салати'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Боули та салати' AND c.name = 'Салати'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1402,7 +1372,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Дракон'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Дракон'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1418,7 +1388,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Дракон'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Дракон'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1434,7 +1404,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Дракон'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Дракон'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1450,7 +1420,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Дракон'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Дракон'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1466,7 +1436,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Суші та роли' AND c.name = 'Роли Дракон'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Суші та роли' AND c.name = 'Роли Дракон'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1484,7 +1454,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Боули та салати' AND c.name = 'Боули'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Боули та салати' AND c.name = 'Боули'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1500,7 +1470,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Боули та салати' AND c.name = 'Боули'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Боули та салати' AND c.name = 'Боули'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1516,7 +1486,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Боули та салати' AND c.name = 'Боули'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Боули та салати' AND c.name = 'Боули'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1532,7 +1502,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Боули та салати' AND c.name = 'Боули'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Боули та салати' AND c.name = 'Боули'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1548,7 +1518,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Боули та салати' AND c.name = 'Боули'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Боули та салати' AND c.name = 'Боули'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1566,7 +1536,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Картопля'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Картопля'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1584,7 +1554,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1600,7 +1570,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1616,7 +1586,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1632,7 +1602,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1648,7 +1618,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1666,7 +1636,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Бокси'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Бокси'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1682,7 +1652,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Бокси'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Бокси'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1698,7 +1668,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Бокси'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Бокси'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1714,7 +1684,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Бокси'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Бокси'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1730,7 +1700,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Бокси'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Бокси'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1748,7 +1718,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Фокачі'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Фокачі'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1764,7 +1734,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Закуски' AND c.name = 'Фокачі'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Закуски' AND c.name = 'Фокачі'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1780,7 +1750,7 @@ WITH new_product AS (
     SELECT c.id, 'Піццелла Дубайська', 'Начинка з меленої фісташки, шоколаду та горішків у фірмовому тісті з цукровою пудрою',
            'https://domapizza.com.ua/wp-content/uploads/Дубайська-піццелла-1-400x400.webp', 1
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Десерти'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Десерти'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1794,7 +1764,7 @@ WITH new_product AS (
     SELECT c.id, 'Піццелла з маком', 'Макова начинка у фірмовому тісті з цукровою пудрою',
            'https://domapizza.com.ua/wp-content/uploads/Піцелла-з-маком-400x400.webp', 2
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Десерти'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Десерти'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1808,7 +1778,7 @@ WITH new_product AS (
     SELECT c.id, 'Піццелла з маком та вишнею', 'Начинка з маком, вишнями у фірмовому тісті з цукровою пудрою',
            'https://domapizza.com.ua/wp-content/uploads/Піцелла-з-маком-та-вишнею-400x400.webp', 3
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Десерти'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Десерти'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1822,7 +1792,7 @@ WITH new_product AS (
     SELECT c.id, 'Піццелла з маком та яблуком', 'Начинка з маком та яблуками у фірмовому тісті з цукровою пудрою',
            'https://domapizza.com.ua/wp-content/uploads/Піцелла-з-маком-та-яблуком-400x400.webp', 4
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Десерти'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Десерти'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1836,7 +1806,7 @@ WITH new_product AS (
     SELECT c.id, 'Піццелла', 'Фруктова або ягідна начинка у фірмовому тісті з цукровою пудро.',
            'https://domapizza.com.ua/wp-content/uploads/Піццелла-400x400.webp', 5
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Десерти'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Десерти'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1854,7 +1824,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Напої' AND c.name = 'Газовані'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Напої' AND c.name = 'Газовані'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1873,7 +1843,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Напої' AND c.name = 'Газовані'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Напої' AND c.name = 'Газовані'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1892,7 +1862,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Напої' AND c.name = 'Газовані'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Напої' AND c.name = 'Газовані'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1911,7 +1881,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Напої' AND c.name = 'Газовані'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Напої' AND c.name = 'Газовані'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1929,7 +1899,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Напої' AND c.name = 'Соки'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Напої' AND c.name = 'Соки'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1948,7 +1918,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Напої' AND c.name = 'Вода'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Напої' AND c.name = 'Вода'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1966,7 +1936,7 @@ WITH new_product AS (
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND parent.name = 'Напої' AND c.name = 'Енергетики'
+    WHERE l.name = 'Urban Pizza & Sushi' AND parent.name = 'Напої' AND c.name = 'Енергетики'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1983,7 +1953,7 @@ WITH new_product AS (
     SELECT c.id, 'Соус гостро-солодкий', NULL,
            NULL, 1
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Соуси'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Соуси'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -1997,7 +1967,7 @@ WITH new_product AS (
     SELECT c.id, 'Соус спайсі', NULL,
            NULL, 2
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Соуси'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Соуси'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2011,7 +1981,7 @@ WITH new_product AS (
     SELECT c.id, 'Соус унагі', NULL,
            NULL, 3
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Соуси'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Соуси'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2025,7 +1995,7 @@ WITH new_product AS (
     SELECT c.id, 'Кетчуп', NULL,
            NULL, 4
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Соуси'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Соуси'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2039,7 +2009,7 @@ WITH new_product AS (
     SELECT c.id, 'Сирний соус', NULL,
            NULL, 5
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Соуси'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Соуси'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2053,7 +2023,7 @@ WITH new_product AS (
     SELECT c.id, 'Кисло-солодкий соус', NULL,
            NULL, 6
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Соуси'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Соуси'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2069,7 +2039,7 @@ WITH new_product AS (
     SELECT c.id, 'BBQ', NULL,
            NULL, 7
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Соуси'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Соуси'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2083,7 +2053,7 @@ WITH new_product AS (
     SELECT c.id, 'Васабі', NULL,
            NULL, 8
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Соуси'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Соуси'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2097,7 +2067,7 @@ WITH new_product AS (
     SELECT c.id, 'Імбир', NULL,
            NULL, 9
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Соуси'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Соуси'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2114,7 +2084,7 @@ WITH new_product AS (
     SELECT c.id, 'Звичайні палички', NULL,
            NULL, 1
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Прибори'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Прибори'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2128,7 +2098,7 @@ WITH new_product AS (
     SELECT c.id, 'Учбові палички', NULL,
            NULL, 2
     FROM categories c JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Pizza' AND c.parent_id IS NULL AND c.name = 'Прибори'
+    WHERE l.name = 'Urban Pizza & Sushi' AND c.parent_id IS NULL AND c.name = 'Прибори'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2289,17 +2259,17 @@ WHERE parent.name = 'Суші та роли' AND c.name = 'Сети з ролі�
 
 
 -- ============================================================================
--- ========== Doma Croissants (каталог з menu_import.xlsx) ==========
+-- ========== Urban Bakery & Coffee (каталог з menu_import.xlsx) ==========
 -- ============================================================================
 
--- Doma Croissants | Круасани / Сендвіч-круасани: з Моцарелою та Помідорами круасан
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: з Моцарелою та Помідорами круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Моцарелою та Помідорами круасан', 'Моцарела, помідор, рукола, соус песто', NULL, 1
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2308,14 +2278,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 115, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: з Філадельфією та Шинкою круасан
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: з Філадельфією та Шинкою круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Філадельфією та Шинкою круасан', 'сир філадельфія, шинка, помідор, салат, соус фірмовий', NULL, 2
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2324,14 +2294,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 135, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: з Куркою круасан
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: з Куркою круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Куркою круасан', 'огірок, помідор, курка, салат, соус фірмовий', NULL, 3
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2340,14 +2310,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 125, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: з Куркою та Сиром круасан
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: з Куркою та Сиром круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Куркою та Сиром круасан', 'помідор, салат, сир, курка, соус фірмовий, огірок', NULL, 4
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2356,14 +2326,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 135, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: з Салямі та Сиром круасан
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: з Салямі та Сиром круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Салямі та Сиром круасан', 'огірок, помідор, салямі, сир столовий, салат, соус часниковий, огірок', NULL, 5
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2372,14 +2342,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 120, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: Чіккен бургер круасан
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: Чіккен бургер круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Чіккен бургер круасан', 'котлета куряча смажена на грилі, помідор, сир тостовий, салат, соус фірмовий бургер, краб цибуля, огірок бочковий', NULL, 6
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2389,14 +2359,14 @@ FROM new_product, (VALUES
         ('L', NULL, 175, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: Біф бургер круасан
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: Біф бургер круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Біф бургер круасан', 'котлета яловича смажена на грилі, помідор, сир тостовий, салат, соус фірмовий бургер, краб цибуля, огірок бочковий', NULL, 7
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2406,14 +2376,14 @@ FROM new_product, (VALUES
         ('L', NULL, 205, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: з Шинкою та Беконом круасан
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: з Шинкою та Беконом круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Шинкою та Беконом круасан', 'солоний огірок, шинка, бекон, салат, соус часниковий', NULL, 8
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2422,14 +2392,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 130, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: з Куркою та Соусом Теріякі
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: з Куркою та Соусом Теріякі
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Куркою та Соусом Теріякі', 'курка, листок салату, огірок свіжий, соус Теріякі, насіння кунжуту, імбир', NULL, 9
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2438,14 +2408,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 135, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: Хані міт круасан
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: Хані міт круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Хані міт круасан', 'соус фірмовий медовий, крем-сир, салямі, шинка, Дорблю, пармезан, рукола', NULL, 10
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2454,14 +2424,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 155, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: з Лососем та імбирем
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: з Лососем та імбирем
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Лососем та імбирем', 'крем-сир, філе лосося, салат, огірок, імбир, соус теріякі, кунжут', NULL, 11
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2470,14 +2440,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 190, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: з Дерунами, цибулею та грибами
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: з Дерунами, цибулею та грибами
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Дерунами, цибулею та грибами', 'Деруни, мариновані гриби, салат, цибуля кранч, сир, фірмовий соус', NULL, 12
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2486,14 +2456,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 150, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: з Філадельфією та Лососем круасан
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: з Філадельфією та Лососем круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Філадельфією та Лососем круасан', 'сир філадельфія, лосось, салат, огірок', NULL, 13
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2502,14 +2472,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 180, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: з Куркою та Пармезаном круасан
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: з Куркою та Пармезаном круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Куркою та Пармезаном круасан', 'курка, помідор, сир пармезан, салат, соус фірмовий', NULL, 14
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2518,14 +2488,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 130, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: з Прошуто з В'яленими помідорами круасан
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: з Прошуто з В'яленими помідорами круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Прошуто з В''яленими помідорами круасан', 'прошуто, рукола, моцарела, помідор в''ялений, соус фірмовий', NULL, 15
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2534,14 +2504,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 170, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: з Філадельфією та Оселедцем круасан
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: з Філадельфією та Оселедцем круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Філадельфією та Оселедцем круасан', 'сир філадельфія, філе оселедця прямого посолу, салат, помідор, соус фірмовий часниковий, цибуля кранч', NULL, 16
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2550,14 +2520,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 135, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Сендвіч-круасани: з Тунцем та яєчнею
+-- Urban Bakery & Coffee | Круасани / Сендвіч-круасани: з Тунцем та яєчнею
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Тунцем та яєчнею', 'фірмовий соус, філе тунця консервоване, помідор, огірок солоний, яєчня, листя салату', NULL, 17
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Сендвіч-круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2566,13 +2536,13 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 170, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Бургери: БІФ БУРГЕР
+-- Urban Bakery & Coffee | Бургери: БІФ БУРГЕР
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'БІФ БУРГЕР', NULL, NULL, 1
     FROM categories c
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бургери'
+    WHERE l.name = 'Urban Bakery & Coffee' AND c.parent_id IS NULL AND c.name = 'Бургери'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2582,13 +2552,13 @@ FROM new_product, (VALUES
         ('Дабл', NULL, 215, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Бургери: БІФ БУРГЕР меню
+-- Urban Bakery & Coffee | Бургери: БІФ БУРГЕР меню
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'БІФ БУРГЕР меню', NULL, NULL, 2
     FROM categories c
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бургери'
+    WHERE l.name = 'Urban Bakery & Coffee' AND c.parent_id IS NULL AND c.name = 'Бургери'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2598,13 +2568,13 @@ FROM new_product, (VALUES
         ('Дабл', NULL, 330, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Бургери: ЧІКЕН БУРГЕР меню
+-- Urban Bakery & Coffee | Бургери: ЧІКЕН БУРГЕР меню
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'ЧІКЕН БУРГЕР меню', NULL, NULL, 3
     FROM categories c
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бургери'
+    WHERE l.name = 'Urban Bakery & Coffee' AND c.parent_id IS NULL AND c.name = 'Бургери'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2614,13 +2584,13 @@ FROM new_product, (VALUES
         ('Дабл', NULL, 320, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Бургери: ЧІКЕН БУРГЕР
+-- Urban Bakery & Coffee | Бургери: ЧІКЕН БУРГЕР
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'ЧІКЕН БУРГЕР', NULL, NULL, 4
     FROM categories c
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бургери'
+    WHERE l.name = 'Urban Bakery & Coffee' AND c.parent_id IS NULL AND c.name = 'Бургери'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2630,13 +2600,13 @@ FROM new_product, (VALUES
         ('Дабл', NULL, 185, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Ролліни: Хані міт роллін
+-- Urban Bakery & Coffee | Ролліни: Хані міт роллін
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Хані міт роллін', 'Тортилья, салямі, шинка, рукола, крем-сир, моцарела, пармезан, Дор-Блю, фірмовий соус медово-гірчичний', NULL, 1
     FROM categories c
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Ролліни'
+    WHERE l.name = 'Urban Bakery & Coffee' AND c.parent_id IS NULL AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2645,13 +2615,13 @@ FROM new_product, (VALUES
         ('1 порція', '250 г', 135, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Ролліни: Верона роллін
+-- Urban Bakery & Coffee | Ролліни: Верона роллін
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Верона роллін', 'Тортилья, салямі, шинка, куряче філе, моцарела, цибуля, чедер, фірмовий соус, спеції', NULL, 2
     FROM categories c
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Ролліни'
+    WHERE l.name = 'Urban Bakery & Coffee' AND c.parent_id IS NULL AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2660,13 +2630,13 @@ FROM new_product, (VALUES
         ('1 порція', '250 г', 135, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Ролліни: Вишгородський роллін
+-- Urban Bakery & Coffee | Ролліни: Вишгородський роллін
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Вишгородський роллін', 'Тортилья, бекон, халапеньйо, моцарела, фірмовий соус, спеції', NULL, 3
     FROM categories c
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Ролліни'
+    WHERE l.name = 'Urban Bakery & Coffee' AND c.parent_id IS NULL AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2675,13 +2645,13 @@ FROM new_product, (VALUES
         ('1 порція', '250 г', 135, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Ролліни: Цезар роллін
+-- Urban Bakery & Coffee | Ролліни: Цезар роллін
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Цезар роллін', 'Тортилья, бекон, куряче філе, помідор, моцарела, фірмовий соус Цезар, спеції', NULL, 4
     FROM categories c
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Ролліни'
+    WHERE l.name = 'Urban Bakery & Coffee' AND c.parent_id IS NULL AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2690,13 +2660,13 @@ FROM new_product, (VALUES
         ('1 порція', '250 г', 135, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Ролліни: Чікен роллін
+-- Urban Bakery & Coffee | Ролліни: Чікен роллін
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Чікен роллін', 'Тортилья, курячі нагетси, салат айсберг, помідор, фірмовий соус', NULL, 5
     FROM categories c
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Ролліни'
+    WHERE l.name = 'Urban Bakery & Coffee' AND c.parent_id IS NULL AND c.name = 'Ролліни'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2705,14 +2675,14 @@ FROM new_product, (VALUES
         ('1 порція', '250 г', 135, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Солодкі круасани: Дубайський круасан
+-- Urban Bakery & Coffee | Круасани / Солодкі круасани: Дубайський круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Дубайський круасан', 'Крем фісташковий, паста шоколадна, мигдаль', NULL, 1
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2721,14 +2691,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 155, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Солодкі круасани: з Мигдалем круасан
+-- Urban Bakery & Coffee | Круасани / Солодкі круасани: з Мигдалем круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Мигдалем круасан', 'крем мигдалевий, мигдалеві пластівці, цукрова пудра', NULL, 2
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2737,14 +2707,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 105, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Солодкі круасани: з Шоколадом та Бананом круасан
+-- Urban Bakery & Coffee | Круасани / Солодкі круасани: з Шоколадом та Бананом круасан
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Шоколадом та Бананом круасан', 'шоколад з фундуком, банан, цукрова пудра', NULL, 3
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2753,14 +2723,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 120, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Солодкі круасани: з Кокосом, маскарпоне та мигдалем
+-- Urban Bakery & Coffee | Круасани / Солодкі круасани: з Кокосом, маскарпоне та мигдалем
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Кокосом, маскарпоне та мигдалем', 'крем маскарпоне, крем кокосовий, мигдаль, молоко згущене, кокосова стружка, цукрова пудра', NULL, 4
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2769,14 +2739,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 125, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Солодкі круасани: з Маскарпоне (з Абрикосом / Вишнею / Яблуком / Персиком)
+-- Urban Bakery & Coffee | Круасани / Солодкі круасани: з Маскарпоне (з Абрикосом / Вишнею / Яблуком / Персиком)
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Маскарпоне (з Абрикосом / Вишнею / Яблуком / Персиком)', 'крем маскарпоне, цукрова пудра', NULL, 5
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2785,14 +2755,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 120, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Круасани / Солодкі круасани: з Маком та Вишнею
+-- Urban Bakery & Coffee | Круасани / Солодкі круасани: з Маком та Вишнею
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'з Маком та Вишнею', 'макова начинка фірмова, конфітюр вишневий', NULL, 6
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Круасани' AND c.name = 'Солодкі круасани'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2801,14 +2771,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 125, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Кавові: Еспресо
+-- Urban Bakery & Coffee | Напої / Кавові: Еспресо
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Еспресо', NULL, NULL, 1
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Кавові'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2818,14 +2788,14 @@ FROM new_product, (VALUES
         ('L', NULL, 60, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Кавові: Американо
+-- Urban Bakery & Coffee | Напої / Кавові: Американо
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Американо', NULL, NULL, 2
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Кавові'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2835,14 +2805,14 @@ FROM new_product, (VALUES
         ('L', NULL, 60, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Кавові: Еспресо з молоком
+-- Urban Bakery & Coffee | Напої / Кавові: Еспресо з молоком
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Еспресо з молоком', NULL, NULL, 3
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Кавові'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2852,14 +2822,14 @@ FROM new_product, (VALUES
         ('L', NULL, 62, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Кавові: Американо з молоком
+-- Urban Bakery & Coffee | Напої / Кавові: Американо з молоком
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Американо з молоком', NULL, NULL, 4
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Кавові'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2869,14 +2839,14 @@ FROM new_product, (VALUES
         ('L', NULL, 72, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Кавові: Лате
+-- Urban Bakery & Coffee | Напої / Кавові: Лате
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Лате', NULL, NULL, 5
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Кавові'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2886,14 +2856,14 @@ FROM new_product, (VALUES
         ('L', NULL, 72, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Кавові: Капучіно
+-- Urban Bakery & Coffee | Напої / Кавові: Капучіно
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Капучіно', NULL, NULL, 6
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Кавові'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2903,14 +2873,14 @@ FROM new_product, (VALUES
         ('L', NULL, 72, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Кавові: Флетвайт
+-- Urban Bakery & Coffee | Напої / Кавові: Флетвайт
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Флетвайт', NULL, NULL, 7
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Кавові'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2920,14 +2890,14 @@ FROM new_product, (VALUES
         ('L', NULL, 72, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Шоколадні: Шокочино
+-- Urban Bakery & Coffee | Напої / Шоколадні: Шокочино
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Шокочино', NULL, NULL, 1
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Шоколадні'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Шоколадні'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2936,14 +2906,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 72, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Шоколадні: Гарячий шоколад
+-- Urban Bakery & Coffee | Напої / Шоколадні: Гарячий шоколад
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Гарячий шоколад', NULL, NULL, 2
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Шоколадні'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Шоколадні'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2952,14 +2922,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 72, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Шоколадні: Какао
+-- Urban Bakery & Coffee | Напої / Шоколадні: Какао
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Какао', NULL, NULL, 3
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Шоколадні'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Шоколадні'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2969,14 +2939,14 @@ FROM new_product, (VALUES
         ('L', NULL, 77, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Чаї: Чай заварний
+-- Urban Bakery & Coffee | Напої / Чаї: Чай заварний
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Чай заварний', NULL, NULL, 1
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Чаї'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Чаї'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -2985,14 +2955,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 65, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Чаї: Чай концентрат (обліпиховий / імбирний)
+-- Urban Bakery & Coffee | Напої / Чаї: Чай концентрат (обліпиховий / імбирний)
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Чай концентрат (обліпиховий / імбирний)', NULL, NULL, 2
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Чаї'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Чаї'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -3001,14 +2971,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 72, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Кавові: Молочна пінки
+-- Urban Bakery & Coffee | Напої / Кавові: Молочна пінки
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Молочна пінки', NULL, NULL, 8
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Кавові'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Кавові'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -3017,14 +2987,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 25, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Літні напої bDOMA: Айс Лате
+-- Urban Bakery & Coffee | Напої / Літні напої Urban: Айс Лате
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Айс Лате', NULL, NULL, 1
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Літні напої bDOMA'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Літні напої'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -3034,14 +3004,14 @@ FROM new_product, (VALUES
         ('L', NULL, 77, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Літні напої bDOMA: Айс кава (будь який сік)
+-- Urban Bakery & Coffee | Напої / Літні напої Urban: Айс кава (будь який сік)
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Айс кава (будь який сік)', NULL, NULL, 2
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Літні напої bDOMA'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Літні напої'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -3050,14 +3020,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 140, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Літні напої bDOMA: Айс капучіно
+-- Urban Bakery & Coffee | Напої / Літні напої Urban: Айс капучіно
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Айс капучіно', NULL, NULL, 3
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Літні напої bDOMA'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Літні напої'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -3067,14 +3037,14 @@ FROM new_product, (VALUES
         ('L', NULL, 77, 2)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Літні напої bDOMA: DOMA Лимонад (апельсин, тархун тропік)
+-- Urban Bakery & Coffee | Напої / Літні напої Urban: Urban Лимонад (апельсин, тархун тропік)
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'DOMA Лимонад (апельсин, тархун тропік)', NULL, NULL, 4
+    SELECT c.id, 'Лимонад (апельсин, тархун, тропік)', NULL, NULL, 4
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Літні напої bDOMA'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Літні напої'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -3083,14 +3053,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 140, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Літні напої bDOMA: Doma Мохіто
+-- Urban Bakery & Coffee | Напої / Літні напої Urban: Urban Мохіто
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'Doma Мохіто', NULL, NULL, 5
+    SELECT c.id, 'Мохіто', NULL, NULL, 5
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Літні напої bDOMA'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Літні напої'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -3099,14 +3069,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 140, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Літні напої bDOMA: Doma Шейк
+-- Urban Bakery & Coffee | Напої / Літні напої Urban: Urban Шейк
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'Doma Шейк', NULL, NULL, 6
+    SELECT c.id, 'Молочний шейк', NULL, NULL, 6
     FROM categories c
     JOIN categories parent ON parent.id = c.parent_id
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Літні напої bDOMA'
+    WHERE l.name = 'Urban Bakery & Coffee' AND parent.name = 'Напої' AND c.name = 'Літні напої'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -3115,30 +3085,14 @@ FROM new_product, (VALUES
         ('Стандарт', NULL, 140, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Напої / Літні напої bDOMA: Doma лід
-WITH new_product AS (
-    INSERT INTO products (category_id, name, description, image_url, sort_order)
-    SELECT c.id, 'Doma лід', NULL, NULL, 7
-    FROM categories c
-    JOIN categories parent ON parent.id = c.parent_id
-    JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND parent.name = 'Напої' AND c.name = 'Літні напої bDOMA'
-    RETURNING id
-)
-INSERT INTO product_variants (product_id, label, weight, price, sort_order)
-SELECT new_product.id, v.label, v.weight, v.price, v.sort_order
-FROM new_product, (VALUES
-        ('M', NULL, 10, 1),
-        ('L', NULL, 15, 2)
-    ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Бенто піци: Салямі
+-- Urban Bakery & Coffee | Бенто піци: Салямі
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Салямі', 'сир моцарела, ковбаса салямі', NULL, 1
     FROM categories c
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
+    WHERE l.name = 'Urban Bakery & Coffee' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -3147,13 +3101,13 @@ FROM new_product, (VALUES
         ('1 шт.', '20 см', 120, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Бенто піци: Чотири сира
+-- Urban Bakery & Coffee | Бенто піци: Чотири сира
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Чотири сира', 'сир моцарела, сир Дор-Блю, сир Чедер, сир Пармезан', NULL, 2
     FROM categories c
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
+    WHERE l.name = 'Urban Bakery & Coffee' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -3162,13 +3116,13 @@ FROM new_product, (VALUES
         ('1 шт.', '20 см', 120, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Бенто піци: Чотири м'яса
+-- Urban Bakery & Coffee | Бенто піци: Чотири м'яса
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Чотири м''яса', 'сир моцарела, ковбаски єгерські, філе курки, бекон, шинка, печериці, солоний огірок', NULL, 3
     FROM categories c
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
+    WHERE l.name = 'Urban Bakery & Coffee' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -3177,13 +3131,13 @@ FROM new_product, (VALUES
         ('1 шт.', '20 см', 120, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Бенто піци: Б'янко
+-- Urban Bakery & Coffee | Бенто піци: Б'янко
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Б''янко', 'сир моцарела, фірмове філе курки, печериці, помідори, сир Пармезан', NULL, 4
     FROM categories c
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
+    WHERE l.name = 'Urban Bakery & Coffee' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)
@@ -3192,13 +3146,13 @@ FROM new_product, (VALUES
         ('1 шт.', '20 см', 120, 1)
     ) AS v(label, weight, price, sort_order);
 
--- Doma Croissants | Бенто піци: Маргарита
+-- Urban Bakery & Coffee | Бенто піци: Маргарита
 WITH new_product AS (
     INSERT INTO products (category_id, name, description, image_url, sort_order)
     SELECT c.id, 'Маргарита', 'Тонке фірмове тісто, соус томатний, сир моцарела, помідори, базилік', NULL, 5
     FROM categories c
     JOIN locations l ON l.id = c.location_id
-    WHERE l.name = 'Doma Croissants' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
+    WHERE l.name = 'Urban Bakery & Coffee' AND c.parent_id IS NULL AND c.name = 'Бенто піци'
     RETURNING id
 )
 INSERT INTO product_variants (product_id, label, weight, price, sort_order)

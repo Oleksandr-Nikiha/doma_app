@@ -48,11 +48,28 @@ export function getRawInitData(): string | null {
 }
 
 
-export function hasTelegramAuth(): boolean {
-  return Boolean(getRawInitData());
+export const USER_TOKEN_KEY = "urban_user_token";
+
+export function getUserToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(USER_TOKEN_KEY);
 }
 
-export const ADMIN_TOKEN_KEY = "doma_admin_token";
+export function setUserToken(token: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(USER_TOKEN_KEY, token);
+}
+
+export function removeUserToken(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(USER_TOKEN_KEY);
+}
+
+export function hasTelegramAuth(): boolean {
+  return Boolean(getRawInitData()) || Boolean(getUserToken());
+}
+
+export const ADMIN_TOKEN_KEY = "urban_admin_token";
 
 export function getAdminToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -78,6 +95,13 @@ function authHeaders(): Record<string, string> {
   const raw = getRawInitData();
   if (raw) {
     headers["X-Telegram-Init-Data"] = raw;
+  }
+  const userToken = getUserToken();
+  if (userToken) {
+    headers["X-Auth-Token"] = userToken;
+    if (!headers["Authorization"]) {
+      headers["Authorization"] = `Bearer ${userToken}`;
+    }
   }
   const adminToken = getAdminToken();
   if (adminToken) {

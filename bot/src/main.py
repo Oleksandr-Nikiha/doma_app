@@ -35,11 +35,19 @@ async def setup_bot_commands(bot: Bot) -> None:
     """
     Реєструє список команд боту в інтерфейсі Telegram (спливаюче меню /).
     """
+    # За замовчуванням та для української мови
     await bot.set_my_commands([
         BotCommand(command="start", description="Відкрити меню та оформити замовлення"),
         BotCommand(command="verify", description="Верифікувати номер телефону"),
         BotCommand(command="admin", description="Вхід до панелі керування закладом"),
     ])
+    # Для англомовних користувачів
+    await bot.set_my_commands([
+        BotCommand(command="start", description="Open menu & order food"),
+        BotCommand(command="verify", description="Verify phone number"),
+        BotCommand(command="admin", description="Staff & manager login"),
+    ], language_code="en")
+
 
 
 async def auto_transition_scheduled_orders(bot: Bot) -> None:

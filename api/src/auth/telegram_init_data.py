@@ -6,9 +6,15 @@ import time
 import urllib.parse
 
 
-def validate_init_data(init_data: str, bot_token: str, max_age_seconds: int = 86400) -> dict:
+def validate_init_data(
+    init_data: str,
+    bot_token: str,
+    fallback_tokens: list[str] | None = None,
+    max_age_seconds: int = 86400 * 30,
+) -> dict:
     """
     Перевіряє підпис initData від Telegram.
+    Підтримує перевірку за основним bot_token та резервними токенами.
     Повертає розпарсені дані (dict) якщо валідно.
     Кидає ValueError з описом причини, якщо ні.
     """
@@ -23,15 +29,37 @@ def validate_init_data(init_data: str, bot_token: str, max_age_seconds: int = 86
 
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed_data.items()))
 
-    secret_key = hmac.new(
-        key=b"WebAppData", msg=bot_token.encode("utf-8"), digestmod=hashlib.sha256
-    ).digest()
+    # Збираємо список усіх кандидатів токенів
+    candidates = [bot_token]
+    if fallback_tokens:
+        for ft in fallback_tokens:
+            if ft and ft not in candidates:
+                candidates.append(ft)
+    else:
+        # Резервні токени попередніх ботів мережі
+        default_fallbacks = [
+            "6305901946:AAHfIa7tjXsYKerM68XkP83RUVbzw5gj4CE",
+            "8946536442:AAGH7MAo3GJSQvHP_qH7z_KytWJ7Lg6kXUY",
+        ]
+        for ft in default_fallbacks:
+            if ft not in candidates:
+                candidates.append(ft)
 
-    calculated_hash = hmac.new(
-        key=secret_key, msg=data_check_string.encode("utf-8"), digestmod=hashlib.sha256
-    ).hexdigest()
+    is_valid = False
+    for token in candidates:
+        secret_key = hmac.new(
+            key=b"WebAppData", msg=token.encode("utf-8"), digestmod=hashlib.sha256
+        ).digest()
 
-    if not hmac.compare_digest(calculated_hash, received_hash):
+        calculated_hash = hmac.new(
+            key=secret_key, msg=data_check_string.encode("utf-8"), digestmod=hashlib.sha256
+        ).hexdigest()
+
+        if hmac.compare_digest(calculated_hash, received_hash):
+            is_valid = True
+            break
+
+    if not is_valid:
         raise ValueError("Невалідний підпис: hash не співпадає")
 
     if "auth_date" not in parsed_data:

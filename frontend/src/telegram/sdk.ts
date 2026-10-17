@@ -41,10 +41,10 @@ function dropEmptyThemeVars(): void {
 }
 
 /**
- * Застосовує теплу фірмову колірну схему Doma (Croissants & Pizza)
+ * Застосовує фірмову урбаністичну колірну схему Urban Bites
  * замість стандартного синього кольору Telegram.
  */
-function applyDomaBrandTheme(): void {
+function applyUrbanBrandTheme(): void {
   const el = document.documentElement;
   const isDark =
     themeParams.isDark?.() ??
@@ -52,35 +52,35 @@ function applyDomaBrandTheme(): void {
     false;
 
   if (isDark) {
-    el.style.setProperty("--tg-theme-bg-color", "#1A1410");
-    el.style.setProperty("--tg-theme-secondary-bg-color", "#241C16");
-    el.style.setProperty("--tg-theme-text-color", "#F5EFE6");
-    el.style.setProperty("--tg-theme-hint-color", "#A8988B");
-    el.style.setProperty("--tg-theme-link-color", "#E29E57");
-    el.style.setProperty("--tg-theme-button-color", "#D96D43");
+    el.style.setProperty("--tg-theme-bg-color", "#12161A");
+    el.style.setProperty("--tg-theme-secondary-bg-color", "#1A1F26");
+    el.style.setProperty("--tg-theme-text-color", "#F4F5F7");
+    el.style.setProperty("--tg-theme-hint-color", "#94A3B8");
+    el.style.setProperty("--tg-theme-link-color", "#E05338");
+    el.style.setProperty("--tg-theme-button-color", "#D34528");
     el.style.setProperty("--tg-theme-button-text-color", "#FFFFFF");
-    el.style.setProperty("--app-surface", "#241C16");
-    el.style.setProperty("--app-surface-2", "#2E241D");
-    el.style.setProperty("--app-surface-3", "#3A2E25");
-    el.style.setProperty("--app-border", "#3D2E24");
-    el.style.setProperty("--app-veil", "rgba(26, 20, 16, 0.88)");
+    el.style.setProperty("--app-surface", "#1A1F26");
+    el.style.setProperty("--app-surface-2", "#242B35");
+    el.style.setProperty("--app-surface-3", "#2E3744");
+    el.style.setProperty("--app-border", "#2E3744");
+    el.style.setProperty("--app-veil", "rgba(18, 22, 26, 0.88)");
   } else {
-    el.style.setProperty("--tg-theme-bg-color", "#FAF7F2");
-    el.style.setProperty("--tg-theme-secondary-bg-color", "#F3EDE2");
-    el.style.setProperty("--tg-theme-text-color", "#2C1E14");
-    el.style.setProperty("--tg-theme-hint-color", "#7A695C");
-    el.style.setProperty("--tg-theme-link-color", "#C85A32");
-    el.style.setProperty("--tg-theme-button-color", "#C85A32");
+    el.style.setProperty("--tg-theme-bg-color", "#FDFBF7");
+    el.style.setProperty("--tg-theme-secondary-bg-color", "#F4F0E8");
+    el.style.setProperty("--tg-theme-text-color", "#18191A");
+    el.style.setProperty("--tg-theme-hint-color", "#6C727A");
+    el.style.setProperty("--tg-theme-link-color", "#D34528");
+    el.style.setProperty("--tg-theme-button-color", "#D34528");
     el.style.setProperty("--tg-theme-button-text-color", "#FFFFFF");
     el.style.setProperty("--app-surface", "#FFFFFF");
-    el.style.setProperty("--app-surface-2", "#F5EFE6");
-    el.style.setProperty("--app-surface-3", "#EADFCF");
-    el.style.setProperty("--app-border", "#E8DFC8");
-    el.style.setProperty("--app-veil", "rgba(250, 247, 242, 0.88)");
+    el.style.setProperty("--app-surface-2", "#F5F2EB");
+    el.style.setProperty("--app-surface-3", "#EAE5DB");
+    el.style.setProperty("--app-border", "#E5DFD5");
+    el.style.setProperty("--app-veil", "rgba(253, 251, 247, 0.88)");
   }
 
   try {
-    const headerColor = isDark ? "#1A1410" : "#FAF7F2";
+    const headerColor = isDark ? "#12161A" : "#FDFBF7";
     if (miniApp.setHeaderColor.isAvailable()) {
       miniApp.setHeaderColor(headerColor as `#${string}`);
     }
@@ -89,6 +89,7 @@ function applyDomaBrandTheme(): void {
     }
   } catch { /* ignore */ }
 }
+
 
 export function initSdk(): void {
   if (ready) return;
@@ -118,19 +119,20 @@ export function initSdk(): void {
         miniApp.ready();
       }
     } catch { /* ignore */ }
-    // Прив'язка теми та накладання фірмових кольорів Doma
+    // Прив'язка теми та накладання фірмових кольорів Urban Bites
     try {
       themeParams.mountSync();
       themeParams.bindCssVars();
       dropEmptyThemeVars();
-      applyDomaBrandTheme();
+      applyUrbanBrandTheme();
       themeParams.state.sub(() => {
         dropEmptyThemeVars();
-        applyDomaBrandTheme();
+        applyUrbanBrandTheme();
       });
     } catch {
-      applyDomaBrandTheme();
+      applyUrbanBrandTheme();
     }
+
     if (viewport.mount.isAvailable()) {
       void viewport.mount().then(() => {
         if (viewport.bindCssVars.isAvailable()) viewport.bindCssVars();

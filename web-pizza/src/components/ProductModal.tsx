@@ -49,9 +49,9 @@ export function ProductModal({ productId, onClose }: ProductModalProps) {
   if (loading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-        <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center space-y-4">
-          <div className="w-12 h-12 border-4 border-[#C8823E] border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-sm font-bold text-[#6B533E]">Завантажуємо смаколики...</p>
+        <div className="bg-[#181B22] rounded-3xl p-8 max-w-sm w-full text-center space-y-4 border border-white/10 shadow-2xl">
+          <div className="w-12 h-12 border-4 border-[#D34528] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-sm font-bold text-[#CBD5E1]">Завантажуємо смаколики...</p>
         </div>
       </div>
     );
@@ -60,12 +60,12 @@ export function ProductModal({ productId, onClose }: ProductModalProps) {
   if (error || !product || !selectedVariant) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-        <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center space-y-4">
-          <p className="text-red-600 font-bold">{error || "Страву не знайдено"}</p>
+        <div className="bg-[#181B22] rounded-3xl p-8 max-w-sm w-full text-center space-y-4 border border-white/10 shadow-2xl">
+          <p className="text-red-400 font-bold">{error || "Страву не знайдено"}</p>
           <button
             onClick={onClose}
             type="button"
-            className="w-full bg-[#2C1E14] text-white py-2.5 rounded-xl font-bold"
+            className="w-full bg-[#222731] hover:bg-[#2C3340] text-white py-2.5 rounded-xl font-bold cursor-pointer border border-white/10"
           >
             Закрити
           </button>
@@ -166,39 +166,39 @@ export function ProductModal({ productId, onClose }: ProductModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative bg-white rounded-t-3xl sm:rounded-3xl max-w-xl w-full max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-[#E8DFC8] animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-200">
+      <div className="relative bg-[#14171E] rounded-t-3xl sm:rounded-3xl max-w-xl w-full max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-white/10 animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-200 text-[#F1F5F9]">
         {/* Кнопка закриття */}
         <button
           onClick={onClose}
           type="button"
           aria-label="Закрити"
-          className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/90 backdrop-blur-md text-[#2C1E14] hover:bg-white flex items-center justify-center font-bold text-lg sm:text-xl shadow-md cursor-pointer transition-transform hover:scale-110 active:scale-95 border border-[#EADFCF]"
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1E232B]/90 backdrop-blur-md text-white hover:bg-[#282F3B] flex items-center justify-center font-bold text-lg sm:text-xl shadow-md cursor-pointer transition-transform hover:scale-110 active:scale-95 border border-white/10"
         >
           ✕
         </button>
 
         {/* Скролабельний вміст модального вікна */}
         <div className="flex-1 overflow-y-auto overscroll-contain">
-          {/* Зображення страви: делікатна висота без гігантського розтягування */}
-          <div className="relative w-full h-56 sm:h-72 bg-[#F3EDE2] overflow-hidden flex items-center justify-center border-b border-[#EADFCF]">
+          {/* Зображення страви */}
+          <div className="relative w-full h-56 sm:h-72 bg-[#121419] overflow-hidden flex items-center justify-center border-b border-white/10">
             <img
               src={getImageUrl(product.image_url)}
               alt={product.name}
               onError={(e) => {
                 (e.currentTarget as HTMLImageElement).src = DEFAULT_PRODUCT_IMAGE;
               }}
-              className="w-full h-full object-cover sm:object-contain transition-all duration-300"
+              className="w-full h-full object-cover sm:object-contain transition-all duration-300 opacity-95"
             />
           </div>
 
           {/* Тіло з опціями */}
           <div className="p-5 sm:p-7 space-y-6">
             <div>
-              <h2 className="font-display text-2xl sm:text-3xl font-bold text-[#2C1E14]">
+              <h2 className="font-display text-2xl sm:text-3xl font-bold text-white">
                 {product.name}
               </h2>
             {product.description && (
-              <p className="mt-2 text-sm sm:text-base text-[#614F42] leading-relaxed">
+              <p className="mt-2 text-sm sm:text-base text-[#94A3B8] leading-relaxed">
                 {product.description}
               </p>
             )}
@@ -207,7 +207,7 @@ export function ProductModal({ productId, onClose }: ProductModalProps) {
           {/* Вибір варіанту / розміру */}
           {product.variants.length > 1 && (
             <div className="space-y-3">
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#7A695C]">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#94A3B8]">
                 Оберіть розмір / варіант
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
@@ -220,14 +220,14 @@ export function ProductModal({ productId, onClose }: ProductModalProps) {
                       type="button"
                       className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                         isSelected
-                          ? "border-[#C85A32] bg-[#FFF8EE] shadow-sm ring-2 ring-[#C85A32]/20"
-                          : "border-[#EADFCF] hover:border-[#C85A32]/50 bg-white"
+                          ? "border-[#E2583E] bg-[#D34528]/15 shadow-sm ring-2 ring-[#E2583E]/20"
+                          : "border-white/10 hover:border-white/25 bg-[#181B22]"
                       }`}
                     >
-                      <div className="font-bold text-sm text-[#2C1E14]">{v.label}</div>
-                      <div className="flex items-center justify-between text-xs text-[#7A695C] mt-1">
+                      <div className="font-bold text-sm text-white">{v.label}</div>
+                      <div className="flex items-center justify-between text-xs text-[#94A3B8] mt-1">
                         {v.weight && <span>{v.weight} г</span>}
-                        <span className="font-extrabold text-[#C85A32]">{v.price} ₴</span>
+                        <span className="font-extrabold text-[#E2583E]">{v.price} ₴</span>
                       </div>
                     </button>
                   );
@@ -243,17 +243,17 @@ export function ProductModal({ productId, onClose }: ProductModalProps) {
             const totalUnits = inGroup.reduce((sum, o) => sum + (o.qty || 1), 0);
 
             return (
-              <div key={group.group_id} className="space-y-3 pt-3 border-t border-[#F5EFE6]">
+              <div key={group.group_id} className="space-y-3 pt-3 border-t border-white/10">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-[#2C1E14]">{group.name}</span>
+                    <span className="text-sm font-bold text-white">{group.name}</span>
                     {group.free_count > 0 && (
-                      <span className="text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                      <span className="text-xs text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded-full font-semibold border border-emerald-500/30">
                         {group.free_count} безкоштовно
                       </span>
                     )}
                   </div>
-                  <span className="text-xs text-[#8C7665]">
+                  <span className="text-xs text-[#94A3B8]">
                     {isMulti
                       ? `обрано ${totalUnits} з ${group.max_select}`
                       : "Оберіть 1"}
@@ -275,20 +275,20 @@ export function ProductModal({ productId, onClose }: ProductModalProps) {
                           key={opt.variant_id}
                           className={`flex items-center justify-between p-3 rounded-2xl border text-sm transition-all ${
                             isChecked
-                              ? "border-[#C85A32] bg-[#FFF8EE]"
-                              : "border-[#EADFCF] bg-white hover:border-[#E2D5C3]"
+                              ? "border-[#E2583E] bg-[#D34528]/15"
+                              : "border-white/10 bg-[#181B22] hover:border-white/20"
                           }`}
                         >
                           <div className="flex-1 pr-3">
-                            <span className="font-bold text-[#2C1E14]">{opt.name}</span>
+                            <span className="font-bold text-white">{opt.name}</span>
                             {opt.price_delta > 0 && (
-                              <span className="text-xs text-[#8C7665] ml-2 font-medium">
+                              <span className="text-xs text-[#94A3B8] ml-2 font-medium">
                                 +{opt.price_delta} ₴
                               </span>
                             )}
                           </div>
 
-                          <div className="flex items-center gap-2 bg-[#F3EDE2] rounded-xl p-1 shrink-0">
+                          <div className="flex items-center gap-2 bg-[#121417] rounded-xl border border-white/10 p-1 shrink-0">
                             <button
                               type="button"
                               onClick={() =>
@@ -301,11 +301,11 @@ export function ProductModal({ productId, onClose }: ProductModalProps) {
                                 )
                               }
                               disabled={count === 0}
-                              className="w-7 h-7 rounded-lg bg-white text-[#2C1E14] font-bold disabled:opacity-30 hover:bg-white/80 flex items-center justify-center cursor-pointer shadow-2xs active:scale-95"
+                              className="w-7 h-7 rounded-lg bg-[#1E232B] text-white font-bold disabled:opacity-30 hover:bg-[#282F3B] flex items-center justify-center cursor-pointer shadow-2xs active:scale-95"
                             >
                               −
                             </button>
-                            <span className="w-5 text-center font-extrabold text-xs text-[#2C1E14]">
+                            <span className="w-5 text-center font-extrabold text-xs text-white">
                               {count}
                             </span>
                             <button
@@ -320,7 +320,7 @@ export function ProductModal({ productId, onClose }: ProductModalProps) {
                                 )
                               }
                               disabled={totalUnits >= group.max_select}
-                              className="w-7 h-7 rounded-lg bg-white text-[#2C1E14] font-bold disabled:opacity-30 hover:bg-white/80 flex items-center justify-center cursor-pointer shadow-2xs active:scale-95"
+                              className="w-7 h-7 rounded-lg bg-[#1E232B] text-white font-bold disabled:opacity-30 hover:bg-[#282F3B] flex items-center justify-center cursor-pointer shadow-2xs active:scale-95"
                             >
                               +
                             </button>
@@ -338,16 +338,16 @@ export function ProductModal({ productId, onClose }: ProductModalProps) {
                         type="button"
                         className={`w-full flex items-center justify-between p-3 rounded-2xl border text-sm transition-all cursor-pointer ${
                           isChecked
-                            ? "border-[#C85A32] bg-[#FFF8EE] font-bold text-[#2C1E14]"
-                            : "border-[#EADFCF] hover:border-[#C85A32]/40 text-[#4A3B32] bg-white"
+                            ? "border-[#E2583E] bg-[#D34528]/15 font-bold text-white"
+                            : "border-white/10 hover:border-white/25 text-[#CBD5E1] bg-[#181B22]"
                         }`}
                       >
                         <div className="flex items-center gap-2.5">
                           <span
                             className={`w-4 h-4 rounded-full flex items-center justify-center border text-[10px] ${
                               isChecked
-                                ? "bg-[#C85A32] border-[#C85A32] text-white"
-                                : "border-[#C4B29E]"
+                                ? "bg-[#D34528] border-[#D34528] text-white"
+                                : "border-white/20"
                             }`}
                           >
                             {isChecked ? "✓" : ""}
@@ -355,7 +355,7 @@ export function ProductModal({ productId, onClose }: ProductModalProps) {
                           <span>{opt.name}</span>
                         </div>
                         {opt.price_delta > 0 && (
-                          <span className="text-xs text-[#8C7665]">+{opt.price_delta} ₴</span>
+                          <span className="text-xs text-[#94A3B8]">+{opt.price_delta} ₴</span>
                         )}
                       </button>
                     );
@@ -368,22 +368,22 @@ export function ProductModal({ productId, onClose }: ProductModalProps) {
         </div>
 
         {/* Зафіксований футер із кількістю та кнопкою додавання */}
-        <div className="shrink-0 p-4 sm:p-5 border-t border-[#EADFCF] bg-[#FAF7F2] flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 bg-[#F3EDE2] rounded-2xl p-1 shrink-0">
+        <div className="shrink-0 p-4 sm:p-5 border-t border-white/10 bg-[#181B22] flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 bg-[#121417] rounded-2xl border border-white/10 p-1 shrink-0">
             <button
               onClick={() => setQty((q) => Math.max(1, q - 1))}
               type="button"
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white text-[#2C1E14] font-bold hover:bg-[#FAF7F2] shadow-xs flex items-center justify-center cursor-pointer active:scale-95 text-base sm:text-lg"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#1E232B] text-white font-bold hover:bg-[#282F3B] shadow-xs flex items-center justify-center cursor-pointer active:scale-95 text-base sm:text-lg"
             >
               −
             </button>
-            <span className="w-6 sm:w-8 text-center font-extrabold text-sm sm:text-base text-[#2C1E14]">
+            <span className="w-6 sm:w-8 text-center font-extrabold text-sm sm:text-base text-white">
               {qty}
             </span>
             <button
               onClick={() => setQty((q) => q + 1)}
               type="button"
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white text-[#2C1E14] font-bold hover:bg-[#FAF7F2] shadow-xs flex items-center justify-center cursor-pointer active:scale-95 text-base sm:text-lg"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#1E232B] text-white font-bold hover:bg-[#282F3B] shadow-xs flex items-center justify-center cursor-pointer active:scale-95 text-base sm:text-lg"
             >
               +
             </button>
@@ -392,10 +392,10 @@ export function ProductModal({ productId, onClose }: ProductModalProps) {
           <button
             onClick={handleAddToCart}
             type="button"
-            className="flex-1 bg-[#2C1E14] hover:bg-[#3D2C1F] text-white py-3 sm:py-3.5 px-4 sm:px-6 rounded-2xl font-bold text-sm sm:text-base shadow-lg shadow-[#2C1E14]/15 transition-all active:scale-98 cursor-pointer flex items-center justify-between"
+            className="flex-1 bg-[#D34528] hover:bg-[#B8351B] text-white py-3 sm:py-3.5 px-4 sm:px-6 rounded-2xl font-bold text-sm sm:text-base shadow-lg shadow-[#D34528]/25 transition-all active:scale-98 cursor-pointer flex items-center justify-between"
           >
             <span>В кошик</span>
-            <span className="text-[#E29E57] font-extrabold">{totalPrice} ₴</span>
+            <span className="bg-white/20 text-white px-2.5 py-0.5 rounded-lg text-sm sm:text-base font-extrabold">{totalPrice} ₴</span>
           </button>
         </div>
       </div>

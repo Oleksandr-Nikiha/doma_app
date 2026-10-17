@@ -480,15 +480,39 @@ class TestSecurityVulnerabilityFixes:
 
 
     async def test_phone_auth_endpoints_disabled(self, async_client):
-        """Вхід за номером телефону та кодом повністю видалено на користь Telegram Auth."""
+        """Вхід за SMS-кодом та встановлення паролю відключено (404)."""
         res_code = await async_client.post("/api/auth/phone-code", json={"phone": "+380931112233"})
         assert res_code.status_code == 404
 
-        res_login = await async_client.post(
-            "/api/auth/phone-login",
+        res_pwd = await async_client.post(
+            "/api/auth/phone-set-password",
             json={"phone": "+380931112233", "password": "1234"},
         )
-        assert res_login.status_code == 404
+        assert res_pwd.status_code == 404
+
+    async def test_web_phone_login_success(self, async_client, mock_db_conn):
+        """Прямий вхід через веб-сайт повертає профіль користувача з бонусами URBAN CLUB."""
+        mock_db_conn.fetchrow.return_value = {
+            "id": 15,
+            "telegram_id": None,
+            "full_name": "Іван Тестовий",
+            "first_name": "Іван",
+            "last_name": "Тестовий",
+            "phone": "+380931112233",
+            "delivery_address": "вул. Хрещатик, 1",
+            "additional_address": None,
+            "is_phone_verified": True,
+            "bonus_balance": 50,
+        }
+        res_login = await async_client.post(
+            "/api/auth/phone-login",
+            json={"phone": "+380931112233", "full_name": "Іван Тестовий"},
+        )
+        assert res_login.status_code == 200
+        data = res_login.json()
+        assert data["id"] == 15
+        assert data["bonus_balance"] == 50
+        assert "auth_token" in data
 
     async def test_admin_notify_rejects_order_without_telegram(self, async_client, mock_db_conn):
         """Сповіщення відхиляється, якщо замовлення з веб-сайту не має telegram_id."""
